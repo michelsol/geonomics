@@ -4,6 +4,7 @@ export * from "./catalog";
 export * from "./config";
 export * from "./hash";
 export * from "./init";
+export * from "./mapgen";
 export * from "./math";
 export * from "./random";
 export * from "./routes";

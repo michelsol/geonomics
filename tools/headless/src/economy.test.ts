@@ -48,7 +48,9 @@ function excessGaps(world: World) {
         gaps.push({
           key: good.key,
           excess,
-          bound: 3 / (reserveDaysOf(good, world.config) * world.config.economy.tradeGapSensitivity),
+          bound:
+            3 / (reserveDaysOf(good, world.config) * world.config.economy.tradeGapSensitivity) +
+            world.config.economy.tradeMargin,
         });
       }
     }
@@ -75,12 +77,16 @@ describe.each(CATALOG_NAMES)("with the %s catalog", (catalog) => {
     const world = scenarios.chain10.build({ catalog: readCatalog(catalog) });
     const recorder = run(world, 200);
     expect(recorder.report().worstVolatility).toBeLessThan(0.015);
-    // Each primary good is richest at one end; its price rises steadily toward the other end.
+    // Each primary good is richest at one end; its price rises steadily toward the other end, give or take the
+    // friction (transport and trade margin) within which neighbors do not trade.
     for (const [k, good] of world.goods.filter((g) => g.isPrimary).entries()) {
       const prices = world.areas.map((area) => area.price[good.id] as number);
       if (k % 2 === 1) prices.reverse();
-      for (let i = 1; i < prices.length; i++)
-        expect(prices[i], good.key).toBeGreaterThanOrEqual(prices[i - 1] as number);
+      const transport = (world.edges[0]?.transportCost as number) * good.transportWeight;
+      for (let i = 1; i < prices.length; i++) {
+        const friction = transport + world.config.economy.tradeMargin * (prices[i - 1] as number);
+        expect(prices[i], good.key).toBeGreaterThanOrEqual((prices[i - 1] as number) - friction);
+      }
     }
     expect(run(world, 200, recorder).report().unmetNecessities).toBeLessThan(0.01);
   });

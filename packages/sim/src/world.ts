@@ -3,7 +3,7 @@ import type { Catalog } from "./catalog";
 import type { WorldConfig } from "./config";
 import { seedFrom } from "./random";
 import { edgeBaseTransportCost, edgeCapacityPerDay, edgeTravelDays } from "./routes";
-import type { Area, AreaId, Edge, EdgeMode, World } from "./types";
+import type { Area, AreaId, Edge, EdgeMode, Terrain, World } from "./types";
 
 export interface AreaInit {
   id: AreaId;
@@ -11,6 +11,7 @@ export interface AreaInit {
   position: { x: number; y: number };
   population?: number;
   productivity?: number;
+  terrain?: Terrain;
   isCoastal?: boolean;
   portLevel?: number;
   airportLevel?: number;
@@ -30,6 +31,7 @@ export function createArea(init: AreaInit, goodCount: number, needCount: number)
     productivity: init.productivity ?? 1,
     unemployedWorkers: 0,
     fortificationLevel: 0,
+    terrain: init.terrain ?? "plains",
     isCoastal: init.isCoastal ?? false,
     portLevel: init.portLevel ?? 0,
     portProgress: 0,
@@ -75,6 +77,7 @@ export function createEmptyWorld(catalog: Catalog, config: WorldConfig, seed: nu
     nextArmyId: 0,
     nextOrderId: 0,
     randomSeed: seedFrom(seed),
+    map: null,
   };
 }
 

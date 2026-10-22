@@ -1,0 +1,499 @@
+// Map generation (specification §5, Map generation): Voronoi cells, elevation and moisture from noise, terrain,
+// coasts, population, resources, land edges, sea routes, airports and capital positions.
+import { Delaunay } from "d3-delaunay";
+import { createNoise2D, type NoiseFunction2D } from "simplex-noise";
+import type { Catalog } from "./catalog";
+import type { WorldConfig } from "./config";
+import { referenceDemandPerPerson } from "./init";
+import { nextRandom, seedFrom } from "./random";
+import { LAND_DISTANCE_PER_TRAVEL_DAY } from "./routes";
+import { rebuildAirRoutes } from "./tick/infrastructure";
+import type { AreaId, Terrain, World } from "./types";
+import { type AreaSpec, addEdge, createEmptyWorld, createWorld } from "./world";
+
+/** Productivity and land transport cost multiplier of each terrain. */
+export const TERRAIN_EFFECTS: Record<Terrain, { productivity: number; landCost: number; density: number }> = {
+  plains: { productivity: 1, landCost: 1, density: 1.2 },
+  forest: { productivity: 0.9, landCost: 1.5, density: 0.8 },
+  hills: { productivity: 0.9, landCost: 2, density: 0.7 },
+  mountains: { productivity: 0.7, landCost: 4, density: 0.3 },
+  desert: { productivity: 0.8, landCost: 1.5, density: 0.35 },
+};
+
+const ASPECT = 1.5; // map width over height
+const LLOYD_ITERATIONS = 2;
+const COASTAL_DENSITY_BONUS = 1.3;
+const SYLLABLES = ["ka", "lo", "mi", "ra", "ten", "sor", "vel", "an", "dor", "is", "ul", "ber", "to", "na", "vi"];
+const SYLLABLES_END = ["gar", "el", "mon", "ia", "ost", "una", "ard", "en", "ix", "or", "eth", "ana", "us", "ir"];
+
+export interface GeneratedMap {
+  world: World; // neutral world, not yet initialized (call initializeWorld, then warmUp)
+  capitals: AreaId[]; // spread-out, populous areas for the players' starting capitals
+}
+
+/** Generates a map with config.map.landAreaCount areas. The same catalog, config and seed give the same map. */
+export function generateMap(catalog: Catalog, config: WorldConfig, seed: number): GeneratedMap {
+  const m = config.map;
+  const rng = { randomSeed: seedFrom(seed) };
+  const random = () => nextRandom(rng);
+  const noise = (): NoiseFunction2D => createNoise2D(random);
+
+  // 1. Cells: a jittered grid relaxed toward even spacing.
+  const totalCells = Math.round(m.landAreaCount / m.landShare);
+  const rows = Math.max(3, Math.round(Math.sqrt(totalCells / ASPECT)));
+  const columns = Math.max(3, Math.round(totalCells / rows));
+  const s = m.cellSpacing;
+  const width = columns * s;
+  const height = rows * s;
+  const count = rows * columns;
+  const points = new Float64Array(2 * count);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < columns; c++) {
+      const i = r * columns + c;
+      points[2 * i] = (c + 0.5 + 0.8 * (random() - 0.5)) * s;
+      points[2 * i + 1] = (r + 0.5 + 0.8 * (random() - 0.5)) * s;
+    }
+  }
+  const bounds: [number, number, number, number] = [0, 0, width, height];
+  for (let iteration = 0; iteration < LLOYD_ITERATIONS; iteration++) {
+    const voronoi = new Delaunay(points).voronoi(bounds);
+    for (let i = 0; i < count; i++) {
+      const polygon = voronoi.cellPolygon(i);
+      if (polygon) [points[2 * i], points[2 * i + 1]] = centroid(polygon);
+    }
+  }
+  const voronoi = new Delaunay(points).voronoi(bounds);
+  const neighbors: number[][] = Array.from({ length: count }, (_, i) =>
+    [...voronoi.neighbors(i)].sort((a, b) => a - b),
+  );
+  const x = (i: number) => points[2 * i] as number;
+  const y = (i: number) => points[2 * i + 1] as number;
+  const distance = (i: number, j: number) => Math.hypot(x(i) - x(j), y(i) - y(j));
+
+  // 2. Elevation: fractal noise minus a falloff toward the edges; sea level gives the land share.
+  const featureScale = Math.sqrt(width * height) / 4;
+  const elevationNoise = noise();
+  const elevation = new Float64Array(count);
+  const relief = new Float64Array(count); // the noise alone, without the falloff: ranks hills and mountains
+  for (let i = 0; i < count; i++) {
+    const dx = (x(i) / width - 0.5) * 2;
+    const dy = (y(i) / height - 0.5) * 2;
+    relief[i] = fractal(elevationNoise, x(i) / featureScale, y(i) / featureScale, m.elevationOctaves);
+    elevation[i] = (relief[i] as number) - 0.6 * (dx * dx + dy * dy);
+  }
+  const nearBorder = (i: number) =>
+    x(i) < 1.5 * s || y(i) < 1.5 * s || x(i) > width - 1.5 * s || y(i) > height - 1.5 * s;
+  const land = new Uint8Array(count);
+  const classify = (share: number): number => {
+    const seaLevel = quantile(elevation, 1 - share);
+    for (let i = 0; i < count; i++) land[i] = !nearBorder(i) && (elevation[i] as number) > seaLevel ? 1 : 0;
+    // No lakes: water that cannot reach the open sea becomes land. Islands too small to matter sink.
+    for (const component of components(count, neighbors, (i) => !land[i])) {
+      if (!component.some(nearBorder)) for (const i of component) land[i] = 1;
+    }
+    for (const component of components(count, neighbors, (i) => land[i] === 1)) {
+      if (component.length < m.minimumIslandAreas) for (const i of component) land[i] = 0;
+    }
+    return land.reduce((sum, value) => sum + value, 0);
+  };
+  // Filling lakes and sinking islets moves the land count, so the sea level is corrected a few times.
+  let share = m.landShare;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const landCount = classify(share);
+    if (Math.abs(landCount - m.landAreaCount) <= 0.01 * m.landAreaCount) break;
+    share = Math.min(0.95, (share * m.landAreaCount) / Math.max(landCount, 1));
+    if (attempt === 3) classify(share);
+  }
+
+  // 3. Terrain from elevation rank among land cells and moisture.
+  const landCells: number[] = [];
+  for (let i = 0; i < count; i++) if (land[i]) landCells.push(i);
+  const byElevation = [...landCells].sort((a, b) => (relief[a] as number) - (relief[b] as number) || a - b);
+  const elevationRank = new Float64Array(count);
+  for (const [rank, i] of byElevation.entries()) elevationRank[i] = rank / Math.max(byElevation.length - 1, 1);
+  const moistureNoise = noise();
+  const terrainOf = (i: number): Terrain => {
+    const rank = elevationRank[i] as number;
+    if (rank >= 0.85) return "mountains";
+    if (rank >= 0.65) return "hills";
+    const moisture = fractal(moistureNoise, x(i) / featureScale, y(i) / featureScale, 3);
+    if (moisture < -0.3) return "desert";
+    if (moisture > 0.2) return "forest";
+    return "plains";
+  };
+
+  // 4–5. Areas: land cells in index order, with terrain, coast, population and productivity.
+  const areaOf = new Int32Array(count).fill(-1);
+  for (const [id, cell] of landCells.entries()) areaOf[cell] = id;
+  const variation = noise();
+  const terrains = landCells.map(terrainOf);
+  const coastal = landCells.map((cell) => (neighbors[cell] as number[]).some((n) => !land[n]));
+  const densities = landCells.map((cell, id) => {
+    const local = 0.6 + 0.8 * (0.5 + 0.5 * variation(x(cell) / (2 * s), y(cell) / (2 * s)));
+    return TERRAIN_EFFECTS[terrains[id] as Terrain].density * (coastal[id] ? COASTAL_DENSITY_BONUS : 1) * local;
+  });
+  const meanDensity = densities.reduce((a, b) => a + b, 0) / Math.max(densities.length, 1);
+  const areas: AreaSpec[] = landCells.map((cell, id) => {
+    const terrain = terrains[id] as Terrain;
+    const local = 0.5 + 0.5 * variation((x(cell) + width) / (3 * s), y(cell) / (3 * s));
+    return {
+      name: areaName(random),
+      position: { x: x(cell), y: y(cell) },
+      population: (m.meanAreaPopulation * (densities[id] as number)) / meanDensity,
+      productivity: TERRAIN_EFFECTS[terrain].productivity * (0.9 + 0.2 * local),
+      terrain,
+      isCoastal: coastal[id] as boolean,
+      portLevel: coastal[id] ? 1 : 0,
+    };
+  });
+
+  const world = createWorld(catalog, config, { areas, edges: [], seed: rng.randomSeed });
+  world.map = { width, height, waterPoints: waterPoints(count, land, points) };
+
+  // 6. Land edges between neighboring land cells.
+  const linked = new Set<string>();
+  for (const cell of landCells) {
+    for (const other of neighbors[cell] as number[]) {
+      if (other <= cell || !land[other]) continue;
+      const a = areaOf[cell] as number;
+      const b = areaOf[other] as number;
+      const terrainFactor =
+        (TERRAIN_EFFECTS[terrains[a] as Terrain].landCost + TERRAIN_EFFECTS[terrains[b] as Terrain].landCost) / 2;
+      const d = distance(cell, other);
+      addEdge(world, {
+        a,
+        b,
+        mode: "land",
+        distance: d,
+        terrainFactor,
+        travelDays: (d / LAND_DISTANCE_PER_TRAVEL_DAY) * terrainFactor,
+      });
+      linked.add(pairKey(a, b));
+    }
+  }
+
+  // 7. Sea routes: each port to its nearest ports by distance over water, then enough routes to join every island.
+  const seaRoutes = new Map<string, { a: AreaId; b: AreaId; distance: number }>();
+  for (const [id, cell] of landCells.entries()) {
+    if (!coastal[id]) continue;
+    const found = nearestByWater([cell], config.transport.seaRoutesPerPort, (other) => {
+      const target = areaOf[other] as number;
+      return target !== id && !linked.has(pairKey(id, target));
+    });
+    for (const route of found) {
+      const b = areaOf[route.cell] as number;
+      const key = pairKey(id, b);
+      if (!seaRoutes.has(key)) seaRoutes.set(key, { a: Math.min(id, b), b: Math.max(id, b), distance: route.distance });
+    }
+  }
+  for (const route of [...seaRoutes.values()].sort((p, q) => p.a - q.a || p.b - q.b)) {
+    addEdge(world, { a: route.a, b: route.b, mode: "sea", distance: route.distance });
+  }
+  joinIslands();
+
+  // 8. Natural capacity of primary goods, placed by terrain and a noise field per good. Every area holds at least
+  // one primary good, so none is left with nothing to work on or to sell.
+  const demand = referenceDemandPerPerson(createEmptyWorld(catalog, config, 0));
+  const totalPopulation = world.areas.reduce((sum, area) => sum + area.population, 0);
+  const primaries = world.goods.filter((good) => good.isPrimary);
+  const suits = (good: World["goods"][number], area: World["areas"][number]) =>
+    good.terrains.length === 0 || good.terrains.some((t) => (t === "coast" ? area.isCoastal : area.terrain === t));
+  const scores = primaries.map(() => {
+    const field = noise();
+    return world.areas.map((area) => field(area.position.x / featureScale, area.position.y / featureScale));
+  });
+  const weights = primaries.map(() => new Float64Array(world.areas.length));
+  for (const [k, good] of primaries.entries()) {
+    const score = scores[k] as number[];
+    let eligible = world.areas.filter((area) => suits(good, area));
+    if (eligible.length === 0) eligible = world.areas;
+    const ranked = eligible.map((area) => area.id).sort((p, q) => (score[q] as number) - (score[p] as number) || p - q);
+    // Enough producing areas that their workforce could supply the world with extractionLaborShare of its labor.
+    const laborShare =
+      ((demand[good.id] as number) * good.laborHoursPerUnit) /
+      (config.economy.hoursPerWorkerDay * config.economy.workforceShare);
+    const neededPopulation = Math.min(1, laborShare / m.extractionLaborShare) * totalPopulation;
+    const minimumCount = Math.max(1, Math.round(m.presence[good.abundance ?? "common"] * ranked.length));
+    let count = 0;
+    let population = 0;
+    while (count < ranked.length && (count < minimumCount || population < neededPopulation)) {
+      population += world.areas[ranked[count] as number]?.population as number;
+      count++;
+    }
+    const chosen = ranked.slice(0, count);
+    const cutoff = score[chosen[chosen.length - 1] as number] as number;
+    for (const id of chosen) {
+      (weights[k] as Float64Array)[id] =
+        ((score[id] as number) - cutoff + 0.2) * (world.areas[id]?.population as number);
+    }
+  }
+  for (const area of world.areas) {
+    if (weights.some((w) => (w[area.id] as number) > 0)) continue;
+    const candidates = primaries
+      .map((good, k) => ({ good, k }))
+      .filter(({ good }) => good.abundance === "common")
+      .sort(
+        (p, q) =>
+          Number(suits(q.good, area)) - Number(suits(p.good, area)) ||
+          ((scores[q.k] as number[])[area.id] as number) - ((scores[p.k] as number[])[area.id] as number) ||
+          p.k - q.k,
+      );
+    const pick = candidates[0] ?? { k: 0 };
+    (weights[pick.k] as Float64Array)[area.id] = 0.2 * area.population;
+  }
+  for (const [k, good] of primaries.entries()) {
+    const w = weights[k] as Float64Array;
+    const weightSum = w.reduce((a, b) => a + b, 0);
+    const total = m.capacityHeadroom * (demand[good.id] as number) * totalPopulation;
+    for (const area of world.areas) {
+      const capacity = (total * (w[area.id] as number)) / weightSum;
+      area.naturalCapacity[good.id] = capacity;
+      area.naturalCapacityMaximum[good.id] = capacity;
+    }
+  }
+
+  // 9. Airports in the most populous areas, linked by air routes.
+  const byPopulation = [...world.areas].sort((a, b) => b.population - a.population || a.id - b.id);
+  const airports = Math.max(2, Math.ceil(config.transport.initialAirportShare * world.areas.length));
+  for (const area of byPopulation.slice(0, airports)) area.airportLevel = 1;
+  rebuildAirRoutes(world);
+
+  // 10. Capitals: the most populous area, then each next one far from the others and populous.
+  const capitals: AreaId[] = [];
+  const hops = new Float64Array(world.areas.length).fill(Number.POSITIVE_INFINITY);
+  for (let k = 0; k < Math.min(m.governmentCount, world.areas.length); k++) {
+    let best = -1;
+    let bestScore = -1;
+    for (const area of world.areas) {
+      if (capitals.includes(area.id)) continue;
+      const score = k === 0 ? area.population : (hops[area.id] as number) * Math.sqrt(area.population);
+      if (score > bestScore) {
+        best = area.id;
+        bestScore = score;
+      }
+    }
+    capitals.push(best);
+    updateHops(world, best, hops);
+  }
+  world.randomSeed = rng.randomSeed;
+  return { world, capitals };
+
+  /**
+   * Bounded Dijkstra over water from start cells; returns the nearest accepted land cells by water distance, each
+   * with the start cell its route leaves from.
+   */
+  function nearestByWater(starts: number[], wanted: number, accept: (cell: number) => boolean) {
+    const best = new Map<number, { distance: number; from: number }>();
+    const dist = new Float64Array(count).fill(Number.POSITIVE_INFINITY);
+    const origin = new Int32Array(count);
+    const heap = new MinHeap();
+    for (const start of starts) {
+      dist[start] = 0;
+      origin[start] = start;
+      heap.push(0, start);
+    }
+    let kth = Number.POSITIVE_INFINITY;
+    while (heap.size > 0) {
+      const [d, cell] = heap.pop();
+      if (d > (dist[cell] as number) || d > kth) continue;
+      for (const next of neighbors[cell] as number[]) {
+        const nd = d + distance(cell, next);
+        if (!land[next]) {
+          if (nd < (dist[next] as number)) {
+            dist[next] = nd;
+            origin[next] = origin[cell] as number;
+            heap.push(nd, next);
+          }
+        } else if (!land[cell] && accept(next) && nd < (best.get(next)?.distance ?? Number.POSITIVE_INFINITY)) {
+          best.set(next, { distance: nd, from: origin[cell] as number });
+          if (best.size >= wanted) {
+            kth = [...best.values()].map((b) => b.distance).sort((a, b) => a - b)[wanted - 1] as number;
+          }
+        }
+      }
+    }
+    return [...best.entries()]
+      .map(([cell, route]) => ({ cell, distance: route.distance, from: route.from }))
+      .sort((p, q) => p.distance - q.distance || p.cell - q.cell)
+      .slice(0, wanted);
+  }
+
+  /** Adds the shortest sea route from the main landmass's group to the nearest other group until all are joined. */
+  function joinIslands(): void {
+    for (;;) {
+      const group = groupOf(world);
+      const main = group[0] as number;
+      const starts = landCells.filter((_, id) => coastal[id] && group[id] === main);
+      if (world.areas.every((area) => group[area.id] === main)) return;
+      const [nearest] = nearestByWater(starts, 1, (cell) => group[areaOf[cell] as number] !== main);
+      if (!nearest) throw new Error("Map generation: an island cannot be reached by sea");
+      const from = areaOf[nearest.from] as number;
+      const to = areaOf[nearest.cell] as number;
+      addEdge(world, { a: Math.min(from, to), b: Math.max(from, to), mode: "sea", distance: nearest.distance });
+    }
+  }
+}
+
+/** Connected group of each area over active edges, numbered from the group of area 0. */
+function groupOf(world: World): Int32Array {
+  const group = new Int32Array(world.areas.length).fill(-1);
+  let next = 0;
+  for (const area of world.areas) {
+    if (group[area.id] !== -1) continue;
+    const stack = [area.id];
+    group[area.id] = next;
+    while (stack.length > 0) {
+      const current = stack.pop() as number;
+      for (const id of world.areas[current]?.edges ?? []) {
+        const edge = world.edges[id];
+        if (!edge?.isActive) continue;
+        const other = edge.areaA === current ? edge.areaB : edge.areaA;
+        if (group[other] === -1) {
+          group[other] = next;
+          stack.push(other);
+        }
+      }
+    }
+    next++;
+  }
+  return group;
+}
+
+/** Lowers each area's hop count to the nearest capital with a breadth-first search from a new capital. */
+function updateHops(world: World, from: AreaId, hops: Float64Array): void {
+  const distance = new Float64Array(world.areas.length).fill(Number.POSITIVE_INFINITY);
+  distance[from] = 0;
+  const queue = [from];
+  for (let head = 0; head < queue.length; head++) {
+    const current = queue[head] as number;
+    for (const id of world.areas[current]?.edges ?? []) {
+      const edge = world.edges[id];
+      if (!edge?.isActive || edge.mode === "air") continue;
+      const other = edge.areaA === current ? edge.areaB : edge.areaA;
+      if (distance[other] === Number.POSITIVE_INFINITY) {
+        distance[other] = (distance[current] as number) + 1;
+        queue.push(other);
+      }
+    }
+  }
+  for (let i = 0; i < hops.length; i++) hops[i] = Math.min(hops[i] as number, distance[i] as number);
+}
+
+function fractal(noise: NoiseFunction2D, x: number, y: number, octaves: number): number {
+  let value = 0;
+  let amplitude = 1;
+  let frequency = 1;
+  let total = 0;
+  for (let octave = 0; octave < octaves; octave++) {
+    value += amplitude * noise(x * frequency, y * frequency);
+    total += amplitude;
+    amplitude *= 0.5;
+    frequency *= 2;
+  }
+  return value / total;
+}
+
+function quantile(values: Float64Array, share: number): number {
+  const sorted = Float64Array.from(values).sort();
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(share * sorted.length)))] as number;
+}
+
+function centroid(polygon: [number, number][]): [number, number] {
+  let area = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < polygon.length - 1; i++) {
+    const [x0, y0] = polygon[i] as [number, number];
+    const [x1, y1] = polygon[i + 1] as [number, number];
+    const cross = x0 * y1 - x1 * y0;
+    area += cross;
+    cx += (x0 + x1) * cross;
+    cy += (y0 + y1) * cross;
+  }
+  return area === 0 ? (polygon[0] as [number, number]) : [cx / (3 * area), cy / (3 * area)];
+}
+
+function components(count: number, neighbors: number[][], inside: (i: number) => boolean): number[][] {
+  const seen = new Uint8Array(count);
+  const result: number[][] = [];
+  for (let i = 0; i < count; i++) {
+    if (seen[i] || !inside(i)) continue;
+    const component = [i];
+    seen[i] = 1;
+    for (let head = 0; head < component.length; head++) {
+      for (const n of neighbors[component[head] as number] as number[]) {
+        if (!seen[n] && inside(n)) {
+          seen[n] = 1;
+          component.push(n);
+        }
+      }
+    }
+    result.push(component);
+  }
+  return result;
+}
+
+function waterPoints(count: number, land: Uint8Array, points: Float64Array): Float64Array {
+  const result: number[] = [];
+  for (let i = 0; i < count; i++) if (!land[i]) result.push(points[2 * i] as number, points[2 * i + 1] as number);
+  return Float64Array.from(result);
+}
+
+function areaName(random: () => number): string {
+  const pick = (list: string[]) => list[Math.floor(random() * list.length)] as string;
+  const name = (random() < 0.5 ? pick(SYLLABLES) : pick(SYLLABLES) + pick(SYLLABLES)) + pick(SYLLABLES_END);
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+const pairKey = (a: number, b: number) => (a < b ? `${a}-${b}` : `${b}-${a}`);
+
+/** Binary min-heap of (priority, value) pairs. */
+class MinHeap {
+  private readonly priorities: number[] = [];
+  private readonly values: number[] = [];
+
+  get size(): number {
+    return this.values.length;
+  }
+
+  push(priority: number, value: number): void {
+    this.priorities.push(priority);
+    this.values.push(value);
+    let i = this.values.length - 1;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if ((this.priorities[parent] as number) <= priority) break;
+      this.swap(i, parent);
+      i = parent;
+    }
+  }
+
+  pop(): [number, number] {
+    const top: [number, number] = [this.priorities[0] as number, this.values[0] as number];
+    const lastPriority = this.priorities.pop() as number;
+    const lastValue = this.values.pop() as number;
+    if (this.values.length > 0) {
+      this.priorities[0] = lastPriority;
+      this.values[0] = lastValue;
+      let i = 0;
+      for (;;) {
+        const left = 2 * i + 1;
+        const right = left + 1;
+        let smallest = i;
+        if (left < this.values.length && (this.priorities[left] as number) < (this.priorities[smallest] as number))
+          smallest = left;
+        if (right < this.values.length && (this.priorities[right] as number) < (this.priorities[smallest] as number))
+          smallest = right;
+        if (smallest === i) break;
+        this.swap(i, smallest);
+        i = smallest;
+      }
+    }
+    return top;
+  }
+
+  private swap(i: number, j: number): void {
+    [this.priorities[i], this.priorities[j]] = [this.priorities[j] as number, this.priorities[i] as number];
+    [this.values[i], this.values[j]] = [this.values[j] as number, this.values[i] as number];
+  }
+}

@@ -10,32 +10,32 @@
   ],
   "goods": [
     {
-      "key": "grain", "name": "Grain", "unit": "100 kg", "kind": "primary", "laborHoursPerUnit": 0.8, "transportWeight": 0.1, "spoilageRatePerDay": 0.001, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": "common",
+      "key": "grain", "name": "Grain", "unit": "100 kg", "kind": "primary", "laborHoursPerUnit": 0.8, "transportWeight": 0.1, "spoilageRatePerDay": 0.001, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": "common", "terrains": ["plains", "hills", "forest"],
       "inputs": [],
       "satisfies": null
     },
     {
-      "key": "fish", "name": "Fish", "unit": "10 kg", "kind": "primary", "laborHoursPerUnit": 2.5, "transportWeight": 0.012, "spoilageRatePerDay": 0.08, "depletionPerUnitExtracted": 0.005, "regenerationRatePerDay": 0.02, "abundance": "regional",
+      "key": "fish", "name": "Fish", "unit": "10 kg", "kind": "primary", "laborHoursPerUnit": 2.5, "transportWeight": 0.012, "spoilageRatePerDay": 0.08, "depletionPerUnitExtracted": 0.005, "regenerationRatePerDay": 0.02, "abundance": "regional", "terrains": ["coast"],
       "inputs": [],
       "satisfies": {"need": "food", "unitsPerGood": 6, "preference": 1}
     },
     {
-      "key": "cotton", "name": "Cotton", "unit": "10 kg", "kind": "primary", "laborHoursPerUnit": 0.5, "transportWeight": 0.012, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": "regional",
+      "key": "cotton", "name": "Cotton", "unit": "10 kg", "kind": "primary", "laborHoursPerUnit": 0.5, "transportWeight": 0.012, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": "regional", "terrains": ["plains", "desert"],
       "inputs": [],
       "satisfies": null
     },
     {
-      "key": "timber", "name": "Timber", "unit": "m³", "kind": "primary", "laborHoursPerUnit": 1.2, "transportWeight": 0.7, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.002, "regenerationRatePerDay": 0.01, "abundance": "common",
+      "key": "timber", "name": "Timber", "unit": "m³", "kind": "primary", "laborHoursPerUnit": 1.2, "transportWeight": 0.7, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.002, "regenerationRatePerDay": 0.01, "abundance": "common", "terrains": ["forest"],
       "inputs": [],
       "satisfies": null
     },
     {
-      "key": "coal", "name": "Coal", "unit": "100 kg", "kind": "primary", "laborHoursPerUnit": 1.5, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional",
+      "key": "coal", "name": "Coal", "unit": "100 kg", "kind": "primary", "laborHoursPerUnit": 1.5, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional", "terrains": ["hills", "mountains", "plains", "forest"],
       "inputs": [],
       "satisfies": {"need": "energy", "unitsPerGood": 80, "preference": 0.3}
     },
     {
-      "key": "iron_ore", "name": "Iron ore", "unit": "100 kg", "kind": "primary", "laborHoursPerUnit": 0.4, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional",
+      "key": "iron_ore", "name": "Iron ore", "unit": "100 kg", "kind": "primary", "laborHoursPerUnit": 0.4, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional", "terrains": ["hills", "mountains"],
       "inputs": [],
       "satisfies": null
     },

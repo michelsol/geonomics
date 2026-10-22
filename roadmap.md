@@ -137,7 +137,7 @@ Rationale for the rules this stage changed: [docs/design-notes.md](docs/design-n
 - Route capacity is never exceeded.
 - Rebuilding routes keeps edge ids stable.
 
-## Stage 5: Map generation
+## Stage 5: Map generation ✅
 
 **Spec first:** add a map generation section to the specification. It covers:
 - the area count and shape, using Voronoi cells from `d3-delaunay`
@@ -156,8 +156,10 @@ Rationale for the rules this stage changed: [docs/design-notes.md](docs/design-n
 - The same seed produces the same map.
 - Every land area is reachable.
 - Every primary good appears somewhere.
-- A 3,000-area map with the large catalog runs a tick within budget.
+- A 3,000-area map with the large catalog runs a tick within budget. *Not met: about 50 ms per tick on the development machine against 30 ms; the default 1,000-area map takes about 15 ms. Carried to stage 8.*
 - The warm-up converges without collapsing any area.
+
+Findings: [docs/design-notes.md](docs/design-notes.md#map-generation-roadmap-stage-5).
 
 ## Stage 6: Government
 
@@ -267,8 +269,9 @@ Rationale for the rules this stage changed: [docs/design-notes.md](docs/design-n
 
 | Question | Settle by |
 | --- | --- |
-| How many areas and governments a default map has, and how big an area is in population | Stage 5 |
-| Whether players start with a single area or a small realm, and with how much treasury | Stage 5 |
+| ~~How many areas and governments a default map has, and how big an area is in population~~ | Settled in stage 5: 1,000 areas, 6 capitals, 10,000 people per area on average (`WorldConfig.map`) |
+| Whether players start with a single area or a small realm, and with how much treasury | Stage 6 (map generation places the capitals) |
+| Meeting the tick budget at 3,000 areas with the large catalog (about 50 ms per tick in stage 5) | Stage 8, with the worker host loop |
 | Whether there is a soft goal (score, prosperity ranking) despite sandbox-first | Stage 8 |
 | Whether a dropped human player's government is handed to the AI | Stage 9 |
 | Naval combat and blockades on sea routes (listed as future work in §5) | After stage 11 |

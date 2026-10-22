@@ -1,8 +1,8 @@
 // Phase 7: labor allocation (specification §5, Labor allocation). Government hiring joins this phase in stage 6.
-import { EPSILON, fractionPerTick, reserveDaysOf } from "../math";
+import { EPSILON, fractionPerTick } from "../math";
 import type { Area, World } from "../types";
 import { savingsFactor } from "./consumption";
-import { hourlyOutputPerWorker } from "./production";
+import { effectiveHoursPerWorkerDay } from "./production";
 import { policiesOf, type Scratch, scratchOf, suppliedForPerTick } from "./scratch";
 
 /** Primary goods are never planned beyond this share of natural capacity, where extra labor adds almost nothing. */
@@ -33,9 +33,15 @@ export function computeValueAdded(world: World, area: Area, scratch: Scratch, ou
 }
 
 /** Workers needed to produce `unitsPerDay` of a good in an area; 0 when the area cannot produce it. */
-export function workersFor(world: World, area: Area, good: World["goods"][number], unitsPerDay: number): number {
+export function workersFor(
+  world: World,
+  area: Area,
+  good: World["goods"][number],
+  unitsPerDay: number,
+  hours = effectiveHoursPerWorkerDay(world, area),
+): number {
   if (unitsPerDay <= 0) return 0;
-  const hourly = hourlyOutputPerWorker(world, area, good);
+  const hourly = hours / good.laborHoursPerUnit;
   if (!good.isPrimary) return unitsPerDay / hourly;
   const capacity = area.naturalCapacity[good.id] as number;
   if (capacity <= EPSILON) return 0;
@@ -64,6 +70,7 @@ export function laborTargets(
   // cheaper until its goods sell abroad, and the reverse.
   const reservation = e.reservationWage * savingsFactor(world, area);
   const temperature = e.laborAllocationTemperature * reservation;
+  const hours = effectiveHoursPerWorkerDay(world, area);
   let total = 0;
   for (const good of world.goods) {
     const g = good.id;
@@ -74,9 +81,9 @@ export function laborTargets(
     const demandedPerDay = suppliedForPerTick(world, scratch, area, g) / days;
     const restock = good.isService
       ? 0
-      : (reserveDaysOf(good, world.config) * demandedPerDay - (area.stock[g] as number)) / e.stockRecoveryDays;
+      : ((scratch.reserveDays[g] as number) * demandedPerDay - (area.stock[g] as number)) / e.stockRecoveryDays;
     const tilt = Math.exp(Math.min(((valueAdded[g] as number) - reservation) / temperature, 5));
-    targets[g] = workersFor(world, area, good, demandedPerDay + restock) * tilt;
+    targets[g] = workersFor(world, area, good, demandedPerDay + restock, hours) * tilt;
     total += targets[g] as number;
   }
   if (total > available) {

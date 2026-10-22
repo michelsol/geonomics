@@ -6,8 +6,8 @@ export function seedFrom(seed: number): number {
   return Math.trunc(seed) >>> 0;
 }
 
-/** Returns a float in [0, 1) and advances the world's generator. */
-export function nextRandom(world: World): number {
+/** Returns a float in [0, 1) and advances the generator held by a world (or any state with a seed). */
+export function nextRandom(world: Pick<World, "randomSeed">): number {
   world.randomSeed = (world.randomSeed + 0x6d2b79f5) >>> 0;
   let t = world.randomSeed;
   t = Math.imul(t ^ (t >>> 15), t | 1);

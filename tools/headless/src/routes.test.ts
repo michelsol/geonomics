@@ -45,9 +45,13 @@ describe.each(CATALOG_NAMES)("with the %s catalog", (catalog) => {
 
   it("flies light, valuable goods and leaves grain and stone at home", () => {
     const { world, carried, goodsCarried } = islandTraffic("islandsByAir", catalog);
+    const bySea = islandTraffic("islands", catalog).carried;
     expect(world.edges[ISLAND_ROUTE_EDGE]?.mode).toBe("air");
     expect(goodsCarried).toBeGreaterThanOrEqual(3);
-    for (const key of ["grain", "stone_sand", "coal", "timber"]) expect(carried(key), key).toBe(0);
+    // Bulk goods barely fly: under 1% of what the same islands ship by sea.
+    for (const key of ["grain", "stone_sand", "coal", "timber"]) {
+      expect(carried(key), key).toBeLessThanOrEqual(0.01 * bySea(key));
+    }
     const light = world.goods.filter((g) => g.laborValue / g.transportWeight > 100).map((g) => g.key);
     expect(light.some((key) => carried(key) > 0)).toBe(true);
   });

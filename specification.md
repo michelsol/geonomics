@@ -92,7 +92,17 @@ interface World {
   nextArmyId: ArmyId;                   // next id to assign to a newly recruited army
   nextOrderId: number;                  // next id to assign to a market or standing order
   randomSeed: number;                   // state of the seeded random generator, so runs are reproducible
+  map: MapLayout | null;                // geometry of a generated map; null for hand-built worlds
 }
+
+interface MapLayout {
+  width: number;                        // map size in map units (km)
+  height: number;
+  waterPoints: Float64Array;            // x, y pairs of the water cells' centers
+}
+// Area cells for rendering are the Voronoi cells of the area positions followed by the water points.
+
+type Terrain = "plains" | "forest" | "hills" | "mountains" | "desert";
 
 type Relation = "peace" | "war";
 ```
@@ -142,6 +152,7 @@ interface Good {
   depletionPerUnitExtracted: number;    // primary goods: natural capacity lost per unit extracted (0 = renewable)
   regenerationRatePerDay: number;       // primary goods: share of lost capacity recovered per game day
   abundance: "common" | "regional" | "rare" | null; // primary goods: how widely map generation spreads capacity
+  terrains: (Terrain | "coast")[];      // primary goods: where map generation places capacity; empty = anywhere
   satisfies: NeedSatisfaction | null;   // need this good is consumed for; null for pure inputs
   laborValue: number;                   // derived at startup: man-hours embodied in one unit, inputs included
 }
@@ -162,6 +173,7 @@ interface Area {
   productivity: number;                 // local multiplier on labor output (terrain, local know-how)
   unemployedWorkers: number;            // workers without a private or government job
   fortificationLevel: number;           // defensive multiplier built by government fortification jobs
+  terrain: Terrain;                     // set by map generation: sets productivity and land transport cost
   isCoastal: boolean;                   // set by map generation: the area touches navigable water
   portLevel: number;                    // 0 = no port; raises the capacity of the area's sea routes
   portProgress: number;                 // worker-days accumulated toward the next port level
@@ -455,7 +467,7 @@ A game starts from a state that is already almost balanced:
 3. Each area starts with `reserveDaysOf(good)` of total demand in stock.
 4. Each area starts with `targetSavingsDays` of income in savings, so savings neither boost nor dampen demand at first.
 5. Value added and `wageLevel` are computed once from these starting prices and workers, so the first tick has valid purchasing power and labor targets.
-6. The world then runs `warmupDays` with no players, at `warmupResponsivenessBoost` times the normal economy and demography responsiveness, before the game opens.
+6. The world then runs `warmupDays` with no players, at `warmupResponsivenessBoost` times the normal economy responsiveness and with population frozen (demography responsiveness 0), before the game opens.
 
 ### Global pace parameters
 
@@ -503,6 +515,7 @@ interface WorldConfig {
     tradeRatePerDay: number;            // speed at which an edge's shipping rate moves toward its target (default 0.23)
     tradeGapSensitivity: number;        // share of its reserve a buyer imports per day over one edge, per unit of relative price gap (default 20)
     exportReserveShare: number;         // share of its own reserve an area keeps when exporting (default 0.5)
+    tradeMargin: number;                // smallest price gap worth trading for, as a share of the higher price (default 0.01)
     laborMobilityRatePerDay: number;    // speed at which private workers move toward the target allocation (default 0.07)
     laborAllocationTemperature: number; // softness of the value-added tilt on labor targets, relative to the reservation wage (default 1)
     reservationWage: number;            // value added per hour below which workers prefer unemployment, at target savings, in man-hours (default 1)
@@ -514,8 +527,8 @@ interface WorldConfig {
     tierWeights: { necessity: number; comfort: number; luxury: number }; // weights in satisfaction (default 3, 2, 1)
     targetSavingsDays: number;          // days of income inhabitants like to hold; neutral point of the savings effect (default 30)
     savingsElasticity: number;          // how strongly savings above or below target change purchasing power (default 0.5)
-    savingsFactorMin: number;           // lower clamp of savings relative to target (default 0.25)
-    savingsFactorMax: number;           // upper clamp of savings relative to target (default 4)
+    savingsFactorMin: number;           // lower clamp of savings relative to target (default 0.05)
+    savingsFactorMax: number;           // upper clamp of savings relative to target (default 16)
   };
   transport: {                          // distances in map units; neighboring areas are about 100 apart (read as km)
     landCostPerDistance: number;        // map generation: base land cost per tonne per unit of distance, before terrain (default 0.003)
@@ -570,6 +583,18 @@ interface WorldConfig {
     foragingShare: number;              // largest share of an area's food stock an army takes per day (default 0.2)
     battleStockDestructionPerDay: number; // share of an area's stock destroyed per day of fighting (default 0.02)
     battleCivilianLossPerDay: number;   // share of an area's population lost per day of fighting (default 0.002)
+  };
+  map: {                                // map generation (section 5, Map generation)
+    landAreaCount: number;              // areas on a generated map (default 1000)
+    cellSpacing: number;                // average distance between neighboring cell centers, in km (default 100)
+    landShare: number;                  // share of the cells that are land (default 0.45)
+    elevationOctaves: number;           // octaves of the elevation noise (default 4)
+    meanAreaPopulation: number;         // average starting population of an area (default 10000)
+    capacityHeadroom: number;           // world capacity of a primary good as a multiple of its reference demand (default 2.5)
+    presence: { common: number; regional: number; rare: number }; // share of eligible areas holding a primary good (default 0.85, 0.3, 0.08)
+    extractionLaborShare: number;       // producing areas of a primary good could supply the world with this share of their labor (default 0.1)
+    governmentCount: number;            // capitals placed for the players (default 6)
+    minimumIslandAreas: number;         // smaller islands sink (default 2)
   };
   warmupDays: number;                   // game days simulated with no players before the game opens (default 180)
   warmupResponsivenessBoost: number;    // responsiveness multiplier during warm-up (default 3)
@@ -668,19 +693,21 @@ Trade is computed per edge, per good and per direction, from a snapshot of the s
 ```typescript
 transport  = edge.transportCost * good.transportWeight
 tariffs    = crossesBorder ? sellerPrice * exportTariffRate[seller] + sellerPrice * importTariffRate[buyer] : 0
-gap        = buyerPrice - sellerPrice - transport - tariffs      // 0 on an inactive or blocked edge
+gap        = buyerPrice - sellerPrice - transport - tariffs
+           - tradeMargin * max(buyerPrice, sellerPrice)          // 0 on an inactive or blocked edge
 
 // The wider the gap, the more of its reserve the buyer refills from this edge each day
 targetRate = gap > 0 ? reserveDaysOf(good) * buyerTotalDemandedPerDay
                        * tradeGapSensitivity * gap / buyerPrice / buyerEdgesWithPositiveGap
                      : 0
 rate      += fraction(tradeRatePerDay) * (targetRate - rate)
+// a fading rate below 1% of the buyer's daily use is set to 0
 if (gap <= 0 || good.isService) skip
 
 // The seller keeps part of its reserve and splits the rest between its exporting edges
 exportable = max(0, sellerStock - exportReserveShare * reserveDaysOf(good) * sellerTotalDemandedPerDay)
              / sellerEdgesWithPositiveGap
-quantity   = min(rate * days, exportable)
+quantity   = min(rate * days, exportable)      // shipments under 0.1% of the buyer's daily use are skipped
 unitPaid   = sellerPrice + transport + tariffs + gap / 2   // the buyer and seller split the gain
 ```
 
@@ -787,6 +814,31 @@ migrants = population * fraction(migrationRatePerDay) * attractivenessDifference
 
 Migration reads populations after growth and applies every edge together; migrants leave their savings behind. New inhabitants and migrants join `unemployedWorkers` in proportion to `workforceShare`; the labor phase places them. When population falls, from starvation or emigration, the lost workers (the same `workforceShare` of the loss) are taken from `unemployedWorkers` first, then from private jobs in proportion to their size. Government workers and soldiers are not affected.
 
+### Map generation
+
+A map is generated from a seed, the catalog and `WorldConfig.map`. Every random draw comes from the seeded generator, so the same inputs give the same map.
+
+1. **Cells.** `landAreaCount / landShare` points on a jittered grid with `cellSpacing` spacing over a 3:2 rectangle, relaxed twice toward their Voronoi centroids (Lloyd).
+2. **Elevation.** Fractal simplex noise (`elevationOctaves`) minus a radial falloff toward the edges. Cells within 1.5 spacings of the border are water. The sea level is set so the land share gives `landAreaCount` land cells, after water bodies that cannot reach the open sea become land (no lakes) and land masses smaller than `minimumIslandAreas` sink; it is corrected up to four times.
+3. **Terrain.** Land cells are ranked by the elevation noise alone: the top 15% are mountains, the next 20% hills. The rest are desert where a moisture noise is low, forest where it is high, and plains otherwise.
+
+| Terrain | Productivity | Land cost factor | Population density |
+| --- | --- | --- | --- |
+| Plains | 1.0 | 1 | 1.2 |
+| Forest | 0.9 | 1.5 | 0.8 |
+| Hills | 0.9 | 2 | 0.7 |
+| Mountains | 0.7 | 4 | 0.3 |
+| Desert | 0.8 | 1.5 | 0.35 |
+
+4. **Areas.** Each land cell is an area. An area is coastal when it borders a water cell; coastal areas get `portLevel` 1. Productivity is the terrain value times 0.9 to 1.1 from noise. Population is the terrain density, ×1.3 on coasts, times 0.6 to 1.4 from noise, scaled to a mean of `meanAreaPopulation`.
+5. **Land edges** join neighboring land cells. Distance is between cell centers; `terrainFactor` is the mean land cost factor of the two areas; `travelDays` is `distance / 25 × terrainFactor`.
+6. **Sea routes.** Each coastal area is linked to its `seaRoutesPerPort` nearest coastal areas by distance over water (a search over water cells), skipping areas it already shares a land edge with. Then, while some areas cannot reach the others, the shortest water route from the group of area 0 to another group is added.
+7. **Natural capacity.** For each primary good, the eligible areas are those whose terrain is in the good's `terrains` (`coast` meaning coastal areas), or all areas if none match. A noise field per good ranks them. The top areas are chosen until both `presence[abundance]` of the eligible areas and enough population to supply world demand with `extractionLaborShare` of its workforce are reached. An area that holds no primary good gets its best-scoring common good, preferring one suited to its terrain. Capacity totals `capacityHeadroom` × reference demand × world population, split in proportion to population × (noise above the cut + 0.2).
+8. **Airports.** The `initialAirportShare` most populous areas get airport level 1, then air routes are built (section 5, Sea and air routes).
+9. **Capitals.** `governmentCount` capitals: the most populous area, then each next one maximizing hops to the nearest capital over land and sea edges × √population. Every area starts neutral.
+
+The world is then initialized (Rule 6) and warmed up.
+
 ### Goods catalogs
 
 Needs and goods are loaded from a JSON catalog chosen when a game is created. Three catalogs ship with the game, all in an industrial to modern setting. All numbers are plausible first guesses for tuning in the headless runner.
@@ -802,6 +854,7 @@ Needs and goods are loaded from a JSON catalog chosen when a game is created. Th
 - **Needs and goods** carry the fields of the `Need` and `Good` interfaces, minus the derived ones (`id`, `laborValue`, `referenceUnitPrice`).
 - **References** between needs, goods and recipe inputs use string `key`s, resolved to ids at load.
 - **`kind`** is `"primary"`, `"crafted"` or `"service"`. The loader derives `isPrimary` and `isService` from it.
+- **`terrains`** (optional, primary goods) lists where map generation places the good: `plains`, `forest`, `hills`, `mountains`, `desert` or `coast`.
 - **`military`** names the `foodGood` and `weaponsGood` used for `WorldConfig.military`.
 
 ```json
@@ -821,6 +874,7 @@ The loader rejects a catalog if any of these hold:
 - A service is used as an input.
 - A primary good has inputs or no `abundance`.
 - A need has no good satisfying it.
+- A terrain is not one of the listed values.
 
 **Conventions used by the shipped catalogs:**
 

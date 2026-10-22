@@ -148,6 +148,7 @@ describe("prices", () => {
   it("stay within the floor and ceiling multiples of labor value", () => {
     const world = twoAreas(smallCatalog, [everything, everything]);
     const area = world.areas[0] as World["areas"][number];
+    runTrade(world); // refreshes the use per good that stock targets are based on
     for (let i = 0; i < 1000; i++) {
       area.stock.fill(0);
       runPrices(world);

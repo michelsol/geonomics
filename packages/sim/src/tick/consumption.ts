@@ -29,7 +29,7 @@ function consumeArea(world: World, area: Area, scratch: Scratch): void {
   const { tierWeights } = world.config.economy;
   const { goods } = world;
   const consumptionTax = policiesOf(world, area, scratch).consumptionTaxRate;
-  const power = purchasingPower(world, area);
+  const logPower = Math.log(purchasingPower(world, area));
   const share = scratch.weights;
   const unitPrice = scratch.values;
 
@@ -47,7 +47,8 @@ function consumeArea(world: World, area: Area, scratch: Scratch): void {
       const good = goods[g] as (typeof goods)[number];
       const satisfies = good.satisfies as NonNullable<typeof good.satisfies>;
       unitPrice[g] = ((area.price[g] as number) * (1 + (consumptionTax[g] as number))) / satisfies.unitsPerGood;
-      share[g] = satisfies.preference * Math.max(unitPrice[g] as number, EPSILON) ** -need.substitutionElasticity;
+      share[g] =
+        satisfies.preference * inversePower(Math.max(unitPrice[g] as number, EPSILON), need.substitutionElasticity);
       weightSum += share[g] as number;
     }
     let needPrice = 0;
@@ -60,8 +61,11 @@ function consumeArea(world: World, area: Area, scratch: Scratch): void {
       area.population *
       need.demandPerPersonPerDay *
       days *
-      (need.referenceUnitPrice / Math.max(needPrice, EPSILON)) ** need.priceElasticity *
-      power ** need.wealthElasticity;
+      // (referenceUnitPrice / needPrice) ** priceElasticity * purchasingPower ** wealthElasticity
+      Math.exp(
+        need.priceElasticity * Math.log(need.referenceUnitPrice / Math.max(needPrice, EPSILON)) +
+          need.wealthElasticity * logPower,
+      );
 
     // First pass: each good covers its share; unmet need units are counted for the spillover pass.
     let unmet = 0;
@@ -109,4 +113,12 @@ function consumeArea(world: World, area: Area, scratch: Scratch): void {
 
   // Services are consumed in the tick they are produced; whatever was not consumed is lost.
   for (const good of goods) if (good.isService) area.stock[good.id] = 0;
+}
+
+/** x ** -exponent, with the common exponents of the catalogs computed without Math.pow. */
+function inversePower(x: number, exponent: number): number {
+  if (exponent === 0) return 1;
+  if (exponent === 1) return 1 / x;
+  if (exponent === 2) return 1 / (x * x);
+  return x ** -exponent;
 }

@@ -25,7 +25,17 @@ export interface World {
   nextArmyId: ArmyId; // next id to assign to a newly recruited army
   nextOrderId: number; // next id to assign to a market or standing order
   randomSeed: number; // state of the seeded random generator, so runs are reproducible
+  map: MapLayout | null; // geometry of a generated map; null for hand-built worlds
 }
+
+/** What rendering needs beyond area positions: Voronoi cells are rebuilt from area positions then water points. */
+export interface MapLayout {
+  width: number; // map units (km)
+  height: number;
+  waterPoints: Float64Array; // x, y pairs of the water cells' centers
+}
+
+export type Terrain = "plains" | "forest" | "hills" | "mountains" | "desert";
 
 export type Relation = "peace" | "war";
 
@@ -58,6 +68,7 @@ export interface RecipeInput {
 }
 
 export type Abundance = "common" | "regional" | "rare";
+export type TerrainAffinity = Terrain | "coast";
 
 export interface Good {
   id: GoodId; // index of this good in World.goods
@@ -73,6 +84,7 @@ export interface Good {
   depletionPerUnitExtracted: number; // primary goods: natural capacity lost per unit extracted (0 = renewable)
   regenerationRatePerDay: number; // primary goods: share of lost capacity recovered per game day
   abundance: Abundance | null; // primary goods: how widely map generation spreads capacity
+  terrains: TerrainAffinity[]; // primary goods: where map generation places capacity; empty = anywhere
   satisfies: NeedSatisfaction | null; // need this good is consumed for; null for pure inputs
   laborValue: number; // derived at startup: man-hours embodied in one unit, inputs included
 }
@@ -91,6 +103,7 @@ export interface Area {
   productivity: number; // local multiplier on labor output (terrain, local know-how)
   unemployedWorkers: number; // workers without a private or government job
   fortificationLevel: number; // defensive multiplier built by government fortification jobs
+  terrain: Terrain; // set by map generation: sets productivity and land transport cost
   isCoastal: boolean; // set by map generation: the area touches navigable water
   portLevel: number; // 0 = no port; raises the capacity of the area's sea routes
   portProgress: number; // worker-days accumulated toward the next port level

@@ -1,12 +1,14 @@
 // Headless runner: runs a scenario with a catalog and prints the §4 diagnostics.
 //   pnpm headless -- --scenario chain10 --catalog medium --days 365 --seed 1 --warmup --csv out/chain.csv
 //   pnpm headless -- --all --days 200
+//   pnpm headless -- --scenario map --catalog large --areas 3000 --days 30 --svg out/map.svg
 import { parseArgs } from "node:util";
 import { hashWorld, runTick, warmUp } from "@geonomics/sim";
 import { CATALOG_NAMES, type CatalogName, readCatalog } from "./catalogs";
 import { CsvWriter } from "./csv";
 import { formatDiagnostics, Recorder } from "./diagnostics";
 import { SCENARIO_NAMES, type ScenarioName, scenarios } from "./scenarios";
+import { writeMapSvg } from "./svg";
 
 const { values } = parseArgs({
   args: process.argv.slice(2).filter((arg) => arg !== "--"),
@@ -15,6 +17,8 @@ const { values } = parseArgs({
     catalog: { type: "string", default: "small" },
     days: { type: "string", default: "365" },
     seed: { type: "string", default: "1" },
+    areas: { type: "string" },
+    svg: { type: "string" },
     warmup: { type: "boolean", default: false },
     csv: { type: "string" },
     "csv-every": { type: "string", default: "1" },
@@ -29,6 +33,8 @@ if (values.help) {
   --catalog <name>    ${CATALOG_NAMES.join(", ")} (default small)
   --days <n>          game days to simulate after initialization (default 365)
   --seed <n>          random seed (default 1)
+  --areas <n>         number of areas of the map scenario (default 1000)
+  --svg <file>        write the map as an SVG after the run (map scenario)
   --warmup            run the Rule 6 warm-up before the measured days
   --csv <file>        write per-day time series to a CSV file
   --csv-every <n>     write one CSV sample every n days (default 1)
@@ -48,28 +54,37 @@ interface RunOptions {
   days: number;
   seed: number;
   warmup: boolean;
+  areas?: number;
   csv?: string;
   csvEvery: number;
 }
 
 async function run(options: RunOptions) {
-  const world = scenarios[options.scenario].build({ catalog: readCatalog(options.catalog), seed: options.seed });
+  const config = options.areas ? { map: { landAreaCount: options.areas } } : undefined;
+  const world = scenarios[options.scenario].build({
+    catalog: readCatalog(options.catalog),
+    seed: options.seed,
+    config,
+  });
   if (options.warmup) warmUp(world);
   const recorder = new Recorder(world);
   const csv = options.csv ? new CsvWriter(options.csv) : undefined;
   const ticks = Math.round(options.days / world.config.pace.gameDaysPerTick);
-  const started = performance.now();
+  let tickTime = 0;
   for (let i = 0; i < ticks; i++) {
+    const started = performance.now();
     runTick(world);
+    tickTime += performance.now() - started;
     recorder.sample();
     if (csv && world.tick % options.csvEvery === 0) csv.write(world);
   }
-  const msPerTick = (performance.now() - started) / Math.max(ticks, 1);
+  const msPerTick = tickTime / Math.max(ticks, 1);
   await csv?.close();
   return { world, diagnostics: recorder.report(), msPerTick };
 }
 
 const days = Number(values.days);
+const areas = values.areas === undefined ? undefined : Number(values.areas);
 const seed = Number(values.seed);
 if (!Number.isFinite(days) || days < 0 || !Number.isFinite(seed)) throw new Error("--days and --seed must be numbers");
 
@@ -102,12 +117,19 @@ if (values.all) {
     days,
     seed,
     warmup: values.warmup,
+    areas,
     csv: values.csv,
     csvEvery,
   });
   console.log(`${scenario} with the ${catalog} catalog, seed ${seed}${values.warmup ? ", after warm-up" : ""}`);
   console.log(scenarios[scenario].description);
   console.log(formatDiagnostics(diagnostics));
-  console.log(`${msPerTick.toFixed(3)} ms per tick, world hash ${hashWorld(world)}`);
+  console.log(
+    `${world.areas.length} areas, ${world.edges.length} edges, ${msPerTick.toFixed(3)} ms per tick, price table ${((world.areas.length * world.goods.length * 2) / 1024).toFixed(0)} KB, world hash ${hashWorld(world)}`,
+  );
   if (values.csv) console.log(`time series written to ${values.csv}`);
+  if (values.svg) {
+    writeMapSvg(world, values.svg);
+    console.log(`map written to ${values.svg}`);
+  }
 }

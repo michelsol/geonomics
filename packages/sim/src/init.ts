@@ -70,13 +70,15 @@ export function initializeWorld(world: World): void {
   }
 }
 
-/** Rule 6, step 6: runs warmupDays with no players at boosted responsiveness, then restores the pace. */
+/**
+ * Rule 6, step 6: runs warmupDays with no players at boosted economy responsiveness, then restores the pace.
+ * Population is frozen meanwhile, so the map's people survive the economy finding its balance.
+ */
 export function warmUp(world: World, days = world.config.warmupDays): void {
   const pace = world.config.pace;
   const saved = { ...pace };
-  const boost = world.config.warmupResponsivenessBoost;
-  pace.economyResponsiveness *= boost;
-  pace.demographyResponsiveness *= boost;
+  pace.economyResponsiveness *= world.config.warmupResponsivenessBoost;
+  pace.demographyResponsiveness = 0;
   try {
     const ticks = Math.round(days / pace.gameDaysPerTick);
     for (let i = 0; i < ticks; i++) runTick(world);

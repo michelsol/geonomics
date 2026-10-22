@@ -1,6 +1,15 @@
 // Goods catalog loader (specification §5, Goods catalogs). Takes parsed JSON, so it works in the browser,
 // the worker and Node alike.
-import type { Abundance, DemandTier, Good, GoodId, Need, NeedSatisfaction, RecipeInput } from "./types";
+import type {
+  Abundance,
+  DemandTier,
+  Good,
+  GoodId,
+  Need,
+  NeedSatisfaction,
+  RecipeInput,
+  TerrainAffinity,
+} from "./types";
 
 export interface Catalog {
   name: string;
@@ -17,6 +26,7 @@ export class CatalogError extends Error {
 const TIERS: readonly DemandTier[] = ["necessity", "comfort", "luxury"];
 const KINDS = ["primary", "crafted", "service"] as const;
 const ABUNDANCES: readonly Abundance[] = ["common", "regional", "rare"];
+const TERRAINS: readonly TerrainAffinity[] = ["plains", "forest", "hills", "mountains", "desert", "coast"];
 
 type Json = Record<string, unknown>;
 
@@ -82,6 +92,12 @@ export function loadCatalog(json: unknown): Catalog {
       if (inputs.length > 0) throw new CatalogError(`Primary good "${key}" must not have inputs`);
       if (abundance === null) throw new CatalogError(`Primary good "${key}" must have an abundance`);
     }
+    const terrains = good.terrains === undefined ? [] : array(good, "terrains", at);
+    for (const terrain of terrains) {
+      if (!TERRAINS.includes(terrain as TerrainAffinity)) {
+        throw new CatalogError(`${at}: unknown terrain "${String(terrain)}"; expected one of ${TERRAINS.join(", ")}`);
+      }
+    }
 
     let satisfies: NeedSatisfaction | null = null;
     if (good.satisfies !== null) {
@@ -115,6 +131,7 @@ export function loadCatalog(json: unknown): Catalog {
       depletionPerUnitExtracted: number(good, "depletionPerUnitExtracted", at, 0),
       regenerationRatePerDay: number(good, "regenerationRatePerDay", at, 0),
       abundance,
+      terrains: terrains as TerrainAffinity[],
       satisfies,
       laborValue,
     });

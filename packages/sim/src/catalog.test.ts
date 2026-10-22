@@ -165,6 +165,11 @@ describe("broken catalogs", () => {
       broken((c) => ((c.military as Record<string, unknown>).weaponsGood = "swords")),
       /Military weaponsGood "swords" is not a good/,
     ],
+    [
+      "unknown terrain",
+      broken((c) => (good(c, "ore").terrains = ["hills", "swamp"])),
+      /good "ore": unknown terrain "swamp"/,
+    ],
     ["bad kind", broken((c) => (good(c, "ore").kind = "mined")), /good "ore": "kind" must be one of/],
     [
       "non-finite number",

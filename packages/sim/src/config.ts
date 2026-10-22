@@ -22,6 +22,7 @@ export interface WorldConfig {
     tradeRatePerDay: number; // speed at which an edge's shipping rate moves toward its target
     tradeGapSensitivity: number; // share of its reserve a buyer imports per day over one edge, per unit of relative gap
     exportReserveShare: number; // share of its own reserve an area keeps when exporting
+    tradeMargin: number; // smallest price gap worth trading for, as a share of the higher price
     laborMobilityRatePerDay: number; // speed at which private workers move toward the target allocation
     laborAllocationTemperature: number; // softness of the value-added tilt on labor targets, relative to the reservation wage
     reservationWage: number; // value added per hour below which workers prefer unemployment, at target savings
@@ -90,6 +91,18 @@ export interface WorldConfig {
     battleStockDestructionPerDay: number; // share of an area's stock destroyed per day of fighting
     battleCivilianLossPerDay: number; // share of an area's population lost per day of fighting
   };
+  map: {
+    landAreaCount: number; // areas on a generated map (land cells)
+    cellSpacing: number; // average distance between neighboring cell centers, in map units (km)
+    landShare: number; // share of the cells that are land
+    elevationOctaves: number; // octaves of the elevation noise; more gives rougher coasts
+    meanAreaPopulation: number; // average starting population of an area
+    capacityHeadroom: number; // world natural capacity of a primary good, as a multiple of its reference demand
+    presence: { common: number; regional: number; rare: number }; // share of eligible areas holding a primary good
+    extractionLaborShare: number; // producing areas of a primary good could supply the world with this share of their labor
+    governmentCount: number; // capitals placed for the players
+    minimumIslandAreas: number; // smaller islands sink
+  };
   warmupDays: number; // game days simulated with no players before the game opens
   warmupResponsivenessBoost: number; // responsiveness multiplier during warm-up
 }
@@ -117,6 +130,7 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
     tradeRatePerDay: 0.23,
     tradeGapSensitivity: 20,
     exportReserveShare: 0.5,
+    tradeMargin: 0.01,
     laborMobilityRatePerDay: 0.07,
     laborAllocationTemperature: 1,
     reservationWage: 1,
@@ -128,8 +142,8 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
     tierWeights: { necessity: 3, comfort: 2, luxury: 1 },
     targetSavingsDays: 30,
     savingsElasticity: 0.5,
-    savingsFactorMin: 0.25,
-    savingsFactorMax: 4,
+    savingsFactorMin: 0.05,
+    savingsFactorMax: 16,
   },
   transport: {
     landCostPerDistance: 0.003,
@@ -181,6 +195,18 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
     foragingShare: 0.2,
     battleStockDestructionPerDay: 0.02,
     battleCivilianLossPerDay: 0.002,
+  },
+  map: {
+    landAreaCount: 1000,
+    cellSpacing: 100,
+    landShare: 0.45,
+    elevationOctaves: 4,
+    meanAreaPopulation: 10_000,
+    capacityHeadroom: 2.5,
+    presence: { common: 0.85, regional: 0.3, rare: 0.08 },
+    extractionLaborShare: 0.1,
+    governmentCount: 6,
+    minimumIslandAreas: 2,
   },
   warmupDays: 180,
   warmupResponsivenessBoost: 3,

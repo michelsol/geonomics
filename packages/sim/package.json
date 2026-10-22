@@ -7,5 +7,12 @@
   },
   "scripts": {
     "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "d3-delaunay": "^6.0.4",
+    "simplex-noise": "^4.0.3"
+  },
+  "devDependencies": {
+    "@types/d3-delaunay": "^6.0.4"
   }
 }

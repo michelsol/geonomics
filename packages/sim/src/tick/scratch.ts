@@ -7,6 +7,11 @@ export interface Scratch {
   needGoods: GoodId[][]; // per NeedId: goods that satisfy it, in catalog order
   unitsPerGood: Float64Array; // per GoodId: need units one unit provides; 0 for pure inputs
   users: { good: GoodId; quantity: number }[][]; // per GoodId: recipes that use it as an input
+  transportWeight: Float64Array; // per GoodId
+  isService: Uint8Array; // per GoodId
+  reserveDays: Float64Array; // per GoodId: reserveDaysOf, refreshed by the trade phase each tick
+  spoilageLoss: Float64Array; // per GoodId: share of a stock lost to spoilage in one tick, refreshed with reserveDays
+  used: Float64Array[]; // per area, per good: usedPerTick, refreshed by the trade phase each tick
   neutralPolicies: ResolvedPolicies; // shared by every area without an owner: all policies at zero
   marginalOutput: Float64Array[]; // per area, per good: units per extra worker per day this tick
   producible: Uint8Array[]; // per area, per good: 1 if the area can produce the good (labor phase)
@@ -70,6 +75,11 @@ function createScratch(world: World, previous: Scratch | undefined): Scratch {
     needGoods,
     unitsPerGood: Float64Array.from(world.goods, (good) => good.satisfies?.unitsPerGood ?? 0),
     users,
+    transportWeight: Float64Array.from(world.goods, (good) => good.transportWeight),
+    isService: Uint8Array.from(world.goods, (good) => (good.isService ? 1 : 0)),
+    reserveDays: perGood(),
+    spoilageLoss: perGood(),
+    used: world.areas.map(() => perGood()),
     neutralPolicies: previous?.neutralPolicies ?? createNeutralPolicies(goodCount),
     marginalOutput: world.areas.map(() => perGood()),
     producible: world.areas.map(() => new Uint8Array(goodCount)),
@@ -110,10 +120,14 @@ export function usedPerTick(area: Area, g: number): number {
 
 /**
  * Units of a good an area uses and ships per tick. Exports count at the smoothed shipping rates of its edges rather
- * than this tick's deliveries, so day-to-day noise in trade does not move stock targets or labor plans.
+ * than this tick's deliveries, so day-to-day noise in trade does not move stock targets or labor plans. Valid after
+ * the trade phase, which refreshes `used` and `exportRate`.
  */
 export function suppliedForPerTick(world: World, scratch: Scratch, area: Area, g: number): number {
-  return usedPerTick(area, g) + (scratch.exportRate[area.id]?.[g] as number) * world.config.pace.gameDaysPerTick;
+  return (
+    (scratch.used[area.id]?.[g] as number) +
+    (scratch.exportRate[area.id]?.[g] as number) * world.config.pace.gameDaysPerTick
+  );
 }
 
 /** Policies in force in an area: its owner's resolved policies, or all zero for a neutral area. */

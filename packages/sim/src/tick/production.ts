@@ -3,12 +3,16 @@ import { EPSILON } from "../math";
 import type { Area, Good, World } from "../types";
 import { type Scratch, scratchOf } from "./scratch";
 
-/** Units one worker produces per game day at the area's productivity and its owner's research level. */
-export function hourlyOutputPerWorker(world: World, area: Area, good: Good): number {
-  const { hoursPerWorkerDay } = world.config.economy;
+/** Worker-hours per worker per game day at the area's productivity and its owner's research level. */
+export function effectiveHoursPerWorkerDay(world: World, area: Area): number {
   const owner = area.owner === null ? undefined : world.governments[area.owner];
   const research = owner ? 1 + owner.researchLevel * world.config.government.researchProductivityBonus : 1;
-  return (hoursPerWorkerDay * area.productivity * research) / good.laborHoursPerUnit;
+  return world.config.economy.hoursPerWorkerDay * area.productivity * research;
+}
+
+/** Units one worker produces per game day at the area's productivity and its owner's research level. */
+export function hourlyOutputPerWorker(world: World, area: Area, good: Good): number {
+  return effectiveHoursPerWorkerDay(world, area) / good.laborHoursPerUnit;
 }
 
 export function runProduction(world: World): void {
@@ -32,15 +36,16 @@ export function produceArea(world: World, area: Area, scratch: Scratch, commit: 
     stock = scratch.values;
   }
 
+  const hours = effectiveHoursPerWorkerDay(world, area);
   for (const good of goods) {
     maximumByLabor[good.id] = good.isPrimary
       ? 0
-      : (area.privateWorkers[good.id] as number) * hourlyOutputPerWorker(world, area, good) * days;
+      : ((area.privateWorkers[good.id] as number) * hours * days) / good.laborHoursPerUnit;
   }
 
   for (const good of goods) {
     const g = good.id;
-    const hourly = hourlyOutputPerWorker(world, area, good);
+    const hourly = hours / good.laborHoursPerUnit;
     let output = 0;
 
     if (good.isPrimary) {
