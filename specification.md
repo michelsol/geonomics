@@ -136,7 +136,7 @@ interface Good {
   isPrimary: boolean;                   // extracted from nature, limited by an area's natural capacity
   isService: boolean;                   // cannot be stored or transported: produced and consumed in the same tick
   transportWeight: number;              // tonnes of freight per unit, bulk included; multiplies an edge's cost per tonne
-  spoilageRatePerDay: number;           // fraction of stored units lost per game day
+  spoilageRatePerDay: number;           // decay rate of stored units: stock *= exp(-spoilageRatePerDay * days)
   depletionPerUnitExtracted: number;    // primary goods: natural capacity lost per unit extracted (0 = renewable)
   regenerationRatePerDay: number;       // primary goods: share of lost capacity recovered per game day
   abundance: "common" | "regional" | "rare" | null; // primary goods: how widely map generation spreads capacity
@@ -179,6 +179,7 @@ interface Area {
   // Per-tick results, recomputed every tick, read by the UI and the AI
   produced: Float64Array;               // units produced this tick, private and government combined
   demanded: Float64Array;               // units the population wanted to consume this tick
+  inputDemanded: Float64Array;          // units private production requested as inputs this tick, before rationing
   consumed: Float64Array;               // units actually consumed this tick
   imported: Float64Array;               // units received from neighbors this tick
   exported: Float64Array;               // units sent to neighbors this tick
@@ -299,9 +300,9 @@ interface DepotTransfer {
 
 type StandingRule =
   | { kind: "keepDepotStock"; good: GoodId; targetDaysOfDemand: number; maximumBuyPrice: number }
-      // buy until the depot holds this many days of the area's demand
+      // buy until the depot holds this many days of the area's total demand (consumers and producers)
   | { kind: "sellAbovePrice"; good: GoodId; minimumPrice: number; keepDaysOfDemand: number }
-      // sell depot surplus whenever the price exceeds the minimum
+      // sell depot surplus above this many days of total demand whenever the price exceeds the minimum
   | { kind: "buyBelowPrice"; good: GoodId; maximumPrice: number; maximumDepotQuantity: number }
       // stockpile whenever the price is low
   | { kind: "supplyArmies"; good: GoodId; daysOfSupply: number };
@@ -376,6 +377,23 @@ interface CommandEnvelope {
 
 Host-only controls (pause, speed, save) are network messages, not simulation commands, so they never touch the world state.
 
+### Command validation
+
+The host validates every command before applying it. A rejected command changes nothing and is answered with a `commandRejected` message giving the reason.
+
+| Check | Rule |
+| --- | --- |
+| Sender | `player` must be the controller of `government`, and the government must not be eliminated |
+| Ownership | Every area, army, order or depot a command references must belong to the sending government |
+| Numbers | Every number must be finite; quantities, worker targets, soldiers and prices must be ≥ 0 |
+| Tax rates | Production and consumption tax rates and tariffs must be within [−1, 5] |
+| Wages | `wageOffer` must be within [0, 10] |
+| Recruiting | Soldiers must not exceed the area's unemployed and private workers |
+| Jobs | `buildPort` only in coastal areas; `buildInfrastructure` only on an edge touching the area |
+| Transfers | Source and destination depots must be connected by a non-blocked path |
+| Diplomacy | No war on oneself; peace only with a government at war; a payment must fit in the payer's treasury when the proposal is answered |
+| Limits | At most 1,000 open market orders and 200 standing orders per government, so a client cannot slow the host down |
+
 ## 4. Pace, stability and convergence
 
 Instability comes from feedback loops that overshoot: prices jump, too many workers switch, supply crashes, and the cycle repeats. Six rules prevent it, and three global pace parameters let a game run calmer or faster without retuning anything.
@@ -431,9 +449,10 @@ A game starts from a state that is already almost balanced:
 
 1. Prices start at labor value; smoothed prices equal prices.
 2. Workers are allocated to cover local demand where local resources allow, and the rest go to the most valuable local jobs.
-3. Each area starts with `reserveDays` of demand in stock.
+3. Each area starts with `reserveDaysOf(good)` of total demand in stock.
 4. Each area starts with `targetSavingsDays` of income in savings, so savings neither boost nor dampen demand at first.
-5. The world then runs `warmupDays` with no players, at `warmupResponsivenessBoost` times the normal responsiveness, before the game opens.
+5. Value added and `wageLevel` are computed once from these starting prices and workers, so the first tick has valid purchasing power and labor targets.
+6. The world then runs `warmupDays` with no players, at `warmupResponsivenessBoost` times the normal responsiveness, before the game opens.
 
 ### Global pace parameters
 
@@ -472,7 +491,8 @@ interface WorldConfig {
   economy: {
     hoursPerWorkerDay: number;          // hours worked per worker per game day (default 8)
     workforceShare: number;             // share of the population able to work (default 0.5)
-    reserveDays: number;                // days of demand an area keeps in stock before exporting (default 5)
+    reserveDays: number;                // days of total demand an area keeps in stock before exporting (default 5)
+    maxReserveSpoilageShare: number;    // perishable goods keep a smaller reserve, so spoilage stays under this share of demand (default 0.1)
     priceAdjustmentRatePerDay: number;  // speed at which prices move toward clearing the stock target (default 0.35)
     priceSmoothingRatePerDay: number;   // speed of the smoothed price used for job decisions (default 0.07)
     tradeRatePerDay: number;            // share of exportable surplus that may leave per day (default 0.23)
@@ -570,18 +590,31 @@ Goods are processed in catalog order, so inputs made this tick are available to 
 // Primary goods: diminishing returns on nature
 laborOutputPerDay = totalWorkers * hourlyOutputPerWorker(good)
 outputPerDay      = capacity * (1 - exp(-laborOutputPerDay / capacity))
+output            = outputPerDay * days
 marginalOutputPerWorker = hourlyOutputPerWorker(good) * exp(-laborOutputPerDay / capacity)
 naturalCapacity  -= output * good.depletionPerUnitExtracted
 
-// Crafted goods: limited by labor and by inputs
+// Crafted goods: limited by labor and by rationed inputs
 maximumByLabor  = workers * hourlyOutputPerWorker(good) * days
-maximumByInputs = min over inputs of (available input stock / input.quantity)
-output          = min(maximumByLabor, maximumByInputs)
-outputLimitedByInputs = maximumByInputs < maximumByLabor
+output          = maximumByLabor * min over inputs of ration[input.good]
+outputLimitedByInputs = output < maximumByLabor
 marginalOutputPerWorker = outputLimitedByInputs ? 0 : hourlyOutputPerWorker(good)
 ```
 
-Private production draws inputs from the area's stock; government production draws from the government depot. Services are produced like crafted goods but go straight to consumption and never enter stock.
+**Input rationing.** Several goods often share one input; electricity, for example, feeds most recipes. A scarce input is split between its users in proportion to what each one requests, not handed to whichever comes first in the catalog. This takes one pass, because catalog order guarantees that when good `i` is reached, all of its production for the tick is done and all of its users come later:
+
+```typescript
+// computed when good i is reached, before any of its users produce
+requested[i]     = sum over private recipes c using i of maximumByLabor[c] * quantity(c, i)
+ration[i]        = min(1, stock[i] / max(requested[i], epsilon))
+inputDemanded[i] = requested[i]
+```
+
+A user limited by another input takes less than its ration, and the rest stays in stock. Producers draw before consumers in the same tick.
+
+`inputDemanded` matters as much as consumer demand. **Total demand** for a good is `demanded + inputDemanded`, and it is the demand used by the price target, the exportable surplus, government buy orders, standing orders and the initial stock. Without it, intermediate goods such as ore or flour would show no demand and their prices would fall to the floor.
+
+Private production draws inputs from the area's stock. Government production draws from the government depot, with its own rationing over the depot, and is not part of `inputDemanded`. Services are produced like crafted goods but go straight to consumption and never enter stock.
 
 ### Consumption
 
@@ -630,7 +663,7 @@ tariffs    = crossesBorder ? sellerPrice * exportTariffRate[seller] + sellerPric
 gap        = buyerPrice - sellerPrice - transport - tariffs
 if (gap <= 0 || !edge.isActive || edge.isBlocked || good.isService) skip
 
-exportable = max(0, sellerStock - reserveDays * sellerDemandedPerDay) / sellerEdgesWithPositiveGap
+exportable = max(0, sellerStock - reserveDaysOf(good) * sellerTotalDemandedPerDay) / sellerEdgesWithPositiveGap
 quantity   = exportable * fraction(tradeRatePerDay) * min(1, tradeGapSensitivity * gap / buyerPrice)
 unitPaid   = sellerPrice + transport + tariffs + gap / 2   // the buyer and seller split the gain
 quantity   = min(quantity, buyerSavings / unitPaid)        // the buyer can only spend what it has
@@ -664,9 +697,19 @@ Sea and air traffic reuse edges instead of adding a separate system. A route is 
 
 ### Prices
 
+Storable goods are priced on stock: the price rises when stock falls below its target and falls when stock exceeds it. Perishable goods keep a smaller target, so their reserve never rots faster than `maxReserveSpoilageShare` of demand: bread keeps about 1 day, fish 1.25 days and electricity a third of a day. Services have no stock, so they are priced on flows within the tick.
+
 ```typescript
-target     = reserveDays * demandedPerDay
-pressure   = (target - stock) / max(target, stock, epsilon)   // between -1 and 1
+totalDemandedPerDay = (demanded + inputDemanded) / days
+reserveDaysOf(good) = min(reserveDays, maxReserveSpoilageShare / max(good.spoilageRatePerDay, epsilon))
+
+if (good.isService)
+  pressure = (demanded - produced) / max(demanded, produced, epsilon)
+else
+  target   = reserveDaysOf(good) * totalDemandedPerDay
+  pressure = (target - stock) / max(target, stock, epsilon)
+// pressure is between -1 and 1
+
 logChange  = clamp(priceAdjustmentRatePerDay * economyResponsiveness * days * pressure,
                    -log(1 + maxPriceChangePerTick), log(1 + maxPriceChangePerTick))
 price      = clamp(price * exp(logChange),
@@ -712,7 +755,7 @@ modeFactor = land: 1, sea: migrationFactorBySea, air: migrationFactorByAir
 migrants = population * fraction(migrationRatePerDay) * attractivenessDifference * modeFactor / edgeCount
 ```
 
-New inhabitants and migrants join `unemployedWorkers` in proportion to `workforceShare`; the labor phase places them.
+New inhabitants and migrants join `unemployedWorkers` in proportion to `workforceShare`; the labor phase places them. When population falls, from starvation or emigration, the lost workers (the same `workforceShare` of the loss) are taken from `unemployedWorkers` first, then from private jobs in proportion to their size. Government workers and soldiers are not affected.
 
 ### Goods catalogs
 
@@ -754,7 +797,7 @@ The loader rejects a catalog if any of these hold:
 - `transportWeight` is in tonnes per unit, so land transport between neighbors (about 0.3 man-hours per tonne) costs a few percent of the value of most goods. Stone, sand and timber are the exceptions: they barely travel by land and are what sea routes are for.
 - Need units are physical where that makes sense (2,000 kcal of food, 10 kWh of energy, 10 passenger-km). Heterogeneous needs such as health, household goods, education and leisure use value units: one unit is one man-hour of that need at reference prices, and each good's `unitsPerGood` equals its labor value.
 - Goods that are used together, such as a car and its fuel, are bundled into a service whose recipe consumes both (car travel). Durables enter that service as a small input per use, which stands in for depreciation. The model therefore needs no complementary demand.
-- Electricity is a crafted good with a spoilage of 1 per day and a near-zero weight. It moves over the grid like any good but cannot be stored.
+- Electricity is a crafted good with a spoilage of 0.3 per day and a near-zero weight. It moves over the grid like any good, but its reserve is only about a third of a day of demand, and imported power loses about a quarter on the way, which stands for grid losses.
 
 **Calibration rule.** At labor-value prices and a purchasing power of 1, the full consumption basket should cost 70–85% of the labor available per person (`hoursPerWorkerDay × workforceShare`, 4 hours by default), and necessities should take roughly 30–40% of the basket. The rest of the labor is left for government jobs, armies and transport. The shipped catalogs use about 73% of the labor; necessities take 32% of the small basket, 29% of the medium one and 35% of the large one.
 
@@ -800,7 +843,7 @@ The government is a price taker on its own areas' markets. Orders execute in the
 // Buy order
 if (price <= limitPrice)
   quantity = min(remainingQuantity, maximumQuantityPerDay * days,
-                 max(0, stock - reserveDays * demandedPerDay), treasury / price)
+                 max(0, stock - reserveDaysOf(good) * totalDemandedPerDay), treasury / price)
   // goods: area stock -> depot; money: treasury -> area savings
 
 // Sell order
@@ -940,12 +983,12 @@ function runTick(world: World, commands: CommandEnvelope[]): void
 ```
 
 0. **Commands and automation.** Validate each command against its sender's government and apply it. Evaluate AI decisions and standing orders, which produce the same effects. Rebuild `resolvedPolicies` where a setting changed. Handle war declarations, peace answers and expired proposals. Recompute `Edge.isBlocked`.
-1. **Production.** For each good in catalog order: primary goods with diminishing returns on natural capacity, crafted goods limited by labor and inputs. Private output goes to area stock, government output to depots. Record `produced`, `outputLimitedByInputs` and the marginal output per worker.
+1. **Production.** For each good in catalog order: primary goods with diminishing returns on natural capacity, crafted goods limited by labor and by inputs rationed between their users. Private output goes to area stock, government output to depots. Record `produced`, `inputDemanded`, `outputLimitedByInputs` and the marginal output per worker.
 2. **Government market and logistics.** Execute buy and sell orders at local prices. Advance depot transfers and deliver those that arrive.
 3. **Consumption and army upkeep.** Compute purchasing power from wage level and savings. Compute demand per need at consumer prices including consumption tax, split it between substitutes, consume from stock, then run the spillover pass. Compute `satisfaction` and `necessitySatisfaction`. Armies refill from depots, forage or eat carried food; unfed soldiers desert.
 4. **Trade.** From the snapshot, compute flows per active, non-blocked edge of every mode, good and direction, including transport and tariffs. Cap sea and air routes at their capacity. Apply all goods and money movements together. Record `imported` and `exported`.
 5. **Taxes, subsidies and wages.** Collect taxes from savings, with the shortfall taken in kind. Pay subsidies, government wages and soldier wages from the treasury, scaled down together if the treasury is short.
-6. **Prices.** Move each price toward clearing the stock target, within the per-tick limit and the price bounds. Update `smoothedPrice`.
+6. **Prices.** Move each price toward clearing the stock target of total demand, or for services toward balancing production and demand, within the per-tick limit and the price bounds. Update `smoothedPrice`.
 7. **Labor.** Compute value added per job from smoothed prices and production taxes, and update `wageLevel`. Move private workers toward the target allocation within `maxLaborShiftPerTick`. Apply government hiring, quitting and firing.
 8. **Military.** Move marching armies. Resolve combat in contested areas. Advance or decay sieges. Transfer captured areas, move capitals and eliminate governments with no area left.
 9. **Population.** Apply growth or starvation from `necessitySatisfaction`. Compute migration along active, non-blocked edges from the snapshot, scaled by each edge's mode, and apply it together.
@@ -974,6 +1017,8 @@ Only the host simulates. The signaling broker is used only to set up connections
 | Networking | PeerJS | WebRTC data channels in reliable mode |
 | Serialization | @msgpack/msgpack | Binary messages and save files; typed arrays sent as Float32 |
 | Tests | Vitest | Unit tests and convergence scenarios |
+| End-to-end tests | Playwright | Real browsers, including two-browser multiplayer sessions |
+| Lint and format | Biome | One tool for both; independent of the TypeScript version |
 | Headless runs | Node with tsx | Balance testing without a browser |
 | Distribution | Static hosting, PWA (vite-plugin-pwa) | GitHub Pages, Netlify or Cloudflare Pages; installable on phones |
 

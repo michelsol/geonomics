@@ -95,7 +95,7 @@
       "satisfies": null
     },
     {
-      "key": "electricity", "name": "Electricity", "unit": "10 kWh", "kind": "crafted", "laborHoursPerUnit": 0.02, "transportWeight": 0.0001, "spoilageRatePerDay": 1, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "key": "electricity", "name": "Electricity", "unit": "10 kWh", "kind": "crafted", "laborHoursPerUnit": 0.02, "transportWeight": 0.0001, "spoilageRatePerDay": 0.3, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
       "inputs": [{"good": "coal", "quantity": 0.04}],
       "satisfies": {"need": "energy", "unitsPerGood": 1, "preference": 6}
     },
