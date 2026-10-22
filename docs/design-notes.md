@@ -1,6 +1,6 @@
 # Design notes
 
-Rationale and findings behind the rules in [specification.md](../specification.md). The specification says what the simulation does; this file says why, and what was tried before.
+Rationale and findings behind the rules in [specification.md](specification.md). The specification says what the simulation does; this file says why, and what was tried before.
 
 ## Economy stability (roadmap stage 3)
 

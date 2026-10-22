@@ -8,7 +8,7 @@ Section numbers (§) refer to the specification.
 
 - **Simulation first, interface later.** Stages 1 to 7 build the whole simulation in `packages/sim` and check it in the headless runner. Nothing in them needs a browser.
 - **Spec first for unspecified areas.** Map generation (stage 5), the interface (stage 8) and the AI (stage 10) start by writing their section of the specification.
-- **The spec stays true.** The specification is not a fixed contract: when implementation shows that a rule must change, update it in the same change. It holds rules only; rationale and findings go to [docs/design-notes.md](docs/design-notes.md).
+- **The spec stays true.** The specification is not a fixed contract: when implementation shows that a rule must change, update it in the same change. It holds rules only; rationale and findings go to [design-notes.md](design-notes.md).
 - **Determinism.** The same seed and the same command log must produce the same world, bit for bit, on the same device. From stage 3 on, a test hashes the world after N ticks and compares two runs.
 - **Budgets.** One tick for 3,000 areas × 54 goods must stay under 30 ms on a desktop and 100 ms on a mid-range phone. A full snapshot plus price table must stay under 300 KB. The headless runner reports both from stage 5 on.
 - **Tuning is continuous.** Every stage that touches the economy ends with a headless run of all three catalogs (`data/goods/`) and, if needed, retuned numbers.
@@ -119,7 +119,7 @@ Internal packages are consumed as TypeScript source (their `exports` point at `s
 - Substitution works: cutting fish capacity raises the bread share and keeps food satisfaction.
 - Savings above target drain through imports.
 
-Rationale for the rules this stage changed: [docs/design-notes.md](docs/design-notes.md).
+Rationale for the rules this stage changed: [design-notes.md](design-notes.md).
 
 ## Stage 4: Sea and air routes ✅
 
@@ -159,7 +159,7 @@ Rationale for the rules this stage changed: [docs/design-notes.md](docs/design-n
 - A 3,000-area map with the large catalog runs a tick within budget. *Not met: about 50 ms per tick on the development machine against 30 ms; the default 1,000-area map takes about 15 ms. Carried to stage 8.*
 - The warm-up converges without collapsing any area.
 
-Findings: [docs/design-notes.md](docs/design-notes.md#map-generation-roadmap-stage-5).
+Findings: [design-notes.md](design-notes.md#map-generation-roadmap-stage-5).
 
 ## Stage 6: Government
 
