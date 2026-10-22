@@ -1,13 +1,13 @@
 // Worlds for convergence checks and benchmarks. The hand-built ones work with any catalog: primary goods are spread
 // generically and capacities are sized from the reference demand. "map" runs the map generator.
 import {
-  type AreaId,
   type AreaSpec,
   type Catalog,
   createConfig,
   createWorld,
   type DeepPartial,
   type EdgeSpec,
+  foundGovernments,
   generateMap,
   initializeWorld,
   nextRandom,
@@ -148,19 +148,16 @@ export const scenarios = {
   },
 
   map: {
-    description: "A generated map (config.map.landAreaCount areas, 1,000 by default)",
+    description: "A generated map (config.map.landAreaCount areas, 1,000 by default) with a realm per capital",
     build: (options) => {
       const config = createConfig(options.catalog, options.config);
       const { world, capitals } = generateMap(options.catalog, config, options.seed ?? 1);
       initializeWorld(world);
-      mapCapitals.set(world, capitals);
+      foundGovernments(world, capitals);
       return world;
     },
   },
 } satisfies Record<string, Scenario>;
-
-/** Capitals chosen by the map generator for worlds built by the "map" scenario. */
-export const mapCapitals = new WeakMap<World, AreaId[]>();
 
 export type ScenarioName = keyof typeof scenarios;
 export const SCENARIO_NAMES = Object.keys(scenarios) as ScenarioName[];

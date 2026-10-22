@@ -28,7 +28,8 @@ function consumeArea(world: World, area: Area, scratch: Scratch): void {
   const days = world.config.pace.gameDaysPerTick;
   const { tierWeights } = world.config.economy;
   const { goods } = world;
-  const consumptionTax = policiesOf(world, area, scratch).consumptionTaxRate;
+  const policies = policiesOf(world, area, scratch);
+  const consumptionTax = policies.consumptionTaxRate;
   const logPower = Math.log(purchasingPower(world, area));
   const share = scratch.weights;
   const unitPrice = scratch.values;
@@ -113,6 +114,20 @@ function consumeArea(world: World, area: Area, scratch: Scratch): void {
 
   // Services are consumed in the tick they are produced; whatever was not consumed is lost.
   for (const good of goods) if (good.isService) area.stock[good.id] = 0;
+
+  if (policies !== scratch.neutralPolicies) {
+    // Consumption tax is owed on what was consumed at the market price; a negative rate is a subsidy.
+    let tax = 0;
+    let subsidy = 0;
+    for (const good of goods) {
+      const due =
+        (consumptionTax[good.id] as number) * (area.consumed[good.id] as number) * (area.price[good.id] as number);
+      if (due > 0) tax += due;
+      else subsidy -= due;
+    }
+    scratch.taxDue[area.id] = (scratch.taxDue[area.id] as number) + tax;
+    scratch.paymentDue[area.id] = (scratch.paymentDue[area.id] as number) + subsidy;
+  }
 }
 
 /** x ** -exponent, with the common exponents of the catalogs computed without Math.pow. */

@@ -1,9 +1,8 @@
-// Debug view of a generated map: Voronoi cells by terrain, water, land edges, sea and air routes, capitals.
+// Debug view of a generated map: Voronoi cells by terrain, realms, water, land edges, sea and air routes, capitals.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Terrain, World } from "@geonomics/sim";
 import { Delaunay } from "d3-delaunay";
-import { mapCapitals } from "./scenarios";
 
 const TERRAIN_COLORS: Record<Terrain, string> = {
   plains: "#b7d48b",
@@ -26,6 +25,12 @@ export function writeMapSvg(world: World, path: string): void {
     const area = world.areas[i];
     const fill = area ? TERRAIN_COLORS[area.terrain] : "#4f7fb5";
     cells.push(`<path d="${voronoi.renderCell(i)}" fill="${fill}" stroke="${area ? "#00000022" : fill}"/>`);
+    const owner = area?.owner === null || area === undefined ? undefined : world.governments[area.owner];
+    if (owner) {
+      cells.push(
+        `<path d="${voronoi.renderCell(i)}" fill="${owner.color}" fill-opacity="0.45" stroke="${owner.color}" stroke-width="4"/>`,
+      );
+    }
   }
 
   const lines: string[] = [];
@@ -52,8 +57,8 @@ export function writeMapSvg(world: World, path: string): void {
       markers.push(`<rect x="${x - 12}" y="${y - 12}" width="24" height="24" fill="#b0303a"/>`);
     else if (area.portLevel > 0) markers.push(`<circle cx="${x}" cy="${y}" r="8" fill="#1d3d73"/>`);
   }
-  for (const id of mapCapitals.get(world) ?? []) {
-    const area = world.areas[id];
+  for (const government of world.governments) {
+    const area = government.capital === null ? undefined : world.areas[government.capital];
     if (area) {
       markers.push(
         `<circle cx="${area.position.x}" cy="${area.position.y}" r="40" fill="#ffd700" stroke="#000" stroke-width="6"/>`,

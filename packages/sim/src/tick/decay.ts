@@ -1,4 +1,4 @@
-// Phase 10: spoilage, regeneration of natural capacity, and the clock.
+// Phase 10: spoilage of stocks, depots and goods in transit, and regeneration of natural capacity.
 import type { World } from "../types";
 
 export function runDecay(world: World): void {
@@ -16,5 +16,14 @@ export function runDecay(world: World): void {
           capacity + (recover[g] as number) * ((area.naturalCapacityMaximum[g] as number) - capacity);
       }
     }
+  }
+
+  // Government depots and goods in transit spoil like any stock.
+  for (const government of world.governments) {
+    for (const state of government.areaStates.values()) {
+      for (const good of world.goods)
+        state.depot[good.id] = (state.depot[good.id] as number) * (keep[good.id] as number);
+    }
+    for (const transfer of government.depotTransfers) transfer.quantity *= keep[transfer.good] as number;
   }
 }

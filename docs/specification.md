@@ -49,6 +49,7 @@ An area's **savings** is the private money held by its inhabitants. Transactions
 | Government and army wages | Treasury to savings | Tax phase |
 | Government purchases on the local market | Treasury to savings | Market phase |
 | Government sales on the local market | Savings to treasury | Market phase |
+| Transport of government depot transfers | Treasury to the savings of the source area | When the transfer is ordered |
 
 Taxing without spending drains an area's savings, so it can no longer import. This is intended: it is the natural cost of over-taxation.
 
@@ -173,6 +174,7 @@ interface Area {
   productivity: number;                 // local multiplier on labor output (terrain, local know-how)
   unemployedWorkers: number;            // workers without a private or government job
   fortificationLevel: number;           // defensive multiplier built by government fortification jobs
+  fortificationProgress: number;        // worker-days accumulated toward the next fortification level
   terrain: Terrain;                     // set by map generation: sets productivity and land transport cost
   isCoastal: boolean;                   // set by map generation: the area touches navigable water
   portLevel: number;                    // 0 = no port; raises the capacity of the area's sea routes
@@ -194,6 +196,7 @@ interface Area {
   produced: Float64Array;               // units produced this tick, private and government combined
   demanded: Float64Array;               // units the population wanted to consume this tick
   inputDemanded: Float64Array;          // units private production requested as inputs this tick, before rationing
+  governmentDemanded: Float64Array;     // units governments tried to buy on the market this tick
   consumed: Float64Array;               // units actually consumed this tick
   imported: Float64Array;               // units received from neighbors this tick
   exported: Float64Array;               // units sent to neighbors this tick
@@ -255,7 +258,7 @@ type PolicyName =
 interface PolicySetting {
   policy: PolicyName;                   // which policy this sets
   good: GoodId | null;                  // the good it applies to; null for per-area policies like head tax
-  value: number | null;                 // the rate or price; null removes a ceiling or floor
+  value: number | null;                 // the rate or price; null restores the neutral value (no tax, ceiling or floor)
 }
 
 interface ResolvedPolicies {            // flat arrays used by the tick; rebuilt only when a setting changes
@@ -360,7 +363,7 @@ interface PeaceProposal {
 
 ### Commands
 
-Players and AI act only through commands. The host queues them and applies them at the start of the next tick.
+Players and AI act only through commands. The host queues them and applies them at the start of the next tick, in order; each command is validated against the state left by the ones before it.
 
 ```typescript
 type Command =
@@ -384,7 +387,7 @@ type Command =
   | { type: "removeStandingOrder"; orderId: number };
 
 interface CommandEnvelope {
-  player: PlayerId;                     // sender, checked against the government's controller
+  player: PlayerId;                     // sender, checked against the government's controller; "ai" for AI governments
   government: GovernmentId;             // government the command acts for
   command: Command;                     // the action itself
 }
@@ -398,14 +401,15 @@ The host validates every command before applying it. A rejected command changes 
 
 | Check | Rule |
 | --- | --- |
-| Sender | `player` must be the controller of `government`, and the government must not be eliminated |
+| Sender | `player` must be the controller of `government` (`"ai"` for an AI government; the host never accepts that id from the network), and the government must not be eliminated |
 | Ownership | Every area, army, order or depot a command references must belong to the sending government |
 | Numbers | Every number must be finite; quantities, worker targets, soldiers and prices must be ≥ 0 |
-| Tax rates | Production and consumption tax rates and tariffs must be within [−1, 5] |
+| Policies | Production and consumption tax rates and tariffs must be within [−1, 5]; head tax, ceilings and floors ≥ 0. Head tax takes no good; every other policy takes one |
 | Wages | `wageOffer` must be within [0, 10] |
 | Recruiting | Soldiers must not exceed the area's unemployed and private workers |
-| Jobs | `buildPort` only in coastal areas; `buildInfrastructure` only on an edge touching the area |
-| Transfers | Source and destination depots must be connected by a non-blocked path |
+| Jobs | `buildPort` only in coastal areas; `buildInfrastructure` only on a land edge touching the area; `produce` never a service, and a primary good only where the area has natural capacity for it |
+| Goods | Market orders, transfers and standing rules never name a service |
+| Transfers | Two different owned areas; the quantity at most what the source depot holds; a non-blocked path between them; a treasury that covers the transport |
 | Diplomacy | No war on oneself; peace only with a government at war; a payment must fit in the payer's treasury when the proposal is answered |
 | Limits | At most 1,000 open market orders and 200 standing orders per government, so a client cannot slow the host down |
 
@@ -547,6 +551,7 @@ interface WorldConfig {
     seaTravelDaysPerDistance: number;   // game days an army needs per unit of sea distance (default 0.01)
     migrationFactorBySea: number;       // migration over a sea route, relative to a land edge (default 0.5)
     migrationFactorByAir: number;       // migration over an air route, relative to a land edge (default 0.25)
+    airFreightDays: number;             // game days a depot transfer takes over an air route (default 1)
   };
   population: {
     growthRatePerDay: number;           // relative growth per day at full necessity satisfaction (default 0.0001)
@@ -565,6 +570,9 @@ interface WorldConfig {
     maximumFortificationLevel: number;  // highest fortification level (default 3)
     researchWorkerDaysPerLevel: number; // work needed per research level (default 10000)
     researchProductivityBonus: number;  // productivity added per research level (default 0.05)
+    startingRealmRadius: number;        // a starting realm is its capital plus land neighbors up to this many hops away (default 1)
+    startingTreasuryDays: number;       // starting treasury, in days of the realm's income (default 30)
+    standingOrderShareOfDemandPerDay: number; // pacing of standing orders, as a share of the area's daily demand (default 0.2)
   };
   network: {
     priceTableRate: number;             // global price table broadcasts per wall-clock second (default 1)
@@ -645,7 +653,7 @@ inputDemanded[i] = requested[i]
 
 A user limited by another input takes less than its ration, and the rest stays in stock. Producers draw before consumers in the same tick.
 
-`inputDemanded` matters as much as consumer demand. **Total demand** for a good is `max(demanded, consumed) + inputDemanded`: what consumers wanted or, when they fell back on it because a substitute ran out, what they actually ate, plus what producers requested. It is the demand used by the price target, the exportable surplus, the labor plan, government buy orders, standing orders and the initial stock.
+`inputDemanded` matters as much as consumer demand. **Total demand** for a good is `max(demanded, consumed) + inputDemanded + governmentDemanded`: what consumers wanted or, when they fell back on it because a substitute ran out, what they actually ate, plus what producers requested, plus what governments tried to buy. It is the demand used by the price target, the exportable surplus, the labor plan and the initial stock. Government buy orders and standing orders use the inhabitants' part only, without `governmentDemanded`.
 
 Private production draws inputs from the area's stock. Government production draws from the government depot, with its own rationing over the depot, and is not part of `inputDemanded`. Services are produced like crafted goods but go straight to consumption and never enter stock.
 
@@ -747,7 +755,8 @@ Scarcity is measured by a **pressure** between -1 and 1. Storable goods are pric
 
 ```typescript
 reserveDaysOf(good) = min(reserveDays, maxReserveSpoilageShare / max(good.spoilageRatePerDay, epsilon))
-used     = max(demanded, consumed) + inputDemanded + exportRate * days   // exports at the smoothed shipping rates
+used     = max(demanded, consumed) + inputDemanded + governmentDemanded
+         + exportRate * days                                            // exports at the smoothed shipping rates
 
 if (good.isService)
   pressure = (demanded - produced) / max(demanded, produced, epsilon)
@@ -835,9 +844,9 @@ A map is generated from a seed, the catalog and `WorldConfig.map`. Every random 
 6. **Sea routes.** Each coastal area is linked to its `seaRoutesPerPort` nearest coastal areas by distance over water (a search over water cells), skipping areas it already shares a land edge with. Then, while some areas cannot reach the others, the shortest water route from the group of area 0 to another group is added.
 7. **Natural capacity.** For each primary good, the eligible areas are those whose terrain is in the good's `terrains` (`coast` meaning coastal areas), or all areas if none match. A noise field per good ranks them. The top areas are chosen until both `presence[abundance]` of the eligible areas and enough population to supply world demand with `extractionLaborShare` of its workforce are reached. An area that holds no primary good gets its best-scoring common good, preferring one suited to its terrain. Capacity totals `capacityHeadroom` × reference demand × world population, split in proportion to population × (noise above the cut + 0.2).
 8. **Airports.** The `initialAirportShare` most populous areas get airport level 1, then air routes are built (section 5, Sea and air routes).
-9. **Capitals.** `governmentCount` capitals: the most populous area, then each next one maximizing hops to the nearest capital over land and sea edges × √population. Every area starts neutral.
+9. **Capitals.** `governmentCount` capitals: the most populous area, then each next one maximizing hops to the nearest capital over land and sea edges × √population.
 
-The world is then initialized (Rule 6) and warmed up.
+The world is then initialized (Rule 6), a government is founded on each capital (section 6, Founding), and the world is warmed up.
 
 ### Goods catalogs
 
@@ -889,45 +898,69 @@ The loader rejects a catalog if any of these hold:
 
 A government touches the private economy through three channels only: policies, market orders and employment. It holds one treasury for the whole realm and one depot per owned area, because money moves instantly but goods must travel.
 
+### Founding
+
+A government is founded on each capital placed by map generation, in capital order.
+
+- **Realm:** the capital, plus the areas up to `startingRealmRadius` land edges away that no earlier government or other capital has claimed.
+- **Treasury:** starts at `startingTreasuryDays` of the realm's income, `population × workforceShare × hoursPerWorkerDay × wageLevel` summed over its areas.
+- **Owned areas:** each starts with an empty depot, no jobs, a `wageOffer` of 1 and no policies.
+- **Relations:** every pair of governments starts at peace.
+- **Controller:** an idle AI until a player or the AI takes the government over.
+
 ### Policies
 
 Each policy plugs into exactly one phase of the tick.
 
 | Policy | Applies per | Phase | Effect |
 | --- | --- | --- | --- |
-| `productionTaxRate` | Good | Labor | Lowers value added, so workers leave the taxed good. Negative values are subsidies. |
-| `consumptionTaxRate` | Good | Consumption | Raises the consumer price, so demand drops, mostly for elastic goods. |
+| `productionTaxRate` | Good | Production, Labor | Taxes private output at the market price, and lowers value added, so workers leave the taxed good. Negative values are subsidies. |
+| `consumptionTaxRate` | Good | Consumption | Raises the consumer price, so demand drops, mostly for elastic goods. Negative values are subsidies. |
 | `importTariffRate` | Good | Trade | Added to the cost of goods entering across a border. |
 | `exportTariffRate` | Good | Trade | Added to the cost of goods leaving across a border. A very high value acts as a ban. |
 | `headTaxPerPersonPerDay` | Area | Taxes | Flat tax per inhabitant. Reliable revenue that drains savings and drives people away. |
 | `priceCeiling`, `priceFloor` | Good | Prices | Clamp the local price. Ceilings cause shortages; floors cause gluts. |
 
-The player sets **realm policies** once and adds **area overrides** where needed. The two are merged into `resolvedPolicies` only when a setting changes, never during a normal tick. Neutral areas have all policies at zero.
+The player sets **realm policies** once and adds **area overrides** where needed.
+
+- A setting replaces the previous setting of the same policy and good.
+- A null value stands for the neutral value (no tax, no ceiling, no floor), so an override can lift a realm ceiling in one area.
+- Clearing an override falls back to the realm setting.
+- Realm settings and overrides are merged into `resolvedPolicies` only when a setting changes or an area changes owner, never during a normal tick.
+- Neutral areas have all policies at zero.
 
 ### Tax collection
 
+Taxes are owed on this tick's private output and consumption at the market price, plus the head tax:
+
 ```typescript
-taxDue = sum over goods of productionTaxRate * privatelyProduced * price
-       + sum over goods of consumptionTaxRate * consumed * price
-       + headTaxPerPersonPerDay * population * days
+taxDue  = sum over goods of max(0, productionTaxRate) * privatelyProduced * price
+        + sum over goods of max(0, consumptionTaxRate) * consumed * price
+        + headTaxPerPersonPerDay * population * days
+subsidy = the same production and consumption terms for negative rates, as positive amounts
 // tariffs were already collected in money during trade
 
 paidInMoney = min(taxDue, area.savings)
 shortfall   = taxDue - paidInMoney
-// shortfall taken in kind: goods move from area stock to the depot, most valuable first, at local price
+// shortfall taken in kind: goods move from area stock to the depot, highest price first, valued at local price
 ```
 
-Subsidies (negative production tax) are paid from the treasury into area savings. If the treasury cannot pay every subsidy and wage, all payments are scaled down by the same ratio.
+The **bill** of a government is the subsidies and wages it owes this tick:
+- the subsidies of every owned area;
+- government wages, `workers × wageOffer × hoursPerWorkerDay × days` per job.
+
+It is paid from the treasury after taxes are collected. If the treasury cannot pay the whole bill, every payment is scaled by the same `paidShare = treasury / bill`.
 
 ### Market orders
 
-The government is a price taker on its own areas' markets. Orders execute in the market phase, after production and before consumption.
+The government is a price taker on its own areas' markets. Orders execute in the market phase, after production and before consumption, in order id order, followed by the trades issued by standing orders.
 
 ```typescript
 // Buy order
 if (price <= limitPrice)
-  quantity = min(remainingQuantity, maximumQuantityPerDay * days,
-                 max(0, stock - reserveDaysOf(good) * totalDemandedPerDay), treasury / price)
+  wanted   = min(remainingQuantity, maximumQuantityPerDay * days, treasury / price)
+  governmentDemanded += wanted                    // counts in total demand, so producers grow to supply it
+  quantity = min(wanted, max(0, stock - reserveDaysOf(good) * inhabitantsDemandedPerTick / days))
   // goods: area stock -> depot; money: treasury -> area savings
 
 // Sell order
@@ -936,11 +969,19 @@ if (price >= limitPrice)
   // goods: depot -> area stock; money: area savings -> treasury
 ```
 
+`inhabitantsDemandedPerTick` is total demand without `governmentDemanded`, so a government never takes the reserve its inhabitants keep. A completed order is removed; an order on an area the government no longer owns is cancelled.
+
 A purchase lowers stock, so the price rises in the next price phase. Buying cheaply in good years and selling during a famine is a core strategy.
 
 ### Depots and transfers
 
-A `transferGoods` command moves goods between two depots of the same government. The route is the cheapest path through non-blocked edges. Transport cost (sum of `transportCost × transportWeight × quantity` along the route) is paid from the treasury upfront, and goods arrive after the sum of the edges' `travelDays`. Goods spoil in depots and in transit like any stock.
+A `transferGoods` command moves goods between two depots of the same government.
+
+- **Route:** the cheapest path by `transportCost` through active, non-blocked edges of every mode.
+- **Departure:** the goods leave the source depot at once.
+- **Payment:** transport, the sum of `transportCost × transportWeight × quantity` along the route, is paid upfront from the treasury to the savings of the source area, whose carriers do the work.
+- **Arrival:** after the sum of the edges' `travelDays`, counting `airFreightDays` for each air route.
+- **Losses:** goods spoil in depots and in transit like any stock. Goods arriving at an area the government no longer owns are lost.
 
 ### Hiring and wages
 
@@ -948,32 +989,43 @@ The player sets a target number of workers per job and a wage offer per area. Wo
 
 ```typescript
 wageAttractiveness = wageOffer / max(area.wageLevel, epsilon)
-if (targetWorkers > workers && wageAttractiveness >= 1)
-  workers += fraction(hiringRatePerDay) * (targetWorkers - workers)   // capped by available workforce
-if (wageAttractiveness < 1)
-  workers -= workers * fraction(quitRatePerDay) * (1 - wageAttractiveness)
 if (targetWorkers < workers)
   workers = targetWorkers                                            // firing is instant
-
-wagesPaid = workers * wageOffer * hoursPerWorkerDay * days           // treasury -> area savings
+workers -= workers * fraction(quitRatePerDay) * max(0, 1 - wageAttractiveness, 1 - paidShare)
+if (targetWorkers > workers && wageAttractiveness >= 1)
+  workers += fraction(hiringRatePerDay) * (targetWorkers - workers)   // capped by available workforce
 ```
 
-Fired and quitting workers return to `unemployedWorkers`. Unpaid workers quit at `quitRatePerDay` times their unpaid share.
+- Hiring, quitting and firing use `economyResponsiveness`.
+- Fired and quitting workers return to `unemployedWorkers`.
+- A job whose target and workers are both zero is removed.
+- If the area's workforce shrinks below its government workers, they are scaled down to fit.
 
 ### Government jobs
 
 | Job | Effect |
 | --- | --- |
-| `produce` | Produces a good with the normal recipe, drawing inputs from the depot and adding output to it. |
-| `buildInfrastructure` | Adds worker-days to an adjacent edge. Each `infrastructureWorkerDaysPerStep` multiplies its transport cost by `infrastructureStepFactor`, down to `minimumTransportCostFactor` of the base. |
+| `produce` | Produces a good with the normal recipe in phase 1. On a primary good, government and private workers share the natural capacity and its output in proportion to workers. A crafted good draws its inputs from the depot, rationed between the government's recipes like private inputs, and adds its output to the depot. |
+| `buildInfrastructure` | Adds worker-days to an adjacent land edge. Each `infrastructureWorkerDaysPerStep` multiplies its transport cost by `infrastructureStepFactor`, down to `minimumTransportCostFactor` of the base. |
 | `fortify` | Adds worker-days toward the next fortification level of the area, up to `maximumFortificationLevel`. |
 | `buildPort` | Coastal areas only. Each `portWorkerDaysPerLevel` raises `portLevel` by one, up to `maximumPortLevel`, which raises the capacity of the area's sea routes. |
 | `buildAirport` | Each `airportWorkerDaysPerLevel` raises `airportLevel` by one, up to `maximumAirportLevel`. The first level opens air routes; the maximum level makes the airport a hub. |
-| `research` | Adds worker-days to the realm's research. Each level adds `researchProductivityBonus` to productivity in every owned area. |
+| `research` | Adds worker-days to the realm's research. Each `researchWorkerDaysPerLevel` adds `researchProductivityBonus` to productivity in every owned area. |
+
+Worker-days are `workers × days`, accumulated in phase 10.
 
 ### Standing orders
 
-Standing orders are rules evaluated at the start of every tick. Each one issues the same effects a player command would, such as placing or topping up a market order or loading an army. They keep a large realm manageable, and AI governments are built almost entirely from them.
+Standing orders are rules evaluated at the start of every tick, in each area they name (`"all"` meaning every owned area). Each one issues the same effects a player command would. They keep a large realm manageable, and AI governments are built almost entirely from them.
+
+| Rule | Issues this tick |
+| --- | --- |
+| `keepDepotStock` | A buy of `targetDaysOfDemand × inhabitants' daily demand − depot`, at most `maximumBuyPrice` |
+| `sellAbovePrice` | A sale of `depot − keepDaysOfDemand × inhabitants' daily demand`, at least `minimumPrice` |
+| `buyBelowPrice` | A buy of `maximumDepotQuantity − depot`, at most `maximumPrice` |
+| `supplyArmies` | Refills armies standing in the area from the depot (section 7, Upkeep) |
+
+Their trades execute in the market phase like market orders. Each trade is paced at `standingOrderShareOfDemandPerDay` of the inhabitants' daily demand for the good, or of its daily production if larger.
 
 ## 7. War and conquest
 
@@ -1063,17 +1115,17 @@ An accepted proposal sets the relation to `peace`, transfers the listed areas wi
 One tick runs eleven phases in a fixed order, and each phase runs over every area before the next one starts. Trade, migration and combat read a snapshot and apply their results together, so the outcome never depends on the order areas are processed in.
 
 ```typescript
-function runTick(world: World, commands: CommandEnvelope[]): void
+function runTick(world: World, commands: CommandEnvelope[]): CommandRejection[] // { envelope, reason }
 ```
 
-0. **Commands and automation.** Validate each command against its sender's government and apply it. Evaluate AI decisions and standing orders, which produce the same effects. Rebuild `resolvedPolicies` where a setting changed. Handle war declarations, peace answers and expired proposals. Recompute `Edge.isBlocked`.
-1. **Production.** For each good in catalog order: primary goods with diminishing returns on natural capacity, crafted goods limited by labor and by inputs rationed between their users. Private output goes to area stock, government output to depots. Record `produced`, `inputDemanded`, `outputLimitedByInputs` and the marginal output per worker.
-2. **Government market and logistics.** Execute buy and sell orders at local prices. Advance depot transfers and deliver those that arrive.
+0. **Commands and automation.** Validate each command against its sender's government and apply it, in order; `runTick` returns the rejected ones with their reasons. Rebuild `resolvedPolicies` where a setting changed. Handle war declarations, peace answers and expired proposals. Evaluate AI decisions and standing orders, which produce the same effects. Recompute `Edge.isBlocked`.
+1. **Production.** For each good in catalog order: primary goods with diminishing returns on natural capacity, crafted goods limited by labor and by inputs rationed between their users. Private output goes to area stock, government output to depots. Production taxes and subsidies are owed on private output. Record `produced`, `inputDemanded`, `outputLimitedByInputs` and the marginal output per worker.
+2. **Government market and logistics.** Execute buy and sell orders at local prices, then the trades issued by standing orders. Advance depot transfers and deliver those that arrive.
 3. **Consumption and army upkeep.** Compute purchasing power from wage level and savings. Compute demand per need at consumer prices including consumption tax, split it between substitutes, consume from stock, then run the spillover pass. Compute `satisfaction` and `necessitySatisfaction`. Armies refill from depots, forage or eat carried food; unfed soldiers desert.
 4. **Trade.** From the snapshot, move each edge's shipping rates toward their targets and compute flows per active, non-blocked edge of every mode, good and direction, including transport and tariffs. Cap sea and air routes at their capacity and imports at the buyer's savings. Apply all goods and money movements together. Record `imported` and `exported`.
 5. **Taxes, subsidies and wages.** Collect taxes from savings, with the shortfall taken in kind. Pay subsidies, government wages and soldier wages from the treasury, scaled down together if the treasury is short.
 6. **Prices.** Measure each good's scarcity against its stock target and flows, or for services against production and demand. Move each price toward the smoothed price times the scarcity premium, within the per-tick limit and the price bounds, then move `smoothedPrice` toward the price.
-7. **Labor.** Compute value added per job from smoothed prices and production taxes, and update `wageLevel`. Move private workers toward the labor each job needs, tilted by value added against the reservation wage, within `maxLaborShiftPerTick`. Apply government hiring, quitting and firing.
+7. **Labor.** Compute value added per job from smoothed prices and production taxes, and update `wageLevel`. Move private workers toward the labor each job needs, tilted by value added against the reservation wage, within `maxLaborShiftPerTick`. Then apply government hiring, quitting and firing.
 8. **Military.** Move marching armies. Resolve combat in contested areas. Advance or decay sieges. Transfer captured areas, move capitals and eliminate governments with no area left.
 9. **Population.** Apply growth or starvation from `necessitySatisfaction`. Compute migration along active, non-blocked edges from the snapshot, scaled by each edge's mode, and apply it together.
 10. **Decay and progress.** Spoil stock, depots, transfers and army supplies. Regenerate natural capacity: `capacity += (maximum - capacity) × (1 - exp(-regenerationRatePerDay × days))`. Apply infrastructure, fortification, port, airport and research progress. If any port or airport level changed, update the capacity of the routes touching it; if an airport level changed, also rebuild the air routes. Increment `tick` and add `gameDaysPerTick` to `gameDay`.

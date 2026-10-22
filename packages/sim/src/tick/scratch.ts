@@ -1,6 +1,7 @@
 // Reusable per-world buffers for the tick, so phases never allocate in the hot path. They hold only values
 // recomputed every tick, so they are kept outside the serializable World.
-import type { Area, GoodId, ResolvedPolicies, World } from "../types";
+import { neutralPolicies } from "../government";
+import type { Area, AreaId, GoodId, GovernmentId, ResolvedPolicies, World } from "../types";
 
 export interface Scratch {
   goodCount: number;
@@ -27,6 +28,22 @@ export interface Scratch {
   attractiveness: Float64Array; // per area
   edgeTonnage: Float64Array; // per edge and direction (2 × edge + 0 for A→B, + 1 for B→A): tonnes this tick
   flows: TradeFlows; // trade flows computed this tick, applied together
+  stateWorkers: (Float64Array | null)[]; // per area, per good: workers of government produce jobs; null when none
+  taxDue: Float64Array; // per area: production and consumption taxes owed this tick
+  paymentDue: Float64Array; // per area: subsidies and wages the treasury owes the inhabitants this tick
+  paidShare: number[]; // per government: share of this tick's wages and subsidies the treasury could pay
+  standingTrades: StandingTrade[]; // market trades issued by standing orders this tick
+}
+
+/** A market trade issued by a standing order for one tick, executed like a market order. */
+export interface StandingTrade {
+  government: GovernmentId;
+  area: AreaId;
+  good: GoodId;
+  side: "buy" | "sell";
+  quantity: number;
+  limitPrice: number;
+  maximumQuantityPerDay: number;
 }
 
 /** Struct-of-arrays list of trade flows, reused tick after tick. */
@@ -80,7 +97,7 @@ function createScratch(world: World, previous: Scratch | undefined): Scratch {
     reserveDays: perGood(),
     spoilageLoss: perGood(),
     used: world.areas.map(() => perGood()),
-    neutralPolicies: previous?.neutralPolicies ?? createNeutralPolicies(goodCount),
+    neutralPolicies: previous?.neutralPolicies ?? neutralPolicies(goodCount),
     marginalOutput: world.areas.map(() => perGood()),
     producible: world.areas.map(() => new Uint8Array(goodCount)),
     maximumByLabor: perGood(),
@@ -95,27 +112,25 @@ function createScratch(world: World, previous: Scratch | undefined): Scratch {
     attractiveness: new Float64Array(areaCount),
     edgeTonnage: new Float64Array(world.edges.length * 2),
     flows: previous?.flows ?? createFlows(1024),
-  };
-}
-
-export function createNeutralPolicies(goodCount: number): ResolvedPolicies {
-  return {
-    productionTaxRate: new Float64Array(goodCount),
-    consumptionTaxRate: new Float64Array(goodCount),
-    importTariffRate: new Float64Array(goodCount),
-    exportTariffRate: new Float64Array(goodCount),
-    headTaxPerPersonPerDay: 0,
-    priceCeiling: new Float64Array(goodCount).fill(Number.POSITIVE_INFINITY),
-    priceFloor: new Float64Array(goodCount),
+    stateWorkers: world.areas.map(() => null),
+    taxDue: new Float64Array(areaCount),
+    paymentDue: new Float64Array(areaCount),
+    paidShare: [],
+    standingTrades: [],
   };
 }
 
 /**
- * Units of a good an area used this tick: what consumers wanted or, when substitutes ran out, what they actually
- * consumed, plus what local producers requested as inputs.
+ * Units of a good the inhabitants of an area used this tick: what consumers wanted or, when substitutes ran out,
+ * what they actually consumed, plus what local producers requested as inputs.
  */
-export function usedPerTick(area: Area, g: number): number {
+export function privateUsedPerTick(area: Area, g: number): number {
   return Math.max(area.demanded[g] as number, area.consumed[g] as number) + (area.inputDemanded[g] as number);
+}
+
+/** Total demand for a good in an area this tick: private use plus what governments tried to buy. */
+export function usedPerTick(area: Area, g: number): number {
+  return privateUsedPerTick(area, g) + (area.governmentDemanded[g] as number);
 }
 
 /**

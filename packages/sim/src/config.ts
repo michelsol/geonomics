@@ -54,6 +54,7 @@ export interface WorldConfig {
     seaTravelDaysPerDistance: number; // game days an army needs per unit of sea distance
     migrationFactorBySea: number; // migration over a sea route, relative to a land edge
     migrationFactorByAir: number; // migration over an air route, relative to a land edge
+    airFreightDays: number; // game days a depot transfer takes over an air route
   };
   population: {
     growthRatePerDay: number; // relative growth per day at full necessity satisfaction
@@ -72,6 +73,9 @@ export interface WorldConfig {
     maximumFortificationLevel: number; // highest fortification level
     researchWorkerDaysPerLevel: number; // work needed per research level
     researchProductivityBonus: number; // productivity added per research level
+    startingRealmRadius: number; // a starting realm is its capital plus land neighbors up to this many hops away
+    startingTreasuryDays: number; // starting treasury, in days of the realm's income
+    standingOrderShareOfDemandPerDay: number; // pacing of standing orders, as a share of the area's total demand per day
   };
   network: {
     priceTableRate: number; // global price table broadcasts per wall-clock second
@@ -162,6 +166,7 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
     seaTravelDaysPerDistance: 0.01,
     migrationFactorBySea: 0.5,
     migrationFactorByAir: 0.25,
+    airFreightDays: 1,
   },
   population: {
     growthRatePerDay: 0.0001,
@@ -180,6 +185,9 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
     maximumFortificationLevel: 3,
     researchWorkerDaysPerLevel: 10000,
     researchProductivityBonus: 0.05,
+    startingRealmRadius: 1,
+    startingTreasuryDays: 30,
+    standingOrderShareOfDemandPerDay: 0.2,
   },
   network: {
     priceTableRate: 1,

@@ -103,6 +103,7 @@ export interface Area {
   productivity: number; // local multiplier on labor output (terrain, local know-how)
   unemployedWorkers: number; // workers without a private or government job
   fortificationLevel: number; // defensive multiplier built by government fortification jobs
+  fortificationProgress: number; // worker-days accumulated toward the next fortification level
   terrain: Terrain; // set by map generation: sets productivity and land transport cost
   isCoastal: boolean; // set by map generation: the area touches navigable water
   portLevel: number; // 0 = no port; raises the capacity of the area's sea routes
@@ -124,6 +125,7 @@ export interface Area {
   produced: Float64Array; // units produced this tick, private and government combined
   demanded: Float64Array; // units the population wanted to consume this tick
   inputDemanded: Float64Array; // units private production requested as inputs this tick, before rationing
+  governmentDemanded: Float64Array; // units governments tried to buy on the market this tick
   consumed: Float64Array; // units actually consumed this tick
   imported: Float64Array; // units received from neighbors this tick
   exported: Float64Array; // units sent to neighbors this tick

@@ -161,7 +161,7 @@ Rationale for the rules this stage changed: [design-notes.md](design-notes.md).
 
 Findings: [design-notes.md](design-notes.md#map-generation-roadmap-stage-5).
 
-## Stage 6: Government
+## Stage 6: Government ✅
 
 **Goal:** players can act on the economy (§6) through commands (§3).
 
@@ -178,6 +178,8 @@ Findings: [design-notes.md](design-notes.md#map-generation-roadmap-stage-5).
 - Taxing without spending drains savings and imports.
 - Buying in a glut and selling in a famine is profitable.
 - Building infrastructure lowers transport cost step by step.
+
+Findings: [design-notes.md](design-notes.md#government-roadmap-stage-6).
 
 ## Stage 7: War and conquest
 
@@ -270,7 +272,7 @@ Findings: [design-notes.md](design-notes.md#map-generation-roadmap-stage-5).
 | Question | Settle by |
 | --- | --- |
 | ~~How many areas and governments a default map has, and how big an area is in population~~ | Settled in stage 5: 1,000 areas, 6 capitals, 10,000 people per area on average (`WorldConfig.map`) |
-| Whether players start with a single area or a small realm, and with how much treasury | Stage 6 (map generation places the capitals) |
+| ~~Whether players start with a single area or a small realm, and with how much treasury~~ | Settled in stage 6: the capital and its land neighbors, with 30 days of the realm's income (`WorldConfig.government`) |
 | Meeting the tick budget at 3,000 areas with the large catalog (about 50 ms per tick in stage 5) | Stage 8, with the worker host loop |
 | Whether there is a soft goal (score, prosperity ranking) despite sandbox-first | Stage 8 |
 | Whether a dropped human player's government is handed to the AI | Stage 9 |

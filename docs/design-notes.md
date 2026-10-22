@@ -83,3 +83,26 @@ What helped:
 - A 1% trade margin, below which neighbors do not trade, which halved the active pairs and removed small back-and-forth shipments.
 
 Micro-optimizations of the per-area phases (fewer `pow` calls, hoisted lookups) made no measurable difference. Reaching the budget needs a structural change: fusing the per-area phases into fewer passes, or splitting areas between worker threads in the host loop (stage 8). The default 1,000-area map runs in about 15 ms.
+
+## Government (roadmap stage 6)
+
+### Government purchases must count as demand
+
+The first version followed the specification literally: a buy order takes only the stock above the area's reserve, and nothing else changes. In a balanced area the stock sits at its reserve, so a government could buy only in a glut: `keepDepotStock` never filled its depot. Producers never saw the government's demand, so they never grew to supply it. What a government tries to buy is now recorded as `governmentDemanded` and counted in total demand, so it raises the price target and the labor plan like any customer. The purchase itself still stops at the inhabitants' reserve. A standing order keeping three days of grain then fills its depot in about two months on the small catalog.
+
+### Money stays conserved
+
+Depot transfers originally paid their transport into nothing. It now goes to the source area's carriers, as in private trade, so money only moves between savings and treasuries. A unit test checks this under taxes, tariffs, subsidies, wages, market orders and transfers together.
+
+### How fast policies bite
+
+The economy reacts slowly, by design (specification §4):
+
+- A head tax of 1 man-hour per person per day (a quarter of income) halves the taxed area's savings in about 150 days, against an untaxed control. Its imports fall by over 15%.
+- After grain capacity triples, the grain price falls about 20% in 100 days. When capacity drops to 40%, it rises about 60% over the next 100 days.
+
+A government that buys in the glut and sells in the famine makes a clear profit. The windows for it are measured in months, not days.
+
+### Cost
+
+Founded realms send their areas through the government code paths: the policy lookups, taxes, the market phase and depot spoilage. On the default 1,000-area map this adds about 7% to the tick (5.2 ms against 4.8 ms with the medium catalog). The economic diagnostics of every scenario are unchanged when no government acts.

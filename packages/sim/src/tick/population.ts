@@ -72,14 +72,23 @@ export function changePopulation(world: World, area: Area, change: number): void
     area.unemployedWorkers += workers;
     return;
   }
-  let lost = -workers;
-  const fromUnemployed = Math.min(lost, area.unemployedWorkers);
+  takeWorkers(world, area, -workers);
+}
+
+/**
+ * Removes up to `count` workers from an area's unemployed first, then from private jobs in proportion to their
+ * size. Returns the number actually taken.
+ */
+export function takeWorkers(world: World, area: Area, count: number): number {
+  const fromUnemployed = Math.min(count, area.unemployedWorkers);
   area.unemployedWorkers -= fromUnemployed;
-  lost -= fromUnemployed;
-  if (lost <= 0) return;
+  const wanted = count - fromUnemployed;
+  if (wanted <= 0) return fromUnemployed;
   let employed = 0;
   for (const good of world.goods) employed += area.privateWorkers[good.id] as number;
-  if (employed <= EPSILON) return;
-  const keep = Math.max(0, 1 - lost / employed);
+  if (employed <= EPSILON) return fromUnemployed;
+  const fromJobs = Math.min(wanted, employed);
+  const keep = 1 - fromJobs / employed;
   for (const good of world.goods) area.privateWorkers[good.id] = (area.privateWorkers[good.id] as number) * keep;
+  return fromUnemployed + fromJobs;
 }
