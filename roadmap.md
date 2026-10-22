@@ -79,7 +79,7 @@ Internal packages are consumed as TypeScript source (their `exports` point at `s
 - About ten broken catalog fixtures are each rejected with a clear message.
 - Labor values match the reference figures from the catalog validator.
 
-## Stage 2: Scenarios and headless runner
+## Stage 2: Scenarios and headless runner ✅
 
 **Goal:** a way to run and measure the economy before any map exists.
 
@@ -94,7 +94,7 @@ Internal packages are consumed as TypeScript source (their `exports` point at `s
 
 **Exit:** the runner prints diagnostics for every scenario, even if the economy does nothing yet.
 
-## Stage 3: Private economy
+## Stage 3: Private economy ✅
 
 **Goal:** the base economy runs on its own and converges (§5).
 
@@ -118,6 +118,8 @@ Internal packages are consumed as TypeScript source (their `exports` point at `s
 - Determinism test passes.
 - Substitution works: cutting fish capacity raises the bread share and keeps food satisfaction.
 - Savings above target drain through imports.
+
+**Spec changes from this stage:** the headless runs showed that the first rules for prices, trade and labor oscillated or seized up (§4, Why the loops are shaped this way). Prices now have a long-run part and a scarcity premium, trade flows have inertia and scale with the buyer's reserve, labor follows demand and stock with a value-added tilt against a reservation wage that follows savings, and transport is paid to the exporter so money is conserved.
 
 ## Stage 4: Sea and air routes
 

@@ -42,7 +42,7 @@ An area's **savings** is the private money held by its inhabitants. Transactions
 
 | Flow | Direction | When |
 | --- | --- | --- |
-| Exports to neighbors | Into savings | Trade phase |
+| Exports to neighbors, transport included | Into savings | Trade phase |
 | Imports from neighbors | Out of savings | Trade phase |
 | Taxes | Savings to treasury | Tax phase |
 | Subsidies | Treasury to savings | Tax phase |
@@ -52,7 +52,9 @@ An area's **savings** is the private money held by its inhabitants. Transactions
 
 Taxing without spending drains an area's savings, so it can no longer import. This is intended: it is the natural cost of over-taxation.
 
-Savings also feed back into demand: an area holding more than its target savings spends more, mostly on comforts and luxuries, and an area with depleted savings cuts back (section 5, Consumption). This pulls savings back toward the target through trade.
+The buyer pays the transport, and it goes to the exporting area, whose carriers do the work. Trade between neutral areas therefore conserves money: without it, every long-distance purchase would destroy money, and a world without governments, which has no source of money, would slowly stop trading.
+
+Savings also feed back into demand and wages: an area holding more than its target savings spends more, mostly on comforts and luxuries, and its workers ask for more; an area with depleted savings cuts back and its workers accept less, so its goods get cheaper and sell abroad (section 5, Consumption and Labor allocation). Both pull savings back toward the target through trade.
 
 When savings cannot cover a tax bill, the shortfall is collected **in kind**. Goods move from the area's stock to the government depot, valued at local prices.
 
@@ -206,6 +208,7 @@ interface Edge {
   travelDays: number;                   // game days an army needs to cross this edge; Infinity on air routes
   isActive: boolean;                    // false for an air route dropped by a rebuild; edges are never deleted
   isBlocked: boolean;                   // recomputed each tick: true when war or a siege stops all traffic
+  tradeFlowPerDay: Float64Array;        // per good and direction (index 2 × GoodId, + 1 for B to A): current shipping rate, units per day
 }
 ```
 
@@ -424,11 +427,13 @@ Each loop must react at least three times slower than the loop it depends on. Fa
 | Prices | `priceAdjustmentRatePerDay` | 2 days |
 | Trade flows | `tradeRatePerDay` | 3 days |
 | Smoothed price used for jobs | `priceSmoothingRatePerDay` | 10 days |
-| Private job allocation | `laborMobilityRatePerDay` | 20 days |
+| Private job allocation | `laborMobilityRatePerDay` | 10 days |
 | Migration | `migrationRatePerDay` | about 70 days |
 | Population growth | `growthRatePerDay` | about 19 years to double |
 
 A rate from a half-life: `rate = ln(2) / halfLifeDays`.
+
+Job allocation follows quantities first (local demand, exports and stock) and prices only tilt it (section 5, Labor allocation), so it can run at the pace of the smoothed price without chasing it.
 
 ### Rule 4: decide jobs on smoothed prices
 
@@ -448,11 +453,11 @@ Even with damping, a guard rail catches surprises:
 A game starts from a state that is already almost balanced:
 
 1. Prices start at labor value; smoothed prices equal prices.
-2. Workers are allocated to cover local demand where local resources allow, and the rest go to the most valuable local jobs.
+2. Workers are allocated to cover local demand where local resources allow. The rest stay unemployed: by the calibration rule that is about a quarter of the workforce, the pool government jobs and armies hire from.
 3. Each area starts with `reserveDaysOf(good)` of total demand in stock.
 4. Each area starts with `targetSavingsDays` of income in savings, so savings neither boost nor dampen demand at first.
 5. Value added and `wageLevel` are computed once from these starting prices and workers, so the first tick has valid purchasing power and labor targets.
-6. The world then runs `warmupDays` with no players, at `warmupResponsivenessBoost` times the normal responsiveness, before the game opens.
+6. The world then runs `warmupDays` with no players, at `warmupResponsivenessBoost` times the normal economy and demography responsiveness, before the game opens.
 
 ### Global pace parameters
 
@@ -469,11 +474,20 @@ To speed up a whole game, raise `gameDaysPerTick` or `maxTicksPerSecond`. To mak
 A headless runner (Node) simulates thousands of days and reports, per area and good:
 
 - **Price volatility:** standard deviation of daily log price changes over the last 30 days.
-- **Oscillation count:** number of times the direction of a price changes over the last 30 days.
+- **Oscillation count:** number of times the direction of a price changes over the last 30 days, ignoring daily moves under 0.1%.
 - **Unmet necessities:** share of necessity demand not met.
 - **Labor churn:** share of the workforce changing jobs per day.
 
-Two regression scenarios must converge: two areas with complementary resources (price gap settles near transport cost within 60 days), and a 10-area chain (prices settle along a smooth gradient within 200 days).
+Two regression scenarios must converge: two areas with complementary resources (price gap settles near transport cost within 60 days), and a 10-area chain (prices settle along a smooth gradient within 200 days). "Near" has a precise meaning: a buyer that imports all it uses settles at a gap of `1 / (reserveDaysOf(good) × tradeGapSensitivity)` of its price above transport, which is 1% for durable goods and 5% for goods kept one day.
+
+### Why the loops are shaped this way
+
+The headless runs behind these rules showed four traps, each of which made the economy oscillate or seize up:
+
+- **Two integrators in a loop.** A price that keeps rising while stock is short, feeding labor that keeps moving while value added is high, oscillates however slow each step is. The price therefore has two parts (section 5, Prices): `smoothedPrice` integrates scarcity slowly and is what jobs follow, and `price` adds a premium proportional to the current scarcity, which is what trade and consumers see.
+- **Instant trade overshoots.** With daily ticks and reserves of one to five days, a flow that reacts at once to the price gap empties one market into the next and back. Shipping rates therefore move toward their target with inertia, and scale with the buyer's reserve so perishable goods are damped as much as durable ones.
+- **Reserves block exports.** An exporter that only ships what exceeds its own reserve never sees foreign demand. Exporters keep only part of their reserve when shipping, and count their exports in their stock target and their labor plan.
+- **Money leaks.** Transport paid to nobody drains money from a world without governments, and a wage floor that never moves keeps resource-poor areas from ever exporting. Transport goes to the exporter's carriers, and the wage workers accept follows savings.
 
 ### WorldConfig
 
@@ -493,12 +507,17 @@ interface WorldConfig {
     workforceShare: number;             // share of the population able to work (default 0.5)
     reserveDays: number;                // days of total demand an area keeps in stock before exporting (default 5)
     maxReserveSpoilageShare: number;    // perishable goods keep a smaller reserve, so spoilage stays under this share of demand (default 0.1)
-    priceAdjustmentRatePerDay: number;  // speed at which prices move toward clearing the stock target (default 0.35)
-    priceSmoothingRatePerDay: number;   // speed of the smoothed price used for job decisions (default 0.07)
-    tradeRatePerDay: number;            // share of exportable surplus that may leave per day (default 0.23)
-    tradeGapSensitivity: number;        // trade volume grows with the relative price gap up to this factor (default 2)
-    laborMobilityRatePerDay: number;    // speed at which private workers move toward the target allocation (default 0.035)
-    laborAllocationTemperature: number; // softness of job choice, relative to wage level; lower = winner takes all (default 0.15)
+    priceAdjustmentRatePerDay: number;  // speed at which the price moves toward the smoothed price times the scarcity premium (default 0.35)
+    priceSmoothingRatePerDay: number;   // speed of the smoothed price, the long-run price that jobs follow (default 0.07)
+    scarcityPremium: number;            // log premium of the price over the smoothed price at full shortage, discount at full glut (default 0.1)
+    priceFlowWeight: number;            // weight of the flow imbalance next to the stock gap in price pressure (default 0.3)
+    tradeRatePerDay: number;            // speed at which an edge's shipping rate moves toward its target (default 0.23)
+    tradeGapSensitivity: number;        // share of its reserve a buyer imports per day over one edge, per unit of relative price gap (default 20)
+    exportReserveShare: number;         // share of its own reserve an area keeps when exporting (default 0.5)
+    laborMobilityRatePerDay: number;    // speed at which private workers move toward the target allocation (default 0.07)
+    laborAllocationTemperature: number; // softness of the value-added tilt on labor targets, relative to the reservation wage (default 1)
+    reservationWage: number;            // value added per hour below which workers prefer unemployment, at target savings, in man-hours (default 1)
+    stockRecoveryDays: number;          // labor plans to bring a stock back to its reserve over this many days (default 5)
     maxPriceChangePerTick: number;      // largest relative price change in one tick (default 0.1)
     maxLaborShiftPerTick: number;       // largest share of a workforce changing jobs in one tick (default 0.02)
     priceFloorMultiple: number;         // lowest price as a multiple of labor value (default 0.1)
@@ -598,8 +617,10 @@ naturalCapacity  -= output * good.depletionPerUnitExtracted
 maximumByLabor  = workers * hourlyOutputPerWorker(good) * days
 output          = maximumByLabor * min over inputs of ration[input.good]
 outputLimitedByInputs = output < maximumByLabor
-marginalOutputPerWorker = outputLimitedByInputs ? 0 : hourlyOutputPerWorker(good)
+marginalOutputPerWorker = hourlyOutputPerWorker(good) * min over inputs of ration[input.good]
 ```
+
+An extra worker only adds output as far as inputs are available, so value added falls smoothly as an input runs short instead of flipping to zero.
 
 **Input rationing.** Several goods often share one input; electricity, for example, feeds most recipes. A scarce input is split between its users in proportion to what each one requests, not handed to whichever comes first in the catalog. This takes one pass, because catalog order guarantees that when good `i` is reached, all of its production for the tick is done and all of its users come later:
 
@@ -612,7 +633,7 @@ inputDemanded[i] = requested[i]
 
 A user limited by another input takes less than its ration, and the rest stays in stock. Producers draw before consumers in the same tick.
 
-`inputDemanded` matters as much as consumer demand. **Total demand** for a good is `demanded + inputDemanded`, and it is the demand used by the price target, the exportable surplus, government buy orders, standing orders and the initial stock. Without it, intermediate goods such as ore or flour would show no demand and their prices would fall to the floor.
+`inputDemanded` matters as much as consumer demand. **Total demand** for a good is `max(demanded, consumed) + inputDemanded`: what consumers wanted or, when they fell back on it because a substitute ran out, what they actually ate, plus what producers requested. It is the demand used by the price target, the exportable surplus, the labor plan, government buy orders, standing orders and the initial stock. Without inputs, intermediate goods such as ore or flour would show no demand and their prices would fall to the floor; without spillover, an area eating fish in place of missing bread would never plan for the extra fish.
 
 Private production draws inputs from the area's stock. Government production draws from the government depot, with its own rationing over the depot, and is not part of `inputDemanded`. Services are produced like crafted goods but go straight to consumption and never enter stock.
 
@@ -620,7 +641,7 @@ Private production draws inputs from the area's stock. Government production dra
 
 Consumption has three parts: the area's purchasing power, the demand for each need split between the goods that satisfy it, and a spillover pass when some of those goods run out.
 
-**Purchasing power** combines income and savings. Savings near `targetSavingsDays` of income are neutral. More savings raise demand and fewer lower it, mostly for needs with a high `wealthElasticity`:
+**Purchasing power** combines income and savings. Savings near `targetSavingsDays` of income are neutral. More savings raise demand and fewer lower it, mostly for needs with a high `wealthElasticity`. The same `savingsFactor` sets the wage workers accept (Labor allocation):
 
 ```typescript
 incomePerPersonPerDay = max(wageLevel, 0.1) * hoursPerWorkerDay * workforceShare
@@ -651,25 +672,38 @@ consumed[g]  = min(stock[g], demanded[g])
 
 `referenceUnitPrice` is `needPrice` computed once at startup, with every consumer price equal to labor value. At those prices and at a purchasing power of 1, an area demands exactly `demandPerPersonPerDay`. A substitution elasticity of 0 keeps shares fixed by preference; 2 to 4 lets consumers switch strongly toward the cheapest good while keeping some variety.
 
-`necessitySatisfaction` is the sum of `needConsumed` divided by the sum of `needDemanded` over necessity needs. `satisfaction` is the same ratio over all needs, with each need weighted by its tier in `tierWeights`.
+`necessitySatisfaction` is the sum of `needConsumed` divided by the sum of `needDemanded` over necessity needs, each valued at its `referenceUnitPrice` so that needs measured in different units add up. `satisfaction` is the same ratio over all needs, with each need also weighted by its tier in `tierWeights`.
 
 ### Trade
 
-Trade is computed per edge, per good and per direction, from a snapshot of the state before trade; all flows are applied together afterward. Land, sea and air edges use the same formula. An area splits its exportable surplus of a good evenly between the edges where that good has a positive gap, so an area with many routes does not spread its exports over routes that would not take them.
+Trade is computed per edge, per good and per direction, from a snapshot of the state before trade; all flows are applied together afterward. Land, sea and air edges use the same formula. Each edge keeps a **shipping rate** per good and direction (`Edge.tradeFlowPerDay`), which moves toward a target set by the price gap. An area splits its exportable surplus of a good evenly between the edges where that good has a positive gap, and its import demand evenly between the edges it can import it from.
 
 ```typescript
 transport  = edge.transportCost * good.transportWeight
 tariffs    = crossesBorder ? sellerPrice * exportTariffRate[seller] + sellerPrice * importTariffRate[buyer] : 0
-gap        = buyerPrice - sellerPrice - transport - tariffs
-if (gap <= 0 || !edge.isActive || edge.isBlocked || good.isService) skip
+gap        = buyerPrice - sellerPrice - transport - tariffs      // 0 on an inactive or blocked edge
 
-exportable = max(0, sellerStock - reserveDaysOf(good) * sellerTotalDemandedPerDay) / sellerEdgesWithPositiveGap
-quantity   = exportable * fraction(tradeRatePerDay) * min(1, tradeGapSensitivity * gap / buyerPrice)
+// The wider the gap, the more of its reserve the buyer refills from this edge each day
+targetRate = gap > 0 ? reserveDaysOf(good) * buyerTotalDemandedPerDay
+                       * tradeGapSensitivity * gap / buyerPrice / buyerEdgesWithPositiveGap
+                     : 0
+rate      += fraction(tradeRatePerDay) * (targetRate - rate)
+if (gap <= 0 || good.isService) skip
+
+// The seller keeps part of its reserve and splits the rest between its exporting edges
+exportable = max(0, sellerStock - exportReserveShare * reserveDaysOf(good) * sellerTotalDemandedPerDay)
+             / sellerEdgesWithPositiveGap
+quantity   = min(rate * days, exportable)
 unitPaid   = sellerPrice + transport + tariffs + gap / 2   // the buyer and seller split the gain
-quantity   = min(quantity, buyerSavings / unitPaid)        // the buyer can only spend what it has
 ```
 
-The seller receives `sellerPrice + gap / 2` per unit. Tariffs go to the respective treasuries. The transport share disappears as labor spent on carrying.
+After capacity (below), an area whose imports would cost more than its savings has all of them scaled down by the same ratio: the buyer can only spend what it has, across all its edges and goods together. The seller receives `sellerPrice + transport + gap / 2` per unit, the transport going to its carriers; tariffs go to the respective treasuries.
+
+Three choices keep trade stable with daily ticks and short reserves:
+
+- **Inertia.** Because the rate moves toward its target at `tradeRatePerDay` (half-life 3 days), trade cannot slosh a whole stock back and forth between two areas whose prices are almost equal.
+- **Scaled by the reserve.** The target is a share of the buyer's reserve, not of its daily use, so a perishable good kept one day is damped as much as a durable one kept five. In exchange a perishable good needs a wider gap to travel: at steady state, a buyer importing all it uses holds a gap of `1 / (reserveDaysOf(good) × tradeGapSensitivity)` above transport.
+- **Exporters see foreign demand.** The seller dips into its reserve down to `exportReserveShare` of it, and its exports, counted at the smoothed shipping rates, raise its stock target and its labor plan. An exporter that only shipped what exceeded its own reserve would never notice that its neighbors want more.
 
 **Capacity.** Sea and air routes carry at most `capacityPerDay × days` tonnes in each direction. When the flows of all goods in one direction exceed it, the route is filled greedily, in order of gap per tonne, so the most profitable cargo goes first. Land edges have infinite capacity and skip this step. Routes are few, so the sort costs little.
 
@@ -697,30 +731,38 @@ Sea and air traffic reuse edges instead of adding a separate system. A route is 
 
 ### Prices
 
-Storable goods are priced on stock: the price rises when stock falls below its target and falls when stock exceeds it. Perishable goods keep a smaller target, so their reserve never rots faster than `maxReserveSpoilageShare` of demand: bread keeps about 1 day, fish 1.25 days and electricity a third of a day. Services have no stock, so they are priced on flows within the tick.
+Every good has two prices. `smoothedPrice` is the **long-run price**: it drifts up for as long as the good stays scarce and down for as long as it stays abundant, and jobs follow it. `price` is the **market price**: the long-run price times a premium proportional to the current scarcity, which trade, consumers and the price table see. A price that only drifted with scarcity would oscillate against the labor it attracts; the premium answers scarcity at once, while the drift finds the level where supply and demand balance.
+
+Scarcity is measured by a **pressure** between -1 and 1. Storable goods are priced on stock, with a flow term that reacts before the stock has moved far; exports count in the stock target, so an exporter keeps a reserve for its customers. Perishable goods keep a smaller target, so their reserve never rots faster than `maxReserveSpoilageShare` of demand: bread keeps about 1 day, fish 1.25 days and electricity a third of a day. Services have no stock, so they are priced on flows within the tick.
 
 ```typescript
-totalDemandedPerDay = (demanded + inputDemanded) / days
 reserveDaysOf(good) = min(reserveDays, maxReserveSpoilageShare / max(good.spoilageRatePerDay, epsilon))
+used     = max(demanded, consumed) + inputDemanded + exportRate * days   // exports at the smoothed shipping rates
 
 if (good.isService)
   pressure = (demanded - produced) / max(demanded, produced, epsilon)
 else
-  target   = reserveDaysOf(good) * totalDemandedPerDay
-  pressure = (target - stock) / max(target, stock, epsilon)
-// pressure is between -1 and 1
+  target        = reserveDaysOf(good) * used / days
+  stockPressure = (target - stock) / max(target, stock, epsilon)
+  supplied      = produced + imported - exported
+  required      = used + target * (1 - exp(-spoilageRatePerDay * days))  // the reserve's spoilage must be replaced
+  flowPressure  = (required - supplied) / max(required, abs(supplied), epsilon)
+  pressure      = clamp(stockPressure + priceFlowWeight * flowPressure, -1, 1)
 
-logChange  = clamp(priceAdjustmentRatePerDay * economyResponsiveness * days * pressure,
-                   -log(1 + maxPriceChangePerTick), log(1 + maxPriceChangePerTick))
-price      = clamp(price * exp(logChange),
-                   max(laborValue * priceFloorMultiple, policy priceFloor),
-                   min(laborValue * priceCeilingMultiple, policy priceCeiling))
-smoothedPrice += fraction(priceSmoothingRatePerDay) * (price - smoothedPrice)
+floor          = max(laborValue * priceFloorMultiple, policy priceFloor)
+ceiling        = min(laborValue * priceCeilingMultiple, policy priceCeiling)
+targetPrice    = smoothedPrice * exp(scarcityPremium * pressure)
+logChange      = clamp(fraction(priceAdjustmentRatePerDay) * (log(targetPrice) - log(price)),
+                       -log(1 + maxPriceChangePerTick), log(1 + maxPriceChangePerTick))
+price          = clamp(price * exp(logChange), floor, ceiling)
+smoothedPrice  = clamp(smoothedPrice + fraction(priceSmoothingRatePerDay) * (price - smoothedPrice), floor, ceiling)
 ```
+
+With the defaults, the market price sits at most 10% above or below the long-run price, and the long-run price drifts by up to about 0.7% per day: it takes weeks, not days, for a good to become several times dearer, which leaves labor and trade time to answer.
 
 ### Labor allocation
 
-Workers move toward a target allocation that favors jobs with high value added, computed from smoothed prices and after production taxes or subsidies.
+Workers move toward a target allocation: the labor needed to meet total demand, exports included, and to bring the stock back to its reserve, tilted toward jobs whose value added beats the **reservation wage**, the value per hour below which workers would rather stay unemployed. Value added is computed from smoothed prices and after production taxes or subsidies.
 
 ```typescript
 valueAddedPerHour(good) =
@@ -730,14 +772,22 @@ valueAddedPerHour(good) =
 
 wageLevel = sum(valueAddedPerHour * privateWorkers) / max(sum(privateWorkers), epsilon)
 
-// Soft choice among producible jobs; "unemployed" is an option with value 0
-weight(job)   = exp((valueAddedPerHour(job) - best) / (laborAllocationTemperature * max(wageLevel, epsilon)))
-target(job)   = availablePrivateWorkforce * weight(job) / sum(weights)
-change(job)   = fraction(laborMobilityRatePerDay) * (target(job) - workers(job))
-// scale all changes down if their total exceeds maxLaborShiftPerTick * workforce
+reservation = reservationWage * savingsFactor          // workers short of savings accept less
+needPerDay  = used / days + (isService ? 0 : (reserveDaysOf(good) * used / days - stock) / stockRecoveryDays)
+needed(job) = isPrimary ? -capacity * ln(1 - min(needPerDay, 0.95 * capacity) / capacity) / hourlyOutputPerWorker
+                        : needPerDay / hourlyOutputPerWorker
+target(job) = needed(job) * exp(min(5, (valueAddedPerHour(job) - reservation)
+                                       / (laborAllocationTemperature * reservation)))
+// scale all targets down together if they exceed the available private workforce; the rest is unemployed
+change(job) = fraction(laborMobilityRatePerDay) * (target(job) - workers(job))
+// scale all changes down if more than maxLaborShiftPerTick of the workforce would change jobs
 ```
 
-A good is producible in an area if it is primary with natural capacity there, or crafted with a recipe. Workers stuck without inputs see a marginal output of zero and drift away.
+The quantity part lets labor follow demand without waiting for prices; the tilt makes each job settle where it adds about the reservation wage. A job adding more grows beyond its local need and exports, a job adding less shrinks and its good is imported. Primary goods with scarce capacity therefore earn a rent: their price rises until the last worker adds the reservation wage.
+
+Because the reservation wage follows savings, trade balances itself. An area that imports more than it exports loses savings, accepts less, prices its goods lower and starts exporting; a rich area asks more and imports more. Without this, a resource-poor area would pay for every input it imports, never undercut anyone, and run out of money.
+
+A good is producible in an area if it is primary with natural capacity there, or crafted with a recipe. Workers stuck without inputs see their marginal output fall with the input's ration and drift away.
 
 ### Population
 
@@ -753,9 +803,10 @@ attractiveness = (1 - migrationWageWeight) * satisfaction
 // per active, non-blocked edge, from the less attractive area to the more attractive one
 modeFactor = land: 1, sea: migrationFactorBySea, air: migrationFactorByAir
 migrants = population * fraction(migrationRatePerDay) * attractivenessDifference * modeFactor / edgeCount
+// population and edgeCount (active, non-blocked edges) of the less attractive area
 ```
 
-New inhabitants and migrants join `unemployedWorkers` in proportion to `workforceShare`; the labor phase places them. When population falls, from starvation or emigration, the lost workers (the same `workforceShare` of the loss) are taken from `unemployedWorkers` first, then from private jobs in proportion to their size. Government workers and soldiers are not affected.
+Migration reads populations after growth and applies every edge together; migrants leave their savings behind. New inhabitants and migrants join `unemployedWorkers` in proportion to `workforceShare`; the labor phase places them. When population falls, from starvation or emigration, the lost workers (the same `workforceShare` of the loss) are taken from `unemployedWorkers` first, then from private jobs in proportion to their size. Government workers and soldiers are not affected.
 
 ### Goods catalogs
 
@@ -986,13 +1037,13 @@ function runTick(world: World, commands: CommandEnvelope[]): void
 1. **Production.** For each good in catalog order: primary goods with diminishing returns on natural capacity, crafted goods limited by labor and by inputs rationed between their users. Private output goes to area stock, government output to depots. Record `produced`, `inputDemanded`, `outputLimitedByInputs` and the marginal output per worker.
 2. **Government market and logistics.** Execute buy and sell orders at local prices. Advance depot transfers and deliver those that arrive.
 3. **Consumption and army upkeep.** Compute purchasing power from wage level and savings. Compute demand per need at consumer prices including consumption tax, split it between substitutes, consume from stock, then run the spillover pass. Compute `satisfaction` and `necessitySatisfaction`. Armies refill from depots, forage or eat carried food; unfed soldiers desert.
-4. **Trade.** From the snapshot, compute flows per active, non-blocked edge of every mode, good and direction, including transport and tariffs. Cap sea and air routes at their capacity. Apply all goods and money movements together. Record `imported` and `exported`.
+4. **Trade.** From the snapshot, move each edge's shipping rates toward their targets and compute flows per active, non-blocked edge of every mode, good and direction, including transport and tariffs. Cap sea and air routes at their capacity and imports at the buyer's savings. Apply all goods and money movements together. Record `imported` and `exported`.
 5. **Taxes, subsidies and wages.** Collect taxes from savings, with the shortfall taken in kind. Pay subsidies, government wages and soldier wages from the treasury, scaled down together if the treasury is short.
-6. **Prices.** Move each price toward clearing the stock target of total demand, or for services toward balancing production and demand, within the per-tick limit and the price bounds. Update `smoothedPrice`.
-7. **Labor.** Compute value added per job from smoothed prices and production taxes, and update `wageLevel`. Move private workers toward the target allocation within `maxLaborShiftPerTick`. Apply government hiring, quitting and firing.
+6. **Prices.** Measure each good's scarcity against its stock target and flows, or for services against production and demand. Move each price toward the smoothed price times the scarcity premium, within the per-tick limit and the price bounds, then move `smoothedPrice` toward the price.
+7. **Labor.** Compute value added per job from smoothed prices and production taxes, and update `wageLevel`. Move private workers toward the labor each job needs, tilted by value added against the reservation wage, within `maxLaborShiftPerTick`. Apply government hiring, quitting and firing.
 8. **Military.** Move marching armies. Resolve combat in contested areas. Advance or decay sieges. Transfer captured areas, move capitals and eliminate governments with no area left.
 9. **Population.** Apply growth or starvation from `necessitySatisfaction`. Compute migration along active, non-blocked edges from the snapshot, scaled by each edge's mode, and apply it together.
-10. **Decay and progress.** Spoil stock, depots, transfers and army supplies. Regenerate natural capacity. Apply infrastructure, fortification, port, airport and research progress. If any port or airport level changed, update the capacity of the routes touching it; if an airport level changed, also rebuild the air routes. Increment `tick` and add `gameDaysPerTick` to `gameDay`.
+10. **Decay and progress.** Spoil stock, depots, transfers and army supplies. Regenerate natural capacity: `capacity += (maximum - capacity) × (1 - exp(-regenerationRatePerDay × days))`. Apply infrastructure, fortification, port, airport and research progress. If any port or airport level changed, update the capacity of the routes touching it; if an airport level changed, also rebuild the air routes. Increment `tick` and add `gameDaysPerTick` to `gameDay`.
 
 All randomness (AI choices, tie-breaks, future events) uses the seeded generator in `World.randomSeed`, so a saved game with the same command log replays identically on the same device.
 

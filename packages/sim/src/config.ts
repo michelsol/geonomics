@@ -15,12 +15,17 @@ export interface WorldConfig {
     workforceShare: number; // share of the population able to work
     reserveDays: number; // days of total demand an area keeps in stock before exporting
     maxReserveSpoilageShare: number; // perishable goods keep a smaller reserve, so spoilage stays under this share of demand
-    priceAdjustmentRatePerDay: number; // speed at which prices move toward clearing the stock target
-    priceSmoothingRatePerDay: number; // speed of the smoothed price used for job decisions
-    tradeRatePerDay: number; // share of exportable surplus that may leave per day
-    tradeGapSensitivity: number; // trade volume grows with the relative price gap up to this factor
+    priceAdjustmentRatePerDay: number; // speed at which the price moves toward the smoothed price times the scarcity premium
+    priceFlowWeight: number; // weight of the flow imbalance next to the stock gap in price pressure
+    scarcityPremium: number; // log price premium over the smoothed price at full shortage (discount at full glut)
+    priceSmoothingRatePerDay: number; // speed of the smoothed price, the long-run price that jobs follow
+    tradeRatePerDay: number; // speed at which an edge's shipping rate moves toward its target
+    tradeGapSensitivity: number; // share of its reserve a buyer imports per day over one edge, per unit of relative gap
+    exportReserveShare: number; // share of its own reserve an area keeps when exporting
     laborMobilityRatePerDay: number; // speed at which private workers move toward the target allocation
-    laborAllocationTemperature: number; // softness of job choice, relative to wage level; lower = winner takes all
+    laborAllocationTemperature: number; // softness of the value-added tilt on labor targets, relative to the reservation wage
+    reservationWage: number; // value added per hour below which workers prefer unemployment, at target savings
+    stockRecoveryDays: number; // labor plans to bring a stock back to its reserve over this many days
     maxPriceChangePerTick: number; // largest relative price change in one tick
     maxLaborShiftPerTick: number; // largest share of a workforce changing jobs in one tick
     priceFloorMultiple: number; // lowest price as a multiple of labor value
@@ -106,11 +111,16 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
     reserveDays: 5,
     maxReserveSpoilageShare: 0.1,
     priceAdjustmentRatePerDay: 0.35,
+    priceFlowWeight: 0.3,
+    scarcityPremium: 0.1,
     priceSmoothingRatePerDay: 0.07,
     tradeRatePerDay: 0.23,
-    tradeGapSensitivity: 2,
-    laborMobilityRatePerDay: 0.035,
-    laborAllocationTemperature: 0.15,
+    tradeGapSensitivity: 20,
+    exportReserveShare: 0.5,
+    laborMobilityRatePerDay: 0.07,
+    laborAllocationTemperature: 1,
+    reservationWage: 1,
+    stockRecoveryDays: 5,
     maxPriceChangePerTick: 0.1,
     maxLaborShiftPerTick: 0.02,
     priceFloorMultiple: 0.1,

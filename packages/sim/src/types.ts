@@ -137,6 +137,7 @@ export interface Edge {
   travelDays: number; // game days an army needs to cross this edge; Infinity on air routes
   isActive: boolean; // false for an air route dropped by a rebuild; edges are never deleted
   isBlocked: boolean; // recomputed each tick: true when war or a siege stops all traffic
+  tradeFlowPerDay: Float64Array; // per good and direction (2 × GoodId, + 1 for B to A): current shipping rate in units
 }
 
 // Governments
