@@ -204,7 +204,7 @@ Findings: [design-notes.md](design-notes.md#government-roadmap-stage-6).
 
 Findings: [design-notes.md](design-notes.md#war-and-conquest-roadmap-stage-7).
 
-## Stage 8: Web app, single player
+## Stage 8: Web app, single player ✅
 
 **Spec first:** add an interface section to the specification. It covers:
 - the screens: lobby, game and end-of-session
@@ -222,6 +222,8 @@ Findings: [design-notes.md](design-notes.md#war-and-conquest-roadmap-stage-7).
 - Price map overlay and good panel, built on the price table (§9, Price table).
 
 **Exit:** a solo game can be played start to finish in the browser on desktop and phone, at an acceptable frame rate on a 3,000-area map.
+
+Findings: [design-notes.md](design-notes.md#web-app-roadmap-stage-8).
 
 ## Stage 9: Multiplayer
 
@@ -275,8 +277,8 @@ Findings: [design-notes.md](design-notes.md#war-and-conquest-roadmap-stage-7).
 | --- | --- |
 | ~~How many areas and governments a default map has, and how big an area is in population~~ | Settled in stage 5: 1,000 areas, 6 capitals, 10,000 people per area on average (`WorldConfig.map`) |
 | ~~Whether players start with a single area or a small realm, and with how much treasury~~ | Settled in stage 6: the capital and its land neighbors, with 30 days of the realm's income (`WorldConfig.government`) |
-| Meeting the tick budget at 3,000 areas with the large catalog (about 50 ms per tick in stage 5) | Stage 8, with the worker host loop |
-| Whether there is a soft goal (score, prosperity ranking) despite sandbox-first | Stage 8 |
+| Meeting the tick budget at 3,000 areas with the large catalog (about 50 ms per tick in Node, 65 ms in the browser worker). The interface stays smooth because the simulation runs in a worker; only the top speed on large maps is limited | After stage 11, if players need faster large maps |
+| ~~Whether there is a soft goal (score, prosperity ranking) despite sandbox-first~~ | Settled in stage 8: none; the end-of-session screen only reports days, population, areas and treasury |
 | Whether a dropped human player's government is handed to the AI | Stage 9 |
 | Naval combat and blockades on sea routes (listed as future work in §5) | After stage 11 |
 | Research gating modern recipes from the large catalog | After stage 11 |

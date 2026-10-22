@@ -1252,3 +1252,72 @@ The free PeerJS cloud broker is enough to start; a self-hosted PeerServer can re
 ### Save and load
 
 The world is serialized with msgpack, keeping typed arrays, plus a save format version number. The host autosaves to IndexedDB at a fixed game-day interval and can export the save as a file. Any player can load a save and host it, which is how a game continues when the host leaves.
+
+### Single player
+
+A solo game uses the same data flow as a hosted one, without the network. The worker posts five kinds of messages to the main thread:
+
+| Message | When | Content |
+| --- | --- | --- |
+| `progress` | During map generation and warm-up | A stage name and a share done |
+| `static` | Once the world is ready | Config, needs, goods, area names, positions and terrain, edges, map layout, governments' names and colors |
+| `snapshot` | At `snapshotRate` | As in Snapshots, for the local player's government |
+| `priceTable` | At `priceTableRate` | As in Price table |
+| `status` | With every snapshot, and on rejections | Running or paused, target and actual ticks per second, milliseconds per tick, and rejected commands with their reasons |
+
+The main thread sends `create`, `command`, `setSpeed`, `pause`, `resume` and `endGame`. The local player sends commands under the player id `local`.
+
+## 10. Interface
+
+The interface is map-first: the map fills the screen and panels sit beside it on desktop, or below it on a phone. It reads only what a snapshot and the price table carry, so a joined player in stage 9 sees exactly what a solo player sees.
+
+### Screens
+
+1. **New game.** The player picks a catalog (small, medium or large), a map size (300, 1,000 or 3,000 areas) and a seed. The map is then generated and warmed up in the worker, behind a progress bar. Finally the player chooses a realm, from a list of the founded governments with capital, population and area count, or takes a random one.
+2. **Game.** The map, the top bar and the panels.
+3. **End of session.** Shown when the player's government is eliminated, or when the player ends the game. It lists days played, peak and final population, areas held and treasury, and offers a new game. There is no score.
+
+### Map
+
+Areas are the Voronoi cells of their positions, with the water cells around them.
+
+| Layer | Colors each area by |
+| --- | --- |
+| Realms | Owner color; neutral areas in grey. Realm borders are drawn on every layer |
+| Prices | The chosen good's price over its labor value, on a log scale from blue (cheap) through white to red (dear) |
+| Satisfaction | Necessity satisfaction, from red (0) to green (1) |
+| Wage level | Wage level on a log scale |
+| Terrain | Terrain type |
+
+One layer is active at a time and has a legend. Every layer also shows:
+
+- **Routes:** sea routes dashed, air routes dotted; blocked edges red.
+- **Capitals:** a star.
+- **Armies:** a marker in their government's color, with their remaining path.
+- **Sieges:** a ring showing their progress.
+- **Selection:** the selected area is outlined.
+
+Mouse or one finger pans and the wheel or a pinch zooms around the pointer. A click or tap selects the area under it. While the player moves an army or picks areas for a peace proposal, a click picks the target instead.
+
+### Panels
+
+| Panel | Shows | Actions |
+| --- | --- | --- |
+| Area | Owner, terrain, population, wage level, satisfaction, port and airport levels, siege. For own areas and their neighbors: price, stock, production, consumption and trade per good. For other areas: prices only | In own areas: policy overrides, jobs, wage offer, depot, recruiting, market orders |
+| Good | Lowest, median and highest price with their areas; a chart over time of the world's lowest, median and highest price and the selected area's price | Show the good on the price map |
+| Government | Treasury and its change per day, realm population and areas, research level | Realm policies |
+| Orders | Open market orders, standing orders, depot transfers in transit | Place and cancel orders; add and remove standing orders; transfer goods between depots |
+| Jobs | Per own area: each job's target and workers, and the wage offer | Set job targets and wage offers |
+| Armies | Each army's soldiers, food, weapons, stance, location and path | Recruit, supply, set stance, move (then pick the destination on the map), disband |
+| Diplomacy | Relations with every government, pending proposals | Declare war; propose peace (payment and areas picked on the map); accept or refuse proposals |
+
+A rejected command is shown as a short message with its reason.
+
+### Time controls
+
+The top bar holds pause and four speeds: 1×, 2× and 5× (`maxTicksPerSecond` 2, 5 and 10) and max, which runs ticks back to back. It shows the game day, the treasury, the actual ticks per second and the milliseconds per tick. Space toggles pause. The game pauses while the tab is hidden.
+
+### Layout
+
+- **Desktop** (900 px wide and more): the map fills the window, under a top bar. A 380 px sidebar on the right holds the panels as tabs.
+- **Phone:** the map fills the screen under a compact top bar. The panels sit in a bottom sheet with three heights: a peek showing the selection, half the screen, and full screen. Touch targets are at least 44 px.

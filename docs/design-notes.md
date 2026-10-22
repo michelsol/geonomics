@@ -133,3 +133,34 @@ Initialization gives every area a militia, but only neutral areas use it. Combat
 ### Soldiers and the workforce
 
 Recruits leave both the workforce and the population. Since the workforce is `population × workforceShare`, a realm at war holds slightly fewer workers than its population implies; disbanding restores it. The labor phase only counts workers it actually holds, so this never creates or loses anyone.
+
+## Web app (roadmap stage 8)
+
+### Rendering
+
+The map is one PixiJS scene of cached geometry: a graphics object each for the cells, the cell and realm borders, the routes, the markers and the selection. Each one is redrawn only when its inputs change:
+- the cells when the layer, the owners, the snapshot or the price table changes;
+- the borders when owners change;
+- the routes when edge flags change;
+- the lines after zooming by more than 25%, so they keep their screen width.
+
+The scene renders on demand, not every frame, so an idle map costs nothing. Picking uses `Delaunay.find` on map coordinates instead of Pixi hit areas.
+
+On the development machine, a 3,000-area map with the large catalog keeps about 59 frames per second while the map is dragged and the simulation runs. The worker meanwhile takes about 65 ms per tick in the browser, against about 50 ms in Node. Because the simulation is off the main thread, the slow tick only caps the top speed of large maps (about 15 ticks per second); it never affects the interface. The default 1,000-area map ticks in about 5 ms with the medium catalog.
+
+### Commands while paused
+
+The host applies a command at once when the game is paused, instead of queueing it for the next tick, and sends a snapshot back. Nothing else happens between the pause and the next tick, so the result is the same as applying it in phase 0, and the player sees policy changes immediately.
+
+### Price history
+
+The client keeps 365 samples per chart, built from successive price tables:
+- for each good, the world's lowest, median and highest price;
+- every good's price in the areas shown in detail and in any area the player has selected.
+
+Keeping whole tables would cost about 117 MB at 3,000 areas × 54 goods. An area's history therefore starts when the player first looks at it.
+
+### Phone layout
+
+The panels sit in a bottom sheet over the full-screen map, with peek, half and full heights. The top bar scrolls sideways instead of wrapping, so the map keeps its height. Touch targets are 44 px. One finger pans, two fingers pinch-zoom and pan, and a tap that moves less than 6 px selects an area.
+

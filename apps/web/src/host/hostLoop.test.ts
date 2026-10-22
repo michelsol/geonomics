@@ -1,0 +1,95 @@
+import { describe, expect, it } from "vitest";
+import { createGame } from "./createGame";
+import { HostLoop } from "./hostLoop";
+import { type FromWorker, LOCAL_PLAYER } from "./protocol";
+
+/** A fake clock and scheduler: tasks run when the clock passes their time. */
+function fakeTime() {
+  let now = 0;
+  let tasks: { at: number; run: () => void }[] = [];
+  return {
+    now: () => now,
+    schedule: (run: () => void, delay: number) => tasks.push({ at: now + delay, run }),
+    advance(ms: number, maxTasks = 100_000) {
+      const end = now + ms;
+      for (let i = 0; i < maxTasks; i++) {
+        tasks.sort((a, b) => a.at - b.at);
+        const next = tasks[0];
+        if (!next || next.at > end) break;
+        tasks = tasks.slice(1);
+        now = next.at;
+        next.run();
+      }
+      now = end;
+    },
+  };
+}
+
+function setup(speed: number | "max" = 5) {
+  const world = createGame({ catalog: "small", areas: 60, seed: 3, warmupDays: 0 }, () => {});
+  (world.governments[0] as (typeof world.governments)[number]).controller = { kind: "human", player: LOCAL_PLAYER };
+  const time = fakeTime();
+  const messages: FromWorker[] = [];
+  const loop = new HostLoop({ world, viewer: 0, post: (m) => messages.push(m), ...time, speed });
+  const count = (type: FromWorker["type"]) => messages.filter((m) => m.type === type).length;
+  return { world, time, messages, loop, count };
+}
+
+describe("HostLoop", () => {
+  it("runs ticks at the target speed and only while running", () => {
+    const { world, time, loop } = setup(5);
+    time.advance(1000);
+    expect(world.tick).toBe(0); // starts paused
+    loop.resume(); // the first tick runs at once, then one every 200 ms
+    time.advance(999);
+    expect(world.tick).toBe(5);
+    loop.setSpeed(10);
+    time.advance(1000);
+    expect(world.tick).toBeGreaterThanOrEqual(14);
+    expect(world.tick).toBeLessThanOrEqual(16);
+    loop.pause();
+    const paused = world.tick;
+    time.advance(5000);
+    expect(world.tick).toBe(paused);
+  });
+
+  it("posts snapshots and price tables at their wall-clock rates", () => {
+    const { time, loop, count, world } = setup(10);
+    loop.resume();
+    time.advance(2000);
+    const { snapshotRate, priceTableRate } = world.config.network;
+    expect(count("snapshot")).toBeGreaterThanOrEqual(2 * snapshotRate - 1);
+    expect(count("snapshot")).toBeLessThanOrEqual(2 * snapshotRate + 1);
+    expect(count("priceTable")).toBeGreaterThanOrEqual(2 * priceTableRate - 1);
+    expect(count("priceTable")).toBeLessThanOrEqual(2 * priceTableRate + 1);
+  });
+
+  it("applies queued commands on the next tick, at once while paused, and reports rejections", () => {
+    const { world, time, loop, messages } = setup(5);
+    loop.enqueue({ type: "setWageOffer", area: world.governments[0]?.capital as number, wageOffer: 3 });
+    const capital = world.governments[0]?.capital as number;
+    expect(world.governments[0]?.areaStates.get(capital)?.wageOffer).toBe(3);
+    expect(messages.at(-1)?.type).toBe("snapshot");
+
+    loop.resume();
+    loop.enqueue({ type: "setWageOffer", area: capital, wageOffer: 4 });
+    expect(world.governments[0]?.areaStates.get(capital)?.wageOffer).toBe(3);
+    time.advance(250);
+    expect(world.governments[0]?.areaStates.get(capital)?.wageOffer).toBe(4);
+
+    loop.enqueue({ type: "setWageOffer", area: capital, wageOffer: 99 });
+    time.advance(250);
+    expect(messages.find((m) => m.type === "rejected")).toMatchObject({
+      type: "rejected",
+      reason: expect.stringMatching(/wage/),
+    });
+  });
+
+  it("runs back to back at max speed, yielding through the scheduler", () => {
+    const { world, time, loop } = setup("max");
+    loop.resume();
+    time.advance(0, 20);
+    expect(world.tick).toBe(20);
+    loop.stop();
+  });
+});

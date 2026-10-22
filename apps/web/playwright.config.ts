@@ -9,7 +9,11 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: { baseURL: `http://localhost:${port}` },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  timeout: 120_000,
+  projects: [
+    { name: "desktop", use: { ...devices["Desktop Chrome"] } },
+    { name: "phone", use: { ...devices["Pixel 7"] } },
+  ],
   webServer: {
     command: `pnpm build && pnpm preview --port ${port} --strictPort`,
     url: `http://localhost:${port}`,
