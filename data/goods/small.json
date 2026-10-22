@@ -32,5 +32,5 @@
       "satisfies": {"need": "equipment", "unitsPerGood": 1, "preference": 1}
     }
   ],
-  "military": {"foodGood": "bread", "weaponsGood": "tools"}
+  "military": {"weaponsGood": "tools"}
 }

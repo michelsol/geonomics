@@ -32,6 +32,23 @@ describe("snapshots", () => {
     expect(snapshot.governments[1]).toMatchObject({ id: 1, areaCount: 1, capital: 3, isEliminated: false });
     expect(snapshot.governments[1]).not.toHaveProperty("treasury");
     expect(Array.from(snapshot.areas.owner)).toEqual([0, 0, 0, 1]);
+    expect(snapshot.government?.soldierWage).toBe(world.config.military.soldierWage);
+  });
+
+  it("show militia, natural capacity and its maximum", () => {
+    const world = realmWorld();
+    const neutral = world.areas[3] as (typeof world.areas)[number];
+    world.governments[1]?.ownedAreas.splice(0); // a neutral March without going through a capture
+    neutral.owner = null;
+    neutral.militia = 200;
+    neutral.naturalCapacity[0] = 1;
+    const snapshot = buildSnapshot(world, 0);
+    expect(Array.from(snapshot.areas.militia)).toEqual([0, 0, 0, 200]);
+    const goods = world.goods.length;
+    const table = buildStaticData(world).naturalCapacityMaximum;
+    expect(table.length).toBe(4 * goods);
+    expect(table[3 * goods]).toBeCloseTo(neutral.naturalCapacityMaximum[0] as number, 1);
+    expect(snapshot.detail.find((d) => d.area === 3)?.naturalCapacity[0]).toBe(1);
   });
 
   it("report edge state and edges created since the receiver last knew", () => {
@@ -51,7 +68,7 @@ describe("snapshots", () => {
     const snapshot = buildSnapshot(realmWorld(), 0);
     const buffers = snapshotTransferables(snapshot);
     expect(new Set(buffers).size).toBe(buffers.length);
-    expect(buffers.length).toBe(10 + 3 + 4 * 7 + 3 * 7);
+    expect(buffers.length).toBe(11 + 3 + 4 * 8 + 3 * 7);
   });
 });
 

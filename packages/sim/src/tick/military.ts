@@ -1,69 +1,61 @@
-// Phases 3 and 8: army upkeep, marching, combat, sieges and captures (specification §7).
-import { armyArea, canMarch, disbandArmy } from "../army";
+// Phases 3, 7 and 8: equipment, desertion, marching, combat, sieges and captures (specification §7).
+import { canMarch, disbandArmy, returnSoldiers } from "../army";
 import { transferArea } from "../government";
 import { EPSILON, fractionPerTick } from "../math";
-import type { Area, Army, Edge, GovernmentId, StandingOrder, World } from "../types";
+import type { Area, Army, Edge, Government, GovernmentId, World } from "../types";
 import { changePopulation } from "./population";
+import { scratchOf } from "./scratch";
 
 /** Siege progress also falls by this much per day without attackers, so it reaches zero. */
 const SIEGE_DECAY_PER_DAY = 0.005;
 
+/** Phase 3: armies standing in an area of their own government take weapons from its depot, up to one per soldier. */
+export function runEquipment(world: World): void {
+  const { weaponsGood } = world.config.military;
+  for (const army of world.armies.values()) {
+    if (army.location.kind !== "area") continue;
+    const depot = world.governments[army.owner]?.areaStates.get(army.location.area)?.depot;
+    if (!depot) continue;
+    const taken = Math.min(Math.max(0, army.soldiers - army.weapons), depot[weaponsGood] as number);
+    depot[weaponsGood] = (depot[weaponsGood] as number) - taken;
+    army.weapons += taken;
+  }
+}
+
 /**
- * Phase 3, after consumption: armies standing in their own areas refill from the depot as supplyArmies standing
- * orders ask, armies elsewhere forage, then every army eats its carried food. Unfed soldiers desert.
+ * Phase 7, after taxes: soldiers desert for the larger of their wage shortfall against the realm's average wage level
+ * and the share of their pay left unpaid, like government workers. Deserters join the population where the army is.
  */
-export function runUpkeep(world: World): void {
-  const m = world.config.military;
+export function runDesertion(world: World): void {
+  const scratch = scratchOf(world);
   const { gameDaysPerTick: days, militaryResponsiveness } = world.config.pace;
-  const desertion = fractionPerTick(m.desertionRatePerDay, militaryResponsiveness, days);
+  const desertion = fractionPerTick(world.config.military.desertionRatePerDay, militaryResponsiveness, days);
+  const shares = new Map<GovernmentId, number>();
   for (const army of [...world.armies.values()]) {
-    const area = world.areas[armyArea(army)] as Area;
-    const eating = m.foodPerSoldierPerDay * army.soldiers * days;
-    if (army.location.kind === "area") {
-      if (area.owner === army.owner) supplyFromDepot(world, army, area, eating);
-      else {
-        // Foraging takes what the army needs this tick, up to foragingShare of the area's food stock per day.
-        const stock = area.stock[m.foodGood] as number;
-        const taken = Math.min(Math.max(0, eating - army.food), stock * Math.min(1, m.foragingShare * days));
-        area.stock[m.foodGood] = stock - taken;
-        area.consumed[m.foodGood] = (area.consumed[m.foodGood] as number) + taken;
-        army.food += taken;
-      }
+    let share = shares.get(army.owner);
+    if (share === undefined) {
+      const government = world.governments[army.owner] as Government;
+      const unpaid = 1 - (scratch.paidShare[army.owner] ?? 1);
+      const shortfall = 1 - government.soldierWage / Math.max(realmWageLevel(world, government), EPSILON);
+      share = desertion * Math.max(0, shortfall, unpaid);
+      shares.set(army.owner, share);
     }
-    const eaten = Math.min(army.food, eating);
-    army.food -= eaten;
-    const unfed = eating > EPSILON ? 1 - eaten / eating : 0;
-    if (unfed > EPSILON) {
-      const deserters = army.soldiers * desertion * unfed;
-      area.population += deserters;
-      area.unemployedWorkers += deserters;
-      army.soldiers -= deserters;
-    }
+    if (share > 0) returnSoldiers(world, army, army.soldiers * share);
     if (army.soldiers < 1) disbandArmy(world, army);
   }
 }
 
-/** Refills an army from its government's depot, as the supplyArmies standing orders for the area ask. */
-function supplyFromDepot(world: World, army: Army, area: Area, eatingPerTick: number): void {
-  const government = world.governments[army.owner];
-  const depot = government?.areaStates.get(area.id)?.depot;
-  if (!government || !depot) return;
-  const { foodGood, weaponsGood } = world.config.military;
-  const days = world.config.pace.gameDaysPerTick;
-  for (const order of government.standingOrders) {
-    const { rule } = order;
-    if (rule.kind !== "supplyArmies" || !appliesTo(order, area.id)) continue;
-    const isFood = rule.good === foodGood;
-    const wanted = isFood ? (rule.daysOfSupply * eatingPerTick) / days + eatingPerTick : army.soldiers;
-    const carried = isFood ? army.food : army.weapons;
-    const loaded = Math.min(Math.max(0, wanted - carried), depot[rule.good] as number);
-    depot[rule.good] = (depot[rule.good] as number) - loaded;
-    if (rule.good === foodGood) army.food += loaded;
-    else if (rule.good === weaponsGood) army.weapons += loaded;
+/** Average wage level of a realm's areas, weighted by population. */
+export function realmWageLevel(world: World, government: Government): number {
+  let weighted = 0;
+  let population = 0;
+  for (const id of government.ownedAreas) {
+    const area = world.areas[id] as Area;
+    weighted += area.wageLevel * area.population;
+    population += area.population;
   }
+  return population > EPSILON ? weighted / population : 1;
 }
-
-const appliesTo = (order: StandingOrder, area: number) => order.areas === "all" || order.areas.includes(area);
 
 /** Phase 10: carried weapons wear out. */
 export function wearWeapons(world: World): void {

@@ -9,7 +9,6 @@ export function runTaxes(world: World): void {
   const scratch = scratchOf(world);
   const days = world.config.pace.gameDaysPerTick;
   const wagePerWorker = world.config.economy.hoursPerWorkerDay * days;
-  const wagePerSoldier = world.config.military.soldierWage * wagePerWorker;
   const { paymentDue } = scratch;
   scratch.paidShare.length = world.governments.length;
 
@@ -27,6 +26,7 @@ export function runTaxes(world: World): void {
     let bill = 0;
     for (const id of government.ownedAreas) bill += paymentDue[id] as number;
     // Soldiers are paid in the area where their army stands, or the one it left while marching.
+    const wagePerSoldier = government.soldierWage * wagePerWorker;
     for (const army of world.armies.values()) if (army.owner === government.id) bill += army.soldiers * wagePerSoldier;
 
     // Subsidies and wages are paid from the treasury, all scaled down together when it runs short.

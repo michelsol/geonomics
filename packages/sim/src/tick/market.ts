@@ -6,7 +6,8 @@ import { privateUsedPerTick, type StandingTrade, scratchOf } from "./scratch";
 
 /**
  * Phase 0: turns each standing order into this tick's market trades, executed in phase 2 like market orders. Each
- * trade is paced at standingOrderShareOfDemandPerDay of the area's total demand (or production, if larger) per day.
+ * trade is paced at standingOrderShareOfDemandPerDay of the area's total demand (or of its production, or of the
+ * trade itself, if larger) per day.
  */
 export function evaluateStandingOrders(world: World): void {
   const scratch = scratchOf(world);
@@ -22,14 +23,14 @@ export function evaluateStandingOrders(world: World): void {
         if (!state) continue;
         const area = world.areas[areaId] as Area;
         const { rule } = order;
-        if (rule.kind === "supplyArmies") continue; // applied with army upkeep in phase 3
         const g = rule.good;
         const used = privateUsedPerTick(area, g);
         const demandPerDay = used / days;
         const pace = (share * Math.max(used, area.produced[g] as number)) / days;
         const held = state.depot[g] as number;
+        // Pacing also follows the trade's own size, so a good nobody else uses (weapons) can still be stockpiled.
         const trade = (side: "buy" | "sell", quantity: number, limitPrice: number) => {
-          if (quantity > EPSILON && pace > EPSILON)
+          if (quantity > EPSILON)
             trades.push({
               government: government.id,
               area: areaId,
@@ -37,7 +38,7 @@ export function evaluateStandingOrders(world: World): void {
               side,
               quantity,
               limitPrice,
-              maximumQuantityPerDay: pace,
+              maximumQuantityPerDay: Math.max(pace, share * quantity),
             });
         };
         switch (rule.kind) {

@@ -1,8 +1,9 @@
-// The player's armies: recruit, supply, stance, move and disband; foreign armies are listed for awareness.
+// The player's armies: pay, recruiting, weapons, stance, moves and disbanding; foreign armies for awareness.
 import type { Army } from "@geonomics/sim";
 import { useState } from "react";
+import { realmWageLevel } from "../../state/selectors";
 import { useGame } from "../../state/store";
-import { fmt, NumberField, Section, Select, Swatch } from "../components";
+import { fmt, NumberField, pct, Section, Select, Stat, Swatch } from "../components";
 import { AreaLink, areaName, ownedOptions, useSend, useView } from "./common";
 
 export function ArmiesPanel() {
@@ -23,9 +24,33 @@ export function ArmiesPanel() {
       : selected !== null && government.ownedAreas.includes(selected)
         ? selected
         : (government.capital ?? 0);
+  const soldiers = own.reduce((sum, army) => sum + army.soldiers, 0);
+  const averageWage = realmWageLevel(snapshot);
+  const bill = soldiers * government.soldierWage * data.config.economy.hoursPerWorkerDay;
 
   return (
     <>
+      <Section title="Pay">
+        <div className="row">
+          <span>Soldier wage</span>
+          <NumberField
+            label="Soldier wage"
+            value={government.soldierWage}
+            min={0}
+            onChange={(wage) => send({ type: "setSoldierWage", wage })}
+          />
+          <span className="muted">mh per hour</span>
+        </div>
+        <div className="stats">
+          <Stat label="Realm average wage" value={fmt(averageWage)} />
+          <Stat label="Soldiers" value={fmt(soldiers)} />
+          <Stat label="Pay per day" value={`${fmt(bill)} mh`} testId="army-bill" />
+        </div>
+        <span className="hint">
+          Soldiers desert when paid less than the realm's average wage, or when the treasury cannot pay them.
+        </span>
+      </Section>
+
       <Section title="Recruit">
         <div className="row">
           <Select
@@ -48,11 +73,10 @@ export function ArmiesPanel() {
             Recruit
           </button>
         </div>
-        <span className="muted">
-          Recruits leave the workforce. Supply them with {data.goods[data.config.military.foodGood]?.name} and{" "}
-          {data.goods[data.config.military.weaponsGood]?.name} from the depot.
-        </span>
+        <span className="hint">Recruits leave the workforce of the area.</span>
       </Section>
+
+      <Weapons />
 
       <Section title="Your armies">
         {own.length === 0 && <span className="muted">No armies.</span>}
@@ -84,6 +108,93 @@ export function ArmiesPanel() {
   );
 }
 
+/** Weapons held in the depots, and a shortcut to buy more on an area's market. */
+function Weapons() {
+  const view = useView();
+  const send = useSend();
+  const selected = useGame((state) => state.selectedArea);
+  const [buy, setBuy] = useState({ area: -1, quantity: 500, limit: -1 });
+  if (!view) return null;
+  const { data, government } = view;
+  const weapons = data.config.military.weaponsGood;
+  const good = data.goods[weapons];
+  if (!good) return null;
+  const held = government.areaStates
+    .map((state) => ({ area: state.area, quantity: state.depot[weapons] as number }))
+    .filter((entry) => entry.quantity >= 0.5);
+  const total = held.reduce((sum, entry) => sum + entry.quantity, 0);
+  const buying = government.marketOrders.filter((order) => order.good === weapons && order.side === "buy");
+  const area =
+    buy.area >= 0
+      ? buy.area
+      : selected !== null && government.ownedAreas.includes(selected)
+        ? selected
+        : (government.capital ?? 0);
+  const limit = buy.limit >= 0 ? buy.limit : Math.round(2 * good.laborValue * 100) / 100;
+
+  return (
+    <Section title={good.name}>
+      <div className="stats">
+        <Stat label="In depots" value={fmt(total)} testId="weapons-held" />
+        <Stat label="Being bought" value={fmt(buying.reduce((sum, order) => sum + order.remainingQuantity, 0))} />
+      </div>
+      {held.length > 0 && (
+        <div className="muted">
+          {held.map((entry, i) => (
+            <span key={entry.area}>
+              {i > 0 ? " · " : ""}
+              <AreaLink area={entry.area} /> {fmt(entry.quantity)}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="row">
+        <Select
+          label="Buy weapons in"
+          value={area}
+          options={ownedOptions(view)}
+          onChange={(value) => setBuy({ ...buy, area: value })}
+        />
+        <NumberField
+          label="Weapons to buy"
+          value={buy.quantity}
+          min={0}
+          onChange={(quantity) => setBuy({ ...buy, quantity })}
+        />
+        <NumberField
+          label="Weapons limit price"
+          value={limit}
+          min={0}
+          onChange={(value) => setBuy({ ...buy, limit: value })}
+        />
+        <button
+          type="button"
+          onClick={() =>
+            send({
+              type: "placeMarketOrder",
+              order: {
+                area,
+                good: weapons,
+                side: "buy",
+                remainingQuantity: buy.quantity,
+                limitPrice: limit,
+                maximumQuantityPerDay: Math.max(1, buy.quantity / 5),
+              },
+            })
+          }
+        >
+          Buy
+        </button>
+      </div>
+      <span className="hint">
+        Nobody else uses {good.name.toLowerCase()}, so producers start making them once you buy (labor value{" "}
+        {fmt(good.laborValue)} mh). Armies standing in your areas take them from the local depot, one per soldier; an
+        equipped soldier fights twice as hard.
+      </span>
+    </Section>
+  );
+}
+
 function ArmyCard({
   army,
   selected,
@@ -97,12 +208,10 @@ function ArmyCard({
 }) {
   const view = useView();
   const send = useSend();
-  const [supply, setSupply] = useState({ food: 100, weapons: 100 });
   if (!view) return null;
   const { data } = view;
   const at = army.location.kind === "area" ? army.location.area : army.location.from;
-  const days = army.food / Math.max(army.soldiers * data.config.military.foodPerSoldierPerDay, 1e-9);
-  const canSupply = army.location.kind === "area" && view.government.ownedAreas.includes(at);
+  const equipment = Math.min(1, army.weapons / Math.max(army.soldiers, 1e-9));
 
   return (
     <div className="list-item" data-testid="army">
@@ -115,8 +224,8 @@ function ArmyCard({
       <span className="muted">
         {army.location.kind === "area" ? "in " : "marching from "}
         <AreaLink area={at} />
-        {army.path.length > 0 ? ` → ${areaName(data, army.path.at(-1) as number)}` : ""} · food {fmt(days)} days ·
-        weapons {fmt(army.weapons)}
+        {army.path.length > 0 ? ` → ${areaName(data, army.path.at(-1) as number)}` : ""} · equipped {pct(equipment)} ·
+        power {fmt(army.soldiers * (1 + equipment))}
       </span>
       <div className="row">
         <button type="button" onClick={onMove}>
@@ -138,28 +247,6 @@ function ArmyCard({
           Disband
         </button>
       </div>
-      {canSupply && (
-        <div className="row">
-          <NumberField
-            label="Food to load"
-            value={supply.food}
-            min={0}
-            onChange={(food) => setSupply({ ...supply, food })}
-          />
-          <NumberField
-            label="Weapons to load"
-            value={supply.weapons}
-            min={0}
-            onChange={(weapons) => setSupply({ ...supply, weapons })}
-          />
-          <button
-            type="button"
-            onClick={() => send({ type: "supplyArmy", army: army.id, food: supply.food, weapons: supply.weapons })}
-          >
-            Load
-          </button>
-        </div>
-      )}
     </div>
   );
 }

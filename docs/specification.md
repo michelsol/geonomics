@@ -258,7 +258,7 @@ type PolicyName =
 
 interface PolicySetting {
   policy: PolicyName;                   // which policy this sets
-  good: GoodId | null;                  // the good it applies to; null for per-area policies like head tax
+  good: GoodId | null;                  // the good it applies to; null for head tax, or every good for a per-good policy
   value: number | null;                 // the rate or price; null restores the neutral value (no tax, ceiling or floor)
 }
 
@@ -298,6 +298,7 @@ interface Government {
   depotTransfers: DepotTransfer[];      // goods travelling between the government's own depots
   researchLevel: number;                // realm-wide productivity bonus level
   researchProgress: number;             // worker-days accumulated toward the next research level
+  soldierWage: number;                  // wage paid per soldier-hour, in man-hours (starts at military.soldierWage)
 }
 
 interface MarketOrder {
@@ -322,10 +323,8 @@ type StandingRule =
       // buy until the depot holds this many days of the area's total demand (consumers and producers)
   | { kind: "sellAbovePrice"; good: GoodId; minimumPrice: number; keepDaysOfDemand: number }
       // sell depot surplus above this many days of total demand whenever the price exceeds the minimum
-  | { kind: "buyBelowPrice"; good: GoodId; maximumPrice: number; maximumDepotQuantity: number }
+  | { kind: "buyBelowPrice"; good: GoodId; maximumPrice: number; maximumDepotQuantity: number };
       // stockpile whenever the price is low
-  | { kind: "supplyArmies"; good: GoodId; daysOfSupply: number };
-      // refill armies standing in these areas from the local depot
 
 interface StandingOrder {
   id: number;                           // unique id, used to remove the rule
@@ -347,7 +346,6 @@ interface Army {
   location: ArmyLocation;               // where the army is now
   path: AreaId[];                       // remaining areas to march through, in order
   soldiers: number;                     // number of soldiers
-  food: number;                         // units of the food good carried
   weapons: number;                      // units of the weapons good carried
   stance: "hold" | "attack";            // hold: defend only; attack: engage enemies and besiege
 }
@@ -380,7 +378,7 @@ type Command =
   | { type: "disbandArmy"; army: ArmyId; soldiers: number }
   | { type: "moveArmy"; army: ArmyId; destination: AreaId }
   | { type: "setArmyStance"; army: ArmyId; stance: "hold" | "attack" }
-  | { type: "supplyArmy"; army: ArmyId; food: number; weapons: number } // load from the local depot
+  | { type: "setSoldierWage"; wage: number }
   | { type: "declareWar"; target: GovernmentId }
   | { type: "proposePeace"; proposal: Omit<PeaceProposal, "id"> }
   | { type: "answerPeace"; proposalId: number; accept: boolean }
@@ -405,10 +403,10 @@ The host validates every command before applying it. A rejected command changes 
 | Sender | `player` must be the controller of `government` (`"ai"` for an AI government; the host never accepts that id from the network), and the government must not be eliminated |
 | Ownership | Every area, army, order or depot a command references must belong to the sending government |
 | Numbers | Every number must be finite; quantities, worker targets, soldiers and prices must be ≥ 0 |
-| Policies | Production and consumption tax rates and tariffs must be within [−1, 5]; head tax, ceilings and floors ≥ 0. Head tax takes no good; every other policy takes one |
-| Wages | `wageOffer` must be within [0, 10] |
+| Policies | Production and consumption tax rates and tariffs must be within [−1, 5]; head tax, ceilings and floors ≥ 0. Head tax takes no good; every other policy takes one good, or none for every good |
+| Wages | `wageOffer` and the soldier wage must be within [0, 10] |
 | Recruiting | At least one soldier, and no more than the area's unemployed and private workers |
-| Armies | `moveArmy` needs a reachable destination under the marching rules; `supplyArmy` needs the army standing in an owned area and the goods in its depot; `disbandArmy` at most the army's soldiers; `supplyArmies` rules name the food or weapons good |
+| Armies | `moveArmy` needs a reachable destination under the marching rules; `disbandArmy` at most the army's soldiers |
 | Jobs | `buildPort` only in coastal areas; `buildInfrastructure` only on a land edge touching the area; `produce` never a service, and a primary good only where the area has natural capacity for it |
 | Goods | Market orders, transfers and standing rules never name a service |
 | Transfers | Two different owned areas; the quantity at most what the source depot holds; a non-blocked path between them; a treasury that covers the transport |
@@ -581,16 +579,13 @@ interface WorldConfig {
     snapshotRate: number;               // snapshots per wall-clock second for owned areas and the viewport (default 3)
   };
   military: {
-    foodGood: GoodId;                   // good soldiers eat; taken from the goods catalog
     weaponsGood: GoodId;                // good soldiers are equipped with; taken from the goods catalog
-    foodPerSoldierPerDay: number;       // units of food eaten per soldier per game day (default: one inhabitant's food need, in units of foodGood)
     weaponWearRatePerDay: number;       // share of carried weapons worn out per day (default 0.005)
-    desertionRatePerDay: number;        // share of soldiers leaving per day without food (default 0.05)
-    soldierWage: number;                // wage per soldier-hour, in man-hours (default 1)
+    desertionRatePerDay: number;        // share of soldiers leaving per day per unit of wage shortfall or unpaid share (default 0.05)
+    soldierWage: number;                // starting soldier wage of every government, per soldier-hour, in man-hours (default 1.5)
     combatLethalityPerDay: number;      // losses per day per unit of enemy power over own power per soldier (default 0.05)
     militiaShare: number;               // share of a neutral area's population that defends it (default 0.02)
     siegeRatePerDay: number;            // siege progress per day per unit of power per inhabitant (default 0.25)
-    foragingShare: number;              // largest share of an area's food stock an army takes per day (default 0.2)
     battleStockDestructionPerDay: number; // share of an area's stock destroyed per day of fighting (default 0.02)
     battleCivilianLossPerDay: number;   // share of an area's population lost per day of fighting (default 0.002)
     siegeDecayRatePerDay: number;       // speed at which siege progress decays once the attackers leave (default 0.1)
@@ -867,7 +862,7 @@ Needs and goods are loaded from a JSON catalog chosen when a game is created. Th
 - **References** between needs, goods and recipe inputs use string `key`s, resolved to ids at load.
 - **`kind`** is `"primary"`, `"crafted"` or `"service"`. The loader derives `isPrimary` and `isService` from it.
 - **`terrains`** (optional, primary goods) lists where map generation places the good: `plains`, `forest`, `hills`, `mountains`, `desert` or `coast`.
-- **`military`** names the `foodGood` and `weaponsGood` used for `WorldConfig.military`.
+- **`military`** names the `weaponsGood` used for `WorldConfig.military`.
 
 ```json
 {
@@ -926,8 +921,9 @@ Each policy plugs into exactly one phase of the tick.
 
 The player sets **realm policies** once and adds **area overrides** where needed.
 
+- A per-good policy set without a good applies to every good. A setting for one good wins over a setting for every good, and an area override wins over any realm setting: settings apply in the order realm every-good, realm one-good, area every-good, area one-good.
 - A setting replaces the previous setting of the same policy and good.
-- A null value stands for the neutral value (no tax, no ceiling, no floor), so an override can lift a realm ceiling in one area.
+- In an override, a null value stands for the neutral value (no tax, no ceiling, no floor), so an override can lift a realm ceiling in one area. A null realm setting removes it.
 - Clearing an override falls back to the realm setting.
 - Realm settings and overrides are merged into `resolvedPolicies` only when a setting changes or an area changes owner, never during a normal tick.
 - Neutral areas have all policies at zero.
@@ -1026,13 +1022,12 @@ Standing orders are rules evaluated at the start of every tick, in each area the
 | `keepDepotStock` | A buy of `targetDaysOfDemand × inhabitants' daily demand − depot`, at most `maximumBuyPrice` |
 | `sellAbovePrice` | A sale of `depot − keepDaysOfDemand × inhabitants' daily demand`, at least `minimumPrice` |
 | `buyBelowPrice` | A buy of `maximumDepotQuantity − depot`, at most `maximumPrice` |
-| `supplyArmies` | Refills armies standing in the area from the depot (section 7, Upkeep) |
 
-Their trades execute in the market phase like market orders. Each trade is paced at `standingOrderShareOfDemandPerDay` of the inhabitants' daily demand for the good, or of its daily production if larger.
+Their trades execute in the market phase like market orders. Each trade is paced at `standingOrderShareOfDemandPerDay` of the inhabitants' daily demand for the good, of its daily production, or of the trade's own quantity, whichever is largest. The last keeps orders working for goods nobody else uses, such as weapons.
 
 ## 7. War and conquest
 
-War is an economic activity: soldiers are withdrawn from the workforce, eat food, wear out weapons and cut trade. Conquest happens by besieging an undefended area until it changes owner.
+War is an economic activity: soldiers are withdrawn from the workforce and paid from the treasury, wear out weapons and cut trade. Conquest happens by besieging an undefended area until it changes owner.
 
 ### Relations
 
@@ -1051,17 +1046,14 @@ Areas with no owner defend themselves with a militia. `Area.militia` is `populat
 - **Marching** follows the fastest path by `travelDays` over active land and sea edges. Crossing an edge takes its `travelDays`; each tick an army covers `days × militaryResponsiveness` days of travel, carrying leftover days into the next edge. A new order replans from the area the army stands in or is heading to.
 - **Sea crossings** are allowed only from an area owned by the army's government with `portLevel` ≥ 1. This is checked when the path is planned and again when the army sets out; an army that can no longer embark stops. So an invasion by sea needs a friendly port to embark from. Armies never use air routes.
 - **Attacking.** An army in `attack` stance attacks every area it stands in that is neutral or owned by a government at war with its own. It stays there until the area falls or the war ends, then follows the rest of its path. An army in `hold` stance never attacks and passes through.
-- **Wages** of `soldierWage × hoursPerWorkerDay × soldiers × days` go from the treasury into the savings of the area where the army stands (or the area it left). They join the government's bill and are scaled down with it when the treasury is short (section 6, Tax collection).
+- **Wages** of `government.soldierWage × hoursPerWorkerDay × soldiers × days` go from the treasury into the savings of the area where the army stands (or the area it left). They join the government's bill and are scaled down with it when the treasury is short (section 6, Tax collection). The player sets the wage with `setSoldierWage`.
 
-### Upkeep
+### Equipment and desertion
 
-Each tick, after consumption, an army eats `foodPerSoldierPerDay × soldiers × days` from its carried food:
+- **Equipment** (phase 3). An army standing in an area of its own government takes weapons from the local depot, up to one per soldier. Carried weapons wear out at `weaponWearRatePerDay` in phase 10.
+- **Desertion** (phase 7, after taxes). Soldiers desert like government workers quit: at `desertionRatePerDay × max(0, 1 − soldierWage / realm wage level, unpaid share)`, scaled by `militaryResponsiveness`. The realm wage level is the population-weighted mean `wageLevel` of the government's areas; the unpaid share is what the treasury could not pay this tick. Deserters join the population of the army's area as unemployed workers.
 
-1. **Refill.** In an owned area, it first refills from the local depot, through a `supplyArmy` command or as `supplyArmies` standing orders for the area ask. Food is refilled up to `daysOfSupply` days of eating plus this tick's meal, and weapons up to one per soldier.
-2. **Foraging.** In enemy or neutral territory, the army forages: it takes what it lacks for this tick from the area's private stock of the food good, up to `foragingShare` of that stock per day. Foraged food counts as consumed in that area.
-3. **Desertion.** Soldiers who could not eat desert at `desertionRatePerDay × unfed share`, scaled by `militaryResponsiveness`. Deserters join the area's population as unemployed workers.
-
-An army with fewer than one soldier is disbanded. Carried weapons wear out at `weaponWearRatePerDay` in phase 10.
+An army with fewer than one soldier is disbanded.
 
 ### Power
 
@@ -1141,11 +1133,11 @@ function runTick(world: World, commands: CommandEnvelope[]): CommandRejection[] 
 0. **Commands and automation.** Validate each command against its sender's government and apply it, in order; `runTick` returns the rejected ones with their reasons. Rebuild `resolvedPolicies` where a setting changed. Handle war declarations, peace answers and expired proposals. Evaluate AI decisions and standing orders, which produce the same effects. Recompute `Edge.isBlocked`.
 1. **Production.** For each good in catalog order: primary goods with diminishing returns on natural capacity, crafted goods limited by labor and by inputs rationed between their users. Private output goes to area stock, government output to depots. Production taxes and subsidies are owed on private output. Record `produced`, `inputDemanded`, `outputLimitedByInputs` and the marginal output per worker.
 2. **Government market and logistics.** Execute buy and sell orders at local prices, then the trades issued by standing orders. Advance depot transfers and deliver those that arrive.
-3. **Consumption and army upkeep.** Compute purchasing power from wage level and savings. Compute demand per need at consumer prices including consumption tax, split it between substitutes, consume from stock, then run the spillover pass. Compute `satisfaction` and `necessitySatisfaction`. Then armies refill from depots or forage, and eat carried food; unfed soldiers desert.
+3. **Consumption and army equipment.** Compute purchasing power from wage level and savings. Compute demand per need at consumer prices including consumption tax, split it between substitutes, consume from stock, then run the spillover pass. Compute `satisfaction` and `necessitySatisfaction`. Then armies standing in their own areas take weapons from the local depot.
 4. **Trade.** From the snapshot, move each edge's shipping rates toward their targets and compute flows per active, non-blocked edge of every mode, good and direction, including transport and tariffs. Cap sea and air routes at their capacity and imports at the buyer's savings. Apply all goods and money movements together. Record `imported` and `exported`.
 5. **Taxes, subsidies and wages.** Collect taxes from savings, with the shortfall taken in kind. Pay subsidies, government wages and soldier wages from the treasury, scaled down together if the treasury is short.
 6. **Prices.** Measure each good's scarcity against its stock target and flows, or for services against production and demand. Move each price toward the smoothed price times the scarcity premium, within the per-tick limit and the price bounds, then move `smoothedPrice` toward the price.
-7. **Labor.** Compute value added per job from smoothed prices and production taxes, and update `wageLevel`. Move private workers toward the labor each job needs, tilted by value added against the reservation wage, within `maxLaborShiftPerTick`. Then apply government hiring, quitting and firing.
+7. **Labor.** Compute value added per job from smoothed prices and production taxes, and update `wageLevel`. Move private workers toward the labor each job needs, tilted by value added against the reservation wage, within `maxLaborShiftPerTick`. Then apply government hiring, quitting and firing, and soldier desertion.
 8. **Military.** Move marching armies. Resolve combat in contested areas and refill the militia of neutral areas without attackers. Advance or decay sieges. Transfer captured areas, move capitals and eliminate governments with no area left.
 9. **Population.** Apply growth or starvation from `necessitySatisfaction`. Compute migration along active, non-blocked edges from the snapshot, scaled by each edge's mode, and apply it together.
 10. **Decay and progress.** Spoil stock, depots and transfers, and wear out carried weapons. Regenerate natural capacity: `capacity += (maximum - capacity) × (1 - exp(-regenerationRatePerDay × days))`. Apply infrastructure, fortification, port, airport and research progress. If any port or airport level changed, update the capacity of the routes touching it; if an airport level changed, also rebuild the air routes. Increment `tick` and add `gameDaysPerTick` to `gameDay`.
@@ -1209,8 +1201,9 @@ The main thread forwards local and remote commands to the worker, updates its ow
 The host broadcasts snapshots at `snapshotRate` (default 3 per second), independent of the tick rate. A snapshot contains:
 
 - `tick` and `gameDay`.
-- Per area, for every area: owner, population, wage level, satisfaction, port and airport levels, and siege progress.
-- Per area, for the receiving player's owned areas and their direct neighbors: savings and the price, stock, produced, consumed, imported and exported arrays at full precision. Other areas' stocks and flows are not sent.
+- Per area, for every area: owner, population, wage level, satisfaction, port, airport and fortification levels, siege progress and besieger, and the militia of neutral areas.
+- Per area, for the receiving player's owned areas and their direct neighbors: savings, unemployed workers, and the price, stock, produced, consumed, imported, exported, private worker and natural capacity arrays. Other areas' stocks and flows are not sent.
+- The static data sent once at the start also carries every area's maximum natural capacity per good.
 - Per edge: transport cost, capacity, active and blocked state, plus the full data of any route edge created since the last snapshot.
 - All armies, relations and pending peace proposals.
 - The receiving player's full government state (treasury, depots, jobs, orders); other governments as a public summary.
@@ -1285,8 +1278,9 @@ Areas are the Voronoi cells of their positions, with the water cells around them
 | --- | --- |
 | Realms | Owner color; neutral areas in grey. Realm borders are drawn on every layer |
 | Prices | The chosen good's price over its labor value, on a log scale from blue (cheap) through white to red (dear) |
+| Resources | The chosen good's maximum natural capacity, brighter for more, relative to the best area; grey where there is none |
 | Satisfaction | Necessity satisfaction, from red (0) to green (1) |
-| Wage level | Wage level on a log scale |
+| Average wage | Wage level (mean value added per private worker-hour) on a log scale |
 | Terrain | Terrain type |
 
 One layer is active at a time and has a legend. Every layer also shows:
@@ -1303,12 +1297,12 @@ Mouse or one finger pans and the wheel or a pinch zooms around the pointer. A cl
 
 | Panel | Shows | Actions |
 | --- | --- | --- |
-| Area | Owner, terrain, population, wage level, satisfaction, port and airport levels, siege. For own areas and their neighbors: price, stock, production, consumption and trade per good. For other areas: prices only | In own areas: policy overrides, jobs, wage offer, depot, recruiting, market orders |
+| Area | Owner, terrain, population, average wage, satisfaction, port, airport and fortification levels, siege; charts of population and average wage over time; natural resources (maximum capacity, and current capacity and extraction where detail is sent). For areas not the player's: militia or defending armies, defense power, the soldiers needed to win and the siege time. For own areas and their neighbors: price, stock, production, consumption and trade per good. For other areas: prices only | Read only |
 | Good | Lowest, median and highest price with their areas; a chart over time of the world's lowest, median and highest price and the selected area's price | Show the good on the price map |
-| Government | Treasury and its change per day, realm population and areas, research level | Realm policies |
-| Orders | Open market orders, standing orders, depot transfers in transit | Place and cancel orders; add and remove standing orders; transfer goods between depots |
-| Jobs | Per own area: each job's target and workers, and the wage offer | Set job targets and wage offers |
-| Armies | Each army's soldiers, food, weapons, stance, location and path | Recruit, supply, set stance, move (then pick the destination on the map), disband |
+| Realm | Treasury and its change per day, realm population and areas, research level, charts of treasury and population; every tax and price control, realm-wide and per area | Set or remove a policy for all areas or one area, and for one good or all goods |
+| Orders | Depot contents per area, open market orders, standing orders, depot transfers in transit | Place and cancel market orders in any own area; add and remove standing orders; transfer goods between depots |
+| Jobs | For one own area or the whole realm: the workforce split between private jobs, government jobs and unemployment, and private workers, output per day and output per worker by good. Per own area: each job's target and workers, and the wage offer | Set job targets and wage offers |
+| Armies | Soldier wage, realm average wage, soldiers and their pay per day; weapons in depots and being bought; each army's soldiers, equipment, power, stance, location and path | Set the soldier wage, recruit, buy weapons, set stance, move (then pick the destination on the map), disband |
 | Diplomacy | Relations with every government, pending proposals | Declare war; propose peace (payment and areas picked on the map); accept or refuse proposals |
 
 A rejected command is shown as a short message with its reason.
@@ -1319,5 +1313,5 @@ The top bar holds pause and four speeds: 1×, 2× and 5× (`maxTicksPerSecond` 2
 
 ### Layout
 
-- **Desktop** (900 px wide and more): the map fills the window, under a top bar. A 380 px sidebar on the right holds the panels as tabs.
+- **Desktop** (900 px wide and more): the map fills the window, under a top bar. A sidebar on the right holds the panels as tabs. It is 380 px wide by default; dragging the divider between map and sidebar resizes it between 280 px and the smaller of 900 px and 70% of the window, arrow keys nudge it, and a double-click restores the default. The width is remembered on the device.
 - **Phone:** the map fills the screen under a compact top bar. The panels sit in a bottom sheet with three heights: a peek showing the selection, half the screen, and full screen. Touch targets are at least 44 px.

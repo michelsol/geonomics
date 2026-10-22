@@ -1,6 +1,6 @@
 // The game screen: top bar, map and panels, as a sidebar on desktop or a bottom sheet on phones.
-import { type ReactNode, useEffect, useState } from "react";
-import { cssColor, DIVERGING, PRICE_RANGE, SATISFACTION, TERRAIN_COLORS, WAGE_RANGE } from "../map/colors";
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
+import { cssColor, DIVERGING, PRICE_RANGE, RESOURCE, SATISFACTION, TERRAIN_COLORS, WAGE_RANGE } from "../map/colors";
 import { MapView } from "../map/MapView";
 import type { Layer } from "../state/store";
 import { gameStore, useGame } from "../state/store";
@@ -27,6 +27,7 @@ const PANELS = {
 const LAYERS: { value: Layer; label: string }[] = [
   { value: "realms", label: "Realms" },
   { value: "prices", label: "Prices" },
+  { value: "resources", label: "Resources" },
   { value: "satisfaction", label: "Satisfaction" },
   { value: "wage", label: "Wage level" },
   { value: "terrain", label: "Terrain" },
@@ -34,9 +35,33 @@ const LAYERS: { value: Layer; label: string }[] = [
 
 type SheetHeight = "peek" | "half" | "full";
 
+const SIDE_WIDTH_DEFAULT = 380;
+const SIDE_WIDTH_MIN = 280;
+const SIDE_WIDTH_KEY = "geonomics.sideWidth";
+const clampSide = (width: number) =>
+  Math.round(Math.min(Math.max(width, SIDE_WIDTH_MIN), Math.max(SIDE_WIDTH_MIN, Math.min(900, 0.7 * innerWidth))));
+
+function storedSideWidth(): number {
+  try {
+    const stored = Number(localStorage.getItem(SIDE_WIDTH_KEY));
+    return stored > 0 ? clampSide(stored) : SIDE_WIDTH_DEFAULT;
+  } catch {
+    return SIDE_WIDTH_DEFAULT;
+  }
+}
+
+function saveSideWidth(width: number): void {
+  try {
+    localStorage.setItem(SIDE_WIDTH_KEY, String(width));
+  } catch {
+    // Private windows may refuse storage; the width then lasts for this session only.
+  }
+}
+
 export function Game() {
   const [panel, setPanel] = useState<PanelName>("area");
   const [sheet, setSheet] = useState<SheetHeight>("peek");
+  const [sideWidth, setSideWidth] = useState(storedSideWidth);
   const View = PANELS[panel].view as (props: PanelProps) => ReactNode;
 
   useEffect(() => {
@@ -64,7 +89,7 @@ export function Game() {
   };
 
   return (
-    <div className="game">
+    <div className="game" style={{ "--side-width": `${sideWidth}px` } as CSSProperties}>
       <TopBar />
       <div className="map-wrap">
         <MapView />
@@ -72,6 +97,13 @@ export function Game() {
         <ModeBanner />
         <Toasts />
       </div>
+      <Divider
+        width={sideWidth}
+        onChange={(width) => {
+          setSideWidth(width);
+          saveSideWidth(width);
+        }}
+      />
       <aside className={`side ${sheet}`} aria-label="Panels">
         <button
           type="button"
@@ -91,6 +123,42 @@ export function Game() {
         </div>
       </aside>
     </div>
+  );
+}
+
+/** The line between the map and the panels; dragging it resizes the panels (desktop only). */
+function Divider({ width, onChange }: { width: number; onChange: (width: number) => void }) {
+  const drag = useRef<{ x: number; width: number } | null>(null);
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a focusable separator is the ARIA pattern for a splitter
+    <div
+      className="divider"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize panels"
+      aria-valuenow={width}
+      aria-valuemin={SIDE_WIDTH_MIN}
+      tabIndex={0}
+      data-testid="divider"
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        drag.current = { x: event.clientX, width };
+      }}
+      onPointerMove={(event) => {
+        if (drag.current) onChange(clampSide(drag.current.width + drag.current.x - event.clientX));
+      }}
+      onPointerUp={() => {
+        drag.current = null;
+      }}
+      onDoubleClick={() => onChange(SIDE_WIDTH_DEFAULT)}
+      onKeyDown={(event) => {
+        const step = event.shiftKey ? 80 : 20;
+        if (event.key === "ArrowLeft") onChange(clampSide(width + step));
+        else if (event.key === "ArrowRight") onChange(clampSide(width - step));
+        else return;
+        event.preventDefault();
+      }}
+    />
   );
 }
 
@@ -170,6 +238,17 @@ function Legend() {
           </div>
         </div>
       );
+    case "resources":
+      return (
+        <div className="legend">
+          <div>Natural capacity of {good}</div>
+          <div className="bar" style={{ background: gradient(RESOURCE) }} />
+          <div className="ends">
+            <span>little</span>
+            <span>most on the map</span>
+          </div>
+        </div>
+      );
     case "satisfaction":
       return (
         <div className="legend">
@@ -184,7 +263,7 @@ function Legend() {
     case "wage":
       return (
         <div className="legend">
-          <div>Wage level</div>
+          <div>Average wage</div>
           <div className="bar" style={{ background: gradient(DIVERGING) }} />
           <div className="ends">
             <span>{1 / WAGE_RANGE}</span>

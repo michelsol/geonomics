@@ -1,17 +1,20 @@
-// The selected area: public figures, stocks and flows where visible, and the player's tools in own areas.
-import { useState } from "react";
+// The selected area: public figures, history, resources, defense, and stocks and flows where visible.
 import { mapControls } from "../../map/MapView";
-import { detailOf, priceOf } from "../../state/selectors";
+import { capacityMaximum, conquestEstimate, detailOf, priceOf } from "../../state/selectors";
 import { useGame } from "../../state/store";
-import { fmt, NumberField, pct, Section, Select, Stat, Swatch } from "../components";
-import { areaName, goodOptions, type PanelProps, useSend, useView } from "./common";
-import { PolicyEditor } from "./PolicyEditor";
+import { Chart } from "../Chart";
+import { fmt, pct, Section, Stat, Swatch } from "../components";
+import { type PanelProps, useView } from "./common";
+
+const WAGE_HINT = "Mean value added per private worker-hour, weighted by workers, in man-hours (not a median).";
 
 export function AreaPanel({ onOpen }: PanelProps) {
   const view = useView();
   const area = useGame((state) => state.selectedArea);
   const table = useGame((state) => state.priceTable);
   const selectGood = useGame((state) => state.selectGood);
+  const history = useGame((state) => state.history);
+  useGame((state) => state.historyVersion); // redraw the charts with every new sample
   if (!view) return <p className="muted">Waiting for the first snapshot…</p>;
   if (area === null) return <p className="muted">Click an area on the map.</p>;
   const { data, snapshot, government } = view;
@@ -22,6 +25,10 @@ export function AreaPanel({ onOpen }: PanelProps) {
   const own = owner === government.id;
   const detail = detailOf(snapshot, area);
   const siege = snapshot.areas.siegeProgress[area] as number;
+  const stats = history?.areaStats.get(area);
+  const days = data.config.pace.gameDaysPerTick;
+  const resources = data.goods.filter((good) => good.isPrimary && capacityMaximum(data, area, good.id) > 0);
+  const headTax = government.areaStates.find((s) => s.area === area)?.resolved.headTaxPerPersonPerDay;
 
   return (
     <>
@@ -49,7 +56,7 @@ export function AreaPanel({ onOpen }: PanelProps) {
         </div>
         <div className="stats">
           <Stat label="Population" value={fmt(snapshot.areas.population[area] as number)} />
-          <Stat label="Wage level" value={fmt(snapshot.areas.wageLevel[area] as number)} />
+          <Stat label="Average wage" value={fmt(snapshot.areas.wageLevel[area] as number)} />
           <Stat label="Necessities met" value={pct(snapshot.areas.necessitySatisfaction[area] as number)} />
           <Stat label="Satisfaction" value={pct(snapshot.areas.satisfaction[area] as number)} />
           <Stat
@@ -57,8 +64,85 @@ export function AreaPanel({ onOpen }: PanelProps) {
             value={`${snapshot.areas.portLevel[area]} · ${snapshot.areas.airportLevel[area]} · ${snapshot.areas.fortificationLevel[area]}`}
           />
           {detail && <Stat label="Savings" value={fmt(detail.savings)} />}
+          {detail && <Stat label="Unemployed" value={fmt(detail.unemployedWorkers)} />}
           {siege > 0 && <Stat label="Siege" value={pct(siege)} />}
         </div>
+        <p className="hint">Average wage: {WAGE_HINT}</p>
+        {own && headTax !== undefined && (
+          <div className="row hint">
+            Head tax here: {fmt(headTax)} mh per person per day.
+            <button type="button" className="link" onClick={() => onOpen("government")}>
+              Taxes are set in Realm
+            </button>
+          </div>
+        )}
+      </Section>
+
+      {stats && stats.length > 1 && (
+        <Section title="History">
+          <p className="chart-caption">Population</p>
+          <Chart
+            x={stats.xs()}
+            height={140}
+            testId="area-population-chart"
+            series={[{ label: "population", color: "#3987e5", values: stats.channel(0) }]}
+          />
+          <p className="chart-caption">Average wage (mh per hour)</p>
+          <Chart
+            x={stats.xs()}
+            height={140}
+            series={[{ label: "average wage", color: "#3987e5", values: stats.channel(1) }]}
+          />
+        </Section>
+      )}
+
+      {!own && <Defense area={area} />}
+
+      <Section title="Natural resources">
+        {resources.length === 0 ? (
+          <span className="muted">None: every primary good must be brought in.</span>
+        ) : (
+          <table data-testid="resources">
+            <thead>
+              <tr>
+                <th>Good</th>
+                <th className="num" title="Largest extraction per day, before depletion">
+                  Capacity
+                </th>
+                {detail && (
+                  <>
+                    <th className="num" title="Capacity left after depletion">
+                      Now
+                    </th>
+                    <th className="num">Extracted</th>
+                    <th className="num">Use</th>
+                  </>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {resources.map((good) => {
+                const maximum = capacityMaximum(data, area, good.id);
+                const now = detail ? (detail.naturalCapacity[good.id] as number) : maximum;
+                const extracted = detail ? (detail.produced[good.id] as number) / days : 0;
+                return (
+                  <tr key={good.id}>
+                    <td title={good.unit}>{good.name}</td>
+                    <td className="num">{fmt(maximum)}</td>
+                    {detail && (
+                      <>
+                        <td className="num">{fmt(now)}</td>
+                        <td className="num">{fmt(extracted)}</td>
+                        <td className="num">{now > 0 ? pct(extracted / now) : "—"}</td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+        <span className="hint">Units per day. See a good across the map with the Resources layer.</span>
       </Section>
 
       <Section title={detail ? "Market" : "Prices"}>
@@ -117,128 +201,39 @@ export function AreaPanel({ onOpen }: PanelProps) {
           </tbody>
         </table>
       </Section>
-
-      {own && <OwnArea area={area} />}
     </>
   );
 }
 
-function OwnArea({ area }: { area: number }) {
+/** Defenders of an area that is not the player's, and the force it takes to win. */
+function Defense({ area }: { area: number }) {
   const view = useView();
-  const send = useSend();
-  const [soldiers, setSoldiers] = useState(100);
-  const [order, setOrder] = useState({ good: 0, side: "buy" as "buy" | "sell", quantity: 100, limit: 1, perDay: 10 });
   if (!view) return null;
-  const state = view.government.areaStates.find((s) => s.area === area);
-  if (!state) return null;
-  const { data } = view;
-  const held = data.goods.filter((good) => (state.depot[good.id] as number) > 0.01);
-
+  const estimate = conquestEstimate(view.data, view.snapshot, area);
+  const neutral = (view.snapshot.areas.owner[area] as number) < 0;
   return (
-    <>
-      <Section title="Your area">
-        <div className="row">
-          <span>Wage offer</span>
-          <NumberField
-            label="Wage offer"
-            value={state.wageOffer}
-            min={0}
-            onChange={(wageOffer) => send({ type: "setWageOffer", area, wageOffer })}
-          />
-          <span className="muted">mh per hour</span>
-        </div>
-        <div className="row">
-          <NumberField label="Soldiers" value={soldiers} min={1} onChange={setSoldiers} />
-          <button type="button" onClick={() => send({ type: "recruitArmy", area, soldiers })}>
-            Recruit army
-          </button>
-        </div>
-      </Section>
-
-      <Section title="Depot">
-        {held.length === 0 ? (
-          <span className="muted">Empty</span>
-        ) : (
-          <table>
-            <tbody>
-              {held.map((good) => (
-                <tr key={good.id}>
-                  <td>{good.name}</td>
-                  <td className="num">{fmt(state.depot[good.id] as number)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Section>
-
-      <Section title="Market order">
-        <div className="row">
-          <Select
-            label="Order side"
-            value={order.side}
-            options={[
-              { value: "buy", label: "Buy" },
-              { value: "sell", label: "Sell" },
-            ]}
-            onChange={(side) => setOrder({ ...order, side })}
-          />
-          <Select
-            label="Order good"
-            value={order.good}
-            options={goodOptions(data, true)}
-            onChange={(good) => setOrder({ ...order, good })}
-          />
-        </div>
-        <div className="row">
-          <NumberField
-            label="Quantity"
-            value={order.quantity}
-            min={0}
-            onChange={(quantity) => setOrder({ ...order, quantity })}
-          />
-          <NumberField
-            label="Limit price"
-            value={order.limit}
-            min={0}
-            onChange={(limit) => setOrder({ ...order, limit })}
-          />
-          <NumberField
-            label="Per day"
-            value={order.perDay}
-            min={0}
-            onChange={(perDay) => setOrder({ ...order, perDay })}
-          />
-          <button
-            type="button"
-            onClick={() =>
-              send({
-                type: "placeMarketOrder",
-                order: {
-                  area,
-                  good: order.good,
-                  side: order.side,
-                  remainingQuantity: order.quantity,
-                  limitPrice: order.limit,
-                  maximumQuantityPerDay: order.perDay,
-                },
-              })
-            }
-          >
-            Place
-          </button>
-        </div>
-        <span className="muted">Quantity · limit price · units per day</span>
-      </Section>
-
-      <Section title={`Policies in ${areaName(data, area)}`}>
-        <PolicyEditor
-          settings={state.policyOverrides}
-          onSet={(setting) => send({ type: "setAreaPolicy", area, setting })}
-          onClear={(setting) => send({ type: "clearAreaPolicy", area, policy: setting.policy, good: setting.good })}
-          resolvedHeadTax={state.resolved.headTaxPerPersonPerDay}
-        />
-      </Section>
-    </>
+    <Section title="Defense">
+      <div className="stats">
+        {neutral && <Stat label="Militia" value={fmt(estimate.militia)} testId="militia" />}
+        {!neutral && <Stat label="Army power here" value={fmt(estimate.armyPower)} />}
+        <Stat label="Fortification" value={`×${1 + estimate.fortification}`} />
+        <Stat label="Defense power" value={fmt(estimate.defensePower)} />
+      </div>
+      {estimate.defensePower > 0 ? (
+        <p data-testid="soldiers-needed">
+          Win with more than <strong>{fmt(Math.ceil(estimate.equippedNeeded))}</strong> equipped soldiers, or{" "}
+          {fmt(Math.ceil(estimate.unequippedNeeded))} without weapons. Bring a margin: the battle costs soldiers.
+        </p>
+      ) : (
+        <p>No defenders: an attacking army besieges it at once.</p>
+      )}
+      <p className="hint">
+        Then the siege takes about {fmt(estimate.siegeDaysPer1000Equipped)} days with 1,000 equipped soldiers (twice as
+        long with half as many).
+        {neutral
+          ? ` The militia is ${pct(view.data.config.military.militiaShare)} of the population, unequipped; it refills while no attacker is present.`
+          : ""}
+      </p>
+    </Section>
   );
 }

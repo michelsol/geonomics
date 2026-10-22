@@ -16,7 +16,7 @@ export interface Catalog {
   description: string;
   needs: Need[];
   goods: Good[]; // sorted so that every input comes before its outputs
-  military: { foodGood: GoodId; weaponsGood: GoodId };
+  military: { weaponsGood: GoodId };
 }
 
 export class CatalogError extends Error {
@@ -154,7 +154,7 @@ export function loadCatalog(json: unknown): Catalog {
     description,
     needs,
     goods,
-    military: { foodGood: militaryGood("foodGood"), weaponsGood: militaryGood("weaponsGood") },
+    military: { weaponsGood: militaryGood("weaponsGood") },
   };
 }
 

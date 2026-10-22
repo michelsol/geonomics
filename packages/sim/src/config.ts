@@ -82,17 +82,14 @@ export interface WorldConfig {
     snapshotRate: number; // snapshots per wall-clock second for owned areas and the viewport
   };
   military: {
-    foodGood: GoodId; // good soldiers eat; taken from the goods catalog
     weaponsGood: GoodId; // good soldiers are equipped with; taken from the goods catalog
-    foodPerSoldierPerDay: number; // units of food eaten per soldier per game day
     weaponWearRatePerDay: number; // share of carried weapons worn out per day
-    desertionRatePerDay: number; // share of soldiers leaving per day without food
-    soldierWage: number; // wage per soldier-hour, in man-hours
+    desertionRatePerDay: number; // share of soldiers leaving per day per unit of wage shortfall or unpaid share
+    soldierWage: number; // starting wage per soldier-hour of every government, in man-hours
     combatLethalityPerDay: number; // losses per day per unit of enemy power over own power per soldier
     militiaShare: number; // share of a neutral area's population that defends it
     siegeRatePerDay: number; // siege progress per day per unit of power per inhabitant
     siegeDecayRatePerDay: number; // speed at which siege progress decays once the attackers leave
-    foragingShare: number; // largest share of an area's food stock an army takes per day
     battleStockDestructionPerDay: number; // share of an area's stock destroyed per day of fighting
     battleCivilianLossPerDay: number; // share of an area's population lost per day of fighting
   };
@@ -114,7 +111,7 @@ export interface WorldConfig {
 
 /** Every default except the catalog-dependent military goods, which createConfig fills in. */
 export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
-  military: Omit<WorldConfig["military"], "foodGood" | "weaponsGood" | "foodPerSoldierPerDay">;
+  military: Omit<WorldConfig["military"], "weaponsGood">;
 } = {
   pace: {
     maxTicksPerSecond: 10,
@@ -197,12 +194,11 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
   military: {
     weaponWearRatePerDay: 0.005,
     desertionRatePerDay: 0.05,
-    soldierWage: 1,
+    soldierWage: 1.5,
     combatLethalityPerDay: 0.05,
     militiaShare: 0.02,
     siegeRatePerDay: 0.25,
     siegeDecayRatePerDay: 0.1,
-    foragingShare: 0.2,
     battleStockDestructionPerDay: 0.02,
     battleCivilianLossPerDay: 0.002,
   },
@@ -224,23 +220,11 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
 
 export type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] };
 
-/**
- * Builds a full config for a catalog from partial overrides. The military food and weapons goods come from the
- * catalog; soldiers eat by default what one inhabitant needs of the food need, expressed in units of the food good.
- */
+/** Builds a full config for a catalog from partial overrides. The military weapons good comes from the catalog. */
 export function createConfig(catalog: Catalog, overrides: DeepPartial<WorldConfig> = {}): WorldConfig {
-  const foodGood = catalog.goods[catalog.military.foodGood];
-  const foodNeed = foodGood?.satisfies ? catalog.needs[foodGood.satisfies.need] : undefined;
-  const foodPerSoldierPerDay =
-    foodGood?.satisfies && foodNeed ? foodNeed.demandPerPersonPerDay / foodGood.satisfies.unitsPerGood : 1;
   const base: WorldConfig = {
     ...DEFAULT_CONFIG,
-    military: {
-      ...DEFAULT_CONFIG.military,
-      foodGood: catalog.military.foodGood,
-      weaponsGood: catalog.military.weaponsGood,
-      foodPerSoldierPerDay,
-    },
+    military: { ...DEFAULT_CONFIG.military, weaponsGood: catalog.military.weaponsGood },
   };
   return deepMerge(JSON.parse(JSON.stringify(base)) as WorldConfig, overrides);
 }

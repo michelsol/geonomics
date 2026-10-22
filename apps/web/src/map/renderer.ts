@@ -13,6 +13,7 @@ import {
   PICKED,
   parseColor,
   priceColor,
+  resourceColor,
   SEA_ROUTE,
   SELECTION,
   satisfactionColor,
@@ -72,9 +73,11 @@ export class MapRenderer {
         ? [layer, owners, governments.length]
         : layer === "prices"
           ? [layer, priceTable, selectedGood]
-          : layer === "terrain"
-            ? [layer]
-            : [layer, snapshot];
+          : layer === "resources"
+            ? [layer, selectedGood]
+            : layer === "terrain"
+              ? [layer]
+              : [layer, snapshot];
     if (changed(this.drawn.cells, cellInputs)) {
       this.drawCells(state);
       this.drawn.cells = cellInputs;
@@ -137,11 +140,31 @@ export class MapRenderer {
         if (!good) return NEUTRAL;
         return priceColor(priceOf(data, state.priceTable, area, good.id), good.laborValue);
       }
+      case "resources": {
+        const goods = data.goods.length;
+        const table = data.naturalCapacityMaximum;
+        return resourceColor(table[area * goods + state.selectedGood] as number, this.bestCapacity(state.selectedGood));
+      }
       case "satisfaction":
         return snapshot ? satisfactionColor(snapshot.areas.necessitySatisfaction[area] as number) : NEUTRAL;
       case "wage":
         return snapshot ? wageColor(snapshot.areas.wageLevel[area] as number) : NEUTRAL;
     }
+  }
+
+  private bestCapacities = new Map<number, number>();
+
+  /** The largest natural capacity of a good across the map, cached per good. */
+  bestCapacity(good: number): number {
+    let best = this.bestCapacities.get(good);
+    if (best === undefined) {
+      best = 0;
+      const goods = this.data.goods.length;
+      for (let area = 0; area < this.data.areas.length; area++)
+        best = Math.max(best, this.data.naturalCapacityMaximum[area * goods + good] as number);
+      this.bestCapacities.set(good, best);
+    }
+    return best;
   }
 
   private drawCells(state: GameState): void {

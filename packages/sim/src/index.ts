@@ -16,6 +16,7 @@ export * from "./snapshot";
 export { purchasingPower } from "./tick/consumption";
 export { advanceInfrastructure, rebuildAirRoutes, updateRouteCapacities } from "./tick/infrastructure";
 export { buildInfrastructure } from "./tick/jobs";
+export { realmWageLevel } from "./tick/military";
 export { hourlyOutputPerWorker } from "./tick/production";
 export { runTick } from "./tick/tick";
 export { lastTradeFlows, lastTradeTonnage, type TradeFlow } from "./tick/trade";

@@ -3,7 +3,7 @@ import { AI_PLAYER, MAXIMUM_MARKET_ORDERS, MAXIMUM_STANDING_ORDERS, transferPath
 import { foundGovernments } from "./government";
 import { goodId, PLAYER, realmWorld, send } from "./testing";
 import { runTick } from "./tick/tick";
-import type { Army, Command, GovernmentAreaState, World } from "./types";
+import type { Army, Command, GovernmentAreaState, StandingRule, World } from "./types";
 
 const stateOf = (world: World, area: number, government = 0) =>
   world.governments[government]?.areaStates.get(area) as GovernmentAreaState;
@@ -311,7 +311,7 @@ describe("armies", () => {
     const before = { population: area.population, unemployed: area.unemployedWorkers };
     expect(recruit(world)).toBeNull();
     const army = onlyArmy(world);
-    expect(army).toMatchObject({ owner: 0, soldiers: 100, food: 0, weapons: 0, stance: "hold" });
+    expect(army).toMatchObject({ owner: 0, soldiers: 100, weapons: 0, stance: "hold" });
     expect(army.location).toEqual({ kind: "area", area: 1 });
     expect(area.population).toBeCloseTo(before.population - 100, 9);
     expect(area.unemployedWorkers).toBeCloseTo(before.unemployed - 100, 9);
@@ -350,37 +350,31 @@ describe("armies", () => {
     expect(send(world, { type: "moveArmy", army: own.id, destination: 9 })).toMatch(/unknown area/);
   });
 
-  it("sets stances and loads supplies from the local depot", () => {
+  it("sets stances and the soldier wage", () => {
     const world = realmWorld();
     recruit(world);
     const army = onlyArmy(world);
-    const { foodGood, weaponsGood } = world.config.military;
     expect(send(world, { type: "setArmyStance", army: army.id, stance: "attack" })).toBeNull();
     expect(army.stance).toBe("attack");
     expect(send(world, { type: "setArmyStance", army: army.id, stance: "flee" } as unknown as Command)).toMatch(
       /stance/,
     );
-    stateOf(world, 1).depot[foodGood] = 100;
-    stateOf(world, 1).depot[weaponsGood] = 10;
-    expect(send(world, { type: "supplyArmy", army: army.id, food: 60, weapons: 10 })).toBeNull();
-    expect(army).toMatchObject({ food: 60, weapons: 10 });
-    expect(stateOf(world, 1).depot[foodGood]).toBe(40);
-    expect(send(world, { type: "supplyArmy", army: army.id, food: 41, weapons: 0 })).toMatch(/not enough/);
-    army.location = { kind: "edge", edge: 0, from: 1, daysTravelled: 1 };
-    expect(send(world, { type: "supplyArmy", army: army.id, food: 1, weapons: 0 })).toMatch(/must stand/);
+    expect(world.governments[0]?.soldierWage).toBe(world.config.military.soldierWage);
+    expect(send(world, { type: "setSoldierWage", wage: 1.5 })).toBeNull();
+    expect(world.governments[0]?.soldierWage).toBe(1.5);
+    expect(send(world, { type: "setSoldierWage", wage: -1 })).toMatch(/soldier wage/);
+    expect(send(world, { type: "setSoldierWage", wage: Number.NaN })).toMatch(/soldier wage/);
   });
 
-  it("accepts supplyArmies standing orders for food and weapons only", () => {
+  it("no longer knows army supply commands and rules", () => {
     const world = realmWorld();
-    const { foodGood, weaponsGood } = world.config.military;
-    const add = (good: number) =>
-      send(world, {
-        type: "addStandingOrder",
-        order: { areas: "all", rule: { kind: "supplyArmies", good, daysOfSupply: 5 } },
-      });
-    expect(add(foodGood)).toBeNull();
-    expect(add(weaponsGood)).toBeNull();
-    expect(add(goodId(world, "ore"))).toMatch(/food or weapons/);
+    recruit(world);
+    const army = onlyArmy(world);
+    expect(send(world, { type: "supplyArmy", army: army.id, food: 1, weapons: 1 } as unknown as Command)).toMatch(
+      /unknown command/,
+    );
+    const rule = { kind: "supplyArmies", good: 0, daysOfSupply: 5 } as unknown as StandingRule;
+    expect(send(world, { type: "addStandingOrder", order: { areas: "all", rule } })).toMatch(/unknown rule/);
   });
 });
 

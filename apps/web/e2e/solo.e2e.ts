@@ -47,12 +47,23 @@ test("a solo game runs, pauses, and takes commands", async ({ page }) => {
   }
   expect(await page.getByTestId("area-name").textContent()).not.toBe(capital);
 
-  // A realm head tax shows up as the tax in force.
+  // A realm head tax, set for all areas from the Realm tab, shows up as the tax in force.
   await openTab(page, "Realm");
+  await page.getByLabel("Policy area").selectOption("-1");
   await page.getByLabel("Policy", { exact: true }).selectOption("headTaxPerPersonPerDay");
   await page.getByLabel("Policy value").fill("0.25");
   await page.getByRole("button", { name: "Set", exact: true }).click();
   await expect(page.getByTestId("head-tax")).toContainText("0.25");
+
+  // The Jobs tab shows how the workforce is employed.
+  await openTab(page, "Jobs");
+  await expect(page.getByTestId("employment-bar")).toBeVisible();
+  await expect(page.getByText("Private jobs")).toBeVisible();
+
+  // Soldiers are paid a wage set in the Armies tab.
+  await openTab(page, "Armies");
+  await page.getByLabel("Soldier wage").fill("2");
+  await expect(page.getByLabel("Soldier wage")).toHaveValue("2");
 
   // Recruiting creates an army.
   await openTab(page, "Armies");
@@ -71,6 +82,22 @@ test("a solo game runs, pauses, and takes commands", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Session over" })).toBeVisible();
   await page.getByRole("button", { name: "New game" }).click();
   await expect(page.getByRole("heading", { name: "Geonomics" })).toBeVisible();
+});
+
+test("the panels resize by dragging the divider", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop", "the divider is desktop only");
+  await startGame(page);
+  const side = page.getByRole("complementary", { name: "Panels" });
+  const before = (await side.boundingBox())?.width ?? 0;
+  const divider = await page.getByTestId("divider").boundingBox();
+  if (!divider) throw new Error("no divider");
+  const x = divider.x + divider.width / 2;
+  const y = divider.y + divider.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x - 150, y, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(async () => (await side.boundingBox())?.width ?? 0).toBeGreaterThan(before + 100);
 });
 
 test("rejected commands are explained", async ({ page }) => {

@@ -85,8 +85,7 @@ describe("shipped catalogs", () => {
       });
 
       it("resolves the military goods", () => {
-        const raw = (json as { military: { foodGood: string; weaponsGood: string } }).military;
-        expect(catalog.goods[catalog.military.foodGood]?.key).toBe(raw.foodGood);
+        const raw = (json as { military: { weaponsGood: string } }).military;
         expect(catalog.goods[catalog.military.weaponsGood]?.key).toBe(raw.weaponsGood);
       });
     });

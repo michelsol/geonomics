@@ -49,6 +49,12 @@ export function wageColor(wageLevel: number): number {
   return ramp(DIVERGING, 0.5 + Math.log(Math.max(wageLevel, 1e-3)) / (2 * Math.log(WAGE_RANGE)));
 }
 
+/** Natural capacity of one good: one hue, brighter for more, relative to the best area on the map. */
+export const RESOURCE = [0x1f3d2e, 0x2f6b43, 0x4f9e57, 0x8fd07a, 0xd2f2a8];
+export function resourceColor(capacity: number, best: number): number {
+  return capacity > 0 && best > 0 ? ramp(RESOURCE, Math.sqrt(capacity / best)) : NEUTRAL;
+}
+
 export function satisfactionColor(satisfaction: number): number {
   return ramp(SATISFACTION, satisfaction);
 }

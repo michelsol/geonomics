@@ -285,5 +285,5 @@
       "satisfies": null
     }
   ],
-  "military": {"foodGood": "processed_food", "weaponsGood": "weapons"}
+  "military": {"weaponsGood": "weapons"}
 }

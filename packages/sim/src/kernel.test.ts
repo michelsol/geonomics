@@ -49,10 +49,7 @@ describe("createConfig", () => {
     expect(config.economy.workforceShare).toBe(0.5);
     expect(config.pace.gameDaysPerTick).toBe(0.5);
     expect(config.pace.maxTicksPerSecond).toBe(10);
-    expect(catalog.goods[config.military.foodGood]?.key).toBe("bread");
     expect(catalog.goods[config.military.weaponsGood]?.key).toBe("tools");
-    // One inhabitant's food need (1.5 units) in bread (1.3 units per kg).
-    expect(config.military.foodPerSoldierPerDay).toBeCloseTo(1.5 / 1.3, 12);
   });
 
   it("never shares nested objects between configs", () => {

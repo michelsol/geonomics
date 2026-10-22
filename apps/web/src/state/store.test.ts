@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createGame } from "../host/createGame";
 import type { ToWorker } from "../host/protocol";
 import { Series } from "./history";
-import { priceExtremes, priceOf } from "./selectors";
+import { conquestEstimate, employmentOf, priceExtremes, priceOf } from "./selectors";
 import { createGameStore } from "./store";
 
 function setup() {
@@ -45,6 +45,42 @@ describe("selectors", () => {
   });
 });
 
+describe("conquest estimate", () => {
+  it("needs attack power above the militia's, and sieges for population over power", () => {
+    const { world } = setup();
+    const neutral = world.areas.find((area) => area.owner === null) as World["areas"][number];
+    neutral.militia = 300;
+    neutral.population = 15_000;
+    const data = buildStaticData(world);
+    const estimate = conquestEstimate(data, buildSnapshot(world, 0), neutral.id);
+    expect(estimate).toMatchObject({ militia: 300, armyPower: 0, defensePower: 300 });
+    expect(estimate.equippedNeeded).toBe(150);
+    expect(estimate.unequippedNeeded).toBe(300);
+    // siegeRatePerDay × power / population per day: 0.25 × 2,000 / 15,000 = 1/30 of the siege per day.
+    expect(estimate.siegeDaysPer1000Equipped).toBeCloseTo(30, 1);
+  });
+});
+
+describe("employment", () => {
+  it("sums private workers, government jobs and the unemployed over areas", () => {
+    const { world } = setup();
+    const snapshot = buildSnapshot(world, 0);
+    const government = snapshot.government as NonNullable<typeof snapshot.government>;
+    const data = buildStaticData(world);
+    const employment = employmentOf(data, snapshot, government, government.ownedAreas);
+    let privateWorkers = 0;
+    let unemployed = 0;
+    for (const id of government.ownedAreas) {
+      const area = world.areas[id] as World["areas"][number];
+      for (const workers of area.privateWorkers) privateWorkers += workers;
+      unemployed += area.unemployedWorkers;
+    }
+    expect(employment.privateTotal).toBeCloseTo(privateWorkers, -1);
+    expect(employment.unemployed).toBeCloseTo(unemployed, 0);
+    expect(employment.government).toBe(0);
+  });
+});
+
 describe("game store", () => {
   it("moves from realm choice to the game and starts the worker", () => {
     const { state, sent } = setup();
@@ -63,6 +99,10 @@ describe("game store", () => {
     expect(state().snapshot?.government?.id).toBe(0);
     expect(state().history?.realm.length).toBe(1);
     expect(state().history?.areaPrices.size).toBeGreaterThan(0);
+    const capital = world.governments[0]?.capital as number;
+    const stats = state().history?.areaStats.get(capital);
+    expect(stats?.channel(0)).toEqual([Math.fround(world.areas[capital]?.population as number)]);
+    expect(stats?.channel(1)).toEqual([Math.fround(world.areas[capital]?.wageLevel as number)]);
     state().receive({ type: "priceTable", tick: 0, gameDay: 0, table: encodePriceTable(world) });
     const [low, median, high] = [0, 1, 2].map((c) => state().history?.goodPrices[0]?.channel(c)[0] as number);
     expect(low).toBeLessThanOrEqual(median as number);

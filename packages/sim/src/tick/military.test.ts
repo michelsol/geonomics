@@ -3,8 +3,9 @@ import { armyPath } from "../army";
 import { AI_PLAYER } from "../commands";
 import { realmWorld, send } from "../testing";
 import type { Army, GovernmentAreaState, World } from "../types";
-import { runMilitary, runUpkeep, wearWeapons } from "./military";
+import { realmWageLevel, runDesertion, runEquipment, runMilitary, wearWeapons } from "./military";
 import { runPopulation } from "./population";
+import { scratchOf } from "./scratch";
 import { updateBlockedEdges } from "./tick";
 
 type Area = World["areas"][number];
@@ -55,47 +56,57 @@ describe("marching", () => {
   });
 });
 
-describe("upkeep", () => {
-  it("eats carried food and deserts when it runs out", () => {
+describe("equipment and desertion", () => {
+  it("takes weapons from the local depot at home, up to one per soldier", () => {
     const world = realmWorld();
-    const army = raise(world, 1, 1000);
-    const m = world.config.military;
-    army.food = 1000 * m.foodPerSoldierPerDay * 1.5;
-    runUpkeep(world);
-    expect(army.food).toBeCloseTo(1000 * m.foodPerSoldierPerDay * 0.5, 9);
-    expect(army.soldiers).toBe(1000);
-    const population = areaOf(world, 1).population;
-    runUpkeep(world); // half fed
-    const deserters = 1000 * (1 - Math.exp(-m.desertionRatePerDay)) * 0.5;
-    expect(army.soldiers).toBeCloseTo(1000 - deserters, 6);
-    expect(areaOf(world, 1).population).toBeCloseTo(population + deserters, 6);
+    const { weaponsGood } = world.config.military;
+    const army = raise(world, 1, 100);
+    stateOf(world, 1).depot[weaponsGood] = 60;
+    runEquipment(world);
+    expect(army.weapons).toBe(60);
+    stateOf(world, 1).depot[weaponsGood] = 1000;
+    runEquipment(world);
+    expect(army.weapons).toBe(100);
+    expect(stateOf(world, 1).depot[weaponsGood]).toBe(960);
+
+    // Abroad, nothing is taken.
+    army.location = { kind: "area", area: 3 };
+    army.weapons = 0;
+    areaOf(world, 3).stock[weaponsGood] = 1000;
+    runEquipment(world);
+    expect(army.weapons).toBe(0);
   });
 
-  it("refills from the depot under a supplyArmies order at home, forages abroad", () => {
+  /** Gives government 0's areas a wage level, pays its soldiers `soldierWage` and returns an army of 1,000. */
+  function paidArmy(wageLevel: number, soldierWage: number) {
     const world = realmWorld();
-    const { foodGood, weaponsGood, foodPerSoldierPerDay, foragingShare } = world.config.military;
-    const army = raise(world, 1, 100);
-    send(world, {
-      type: "addStandingOrder",
-      order: { areas: "all", rule: { kind: "supplyArmies", good: foodGood, daysOfSupply: 10 } },
-    });
-    send(world, {
-      type: "addStandingOrder",
-      order: { areas: [1], rule: { kind: "supplyArmies", good: weaponsGood, daysOfSupply: 0 } },
-    });
-    stateOf(world, 1).depot[foodGood] = 1e6;
-    stateOf(world, 1).depot[weaponsGood] = 1e6;
-    runUpkeep(world);
-    expect(army.food).toBeCloseTo(10 * 100 * foodPerSoldierPerDay, 6);
-    expect(army.weapons).toBe(100);
+    const army = raise(world, 1, 1000);
+    const government = world.governments[0] as World["governments"][number];
+    for (const id of government.ownedAreas) areaOf(world, id).wageLevel = wageLevel;
+    government.soldierWage = soldierWage;
+    return { world, government, army, rate: 1 - Math.exp(-world.config.military.desertionRatePerDay) };
+  }
 
-    // Abroad, the army takes what it eats from private stock, within the foraging share.
-    army.location = { kind: "area", area: 3 };
-    army.food = 0;
-    const march = areaOf(world, 3);
-    march.stock[foodGood] = 1;
-    runUpkeep(world);
-    expect(march.stock[foodGood]).toBeCloseTo(1 - foragingShare, 12);
+  it("keeps soldiers paid at least the realm's wage level", () => {
+    const { world, government, army } = paidArmy(1.2, 1.2);
+    expect(realmWageLevel(world, government)).toBeCloseTo(1.2, 12);
+    runDesertion(world);
+    expect(army.soldiers).toBe(1000);
+  });
+
+  it("loses underpaid soldiers in proportion to the wage shortfall", () => {
+    const { world, army, rate } = paidArmy(2, 1);
+    const population = areaOf(world, 1).population;
+    runDesertion(world);
+    expect(army.soldiers).toBeCloseTo(1000 - 1000 * rate * 0.5, 6);
+    expect(areaOf(world, 1).population).toBeCloseTo(population + 1000 * rate * 0.5, 6);
+  });
+
+  it("loses soldiers left unpaid by a short treasury", () => {
+    const { world, army, rate } = paidArmy(1, 3);
+    scratchOf(world).paidShare[0] = 0.25;
+    runDesertion(world);
+    expect(army.soldiers).toBeCloseTo(1000 - 1000 * rate * 0.75, 6);
   });
 
   it("wears weapons out", () => {
@@ -114,7 +125,6 @@ describe("combat and sieges", () => {
     send(world, { type: "declareWar", target: 1 });
     const attacker = raise(world, 1, soldiers);
     attacker.weapons = soldiers / 2;
-    attacker.food = 1e9;
     attacker.stance = "attack";
     attacker.location = { kind: "area", area: 3 };
     return { world, attacker, march: areaOf(world, 3) };

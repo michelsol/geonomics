@@ -183,7 +183,7 @@ export type PolicyName =
 
 export interface PolicySetting {
   policy: PolicyName; // which policy this sets
-  good: GoodId | null; // the good it applies to; null for per-area policies like head tax
+  good: GoodId | null; // the good it applies to; null for head tax, or every good for a per-good policy
   value: number | null; // the rate or price; null removes a ceiling or floor
 }
 
@@ -223,6 +223,7 @@ export interface Government {
   depotTransfers: DepotTransfer[]; // goods travelling between the government's own depots
   researchLevel: number; // realm-wide productivity bonus level
   researchProgress: number; // worker-days accumulated toward the next research level
+  soldierWage: number; // wage paid per soldier-hour, in man-hours
 }
 
 export interface MarketOrder {
@@ -248,9 +249,7 @@ export type StandingRule =
   // sell depot surplus above this many days of total demand whenever the price exceeds the minimum
   | { kind: "sellAbovePrice"; good: GoodId; minimumPrice: number; keepDaysOfDemand: number }
   // stockpile whenever the price is low
-  | { kind: "buyBelowPrice"; good: GoodId; maximumPrice: number; maximumDepotQuantity: number }
-  // refill armies standing in these areas from the local depot
-  | { kind: "supplyArmies"; good: GoodId; daysOfSupply: number };
+  | { kind: "buyBelowPrice"; good: GoodId; maximumPrice: number; maximumDepotQuantity: number };
 
 export interface StandingOrder {
   id: number; // unique id, used to remove the rule
@@ -272,7 +271,6 @@ export interface Army {
   location: ArmyLocation; // where the army is now
   path: AreaId[]; // remaining areas to march through, in order
   soldiers: number; // number of soldiers
-  food: number; // units of the food good carried
   weapons: number; // units of the weapons good carried
   stance: ArmyStance; // hold: defend only; attack: engage enemies and besiege
 }
@@ -301,7 +299,7 @@ export type Command =
   | { type: "disbandArmy"; army: ArmyId; soldiers: number }
   | { type: "moveArmy"; army: ArmyId; destination: AreaId }
   | { type: "setArmyStance"; army: ArmyId; stance: ArmyStance }
-  | { type: "supplyArmy"; army: ArmyId; food: number; weapons: number } // load from the local depot
+  | { type: "setSoldierWage"; wage: number }
   | { type: "declareWar"; target: GovernmentId }
   | { type: "proposePeace"; proposal: Omit<PeaceProposal, "id"> }
   | { type: "answerPeace"; proposalId: number; accept: boolean }

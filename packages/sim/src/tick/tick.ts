@@ -8,7 +8,7 @@ import { advanceInfrastructure } from "./infrastructure";
 import { runJobs } from "./jobs";
 import { runLabor } from "./labor";
 import { evaluateStandingOrders, runMarket } from "./market";
-import { runMilitary, runUpkeep, wearWeapons } from "./military";
+import { runDesertion, runEquipment, runMilitary, wearWeapons } from "./military";
 import { runPopulation } from "./population";
 import { runPrices } from "./prices";
 import { runProduction } from "./production";
@@ -24,12 +24,13 @@ export function runTick(world: World, commands: readonly CommandEnvelope[] = [])
   runProduction(world); // 1
   runMarket(world); // 2
   runConsumption(world); // 3
-  runUpkeep(world); // 3
+  runEquipment(world); // 3
   runTrade(world); // 4
   runTaxes(world); // 5
   runPrices(world); // 6
   runLabor(world); // 7
   runHiring(world); // 7
+  runDesertion(world); // 7
   runMilitary(world); // 8
   runPopulation(world); // 9
   runDecay(world); // 10

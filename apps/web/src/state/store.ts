@@ -7,7 +7,7 @@ import { History } from "./history";
 import { priceExtremes, priceOf, realmPopulation } from "./selectors";
 
 export type Screen = "newGame" | "chooseRealm" | "game" | "ended";
-export type Layer = "realms" | "prices" | "satisfaction" | "wage" | "terrain";
+export type Layer = "realms" | "prices" | "resources" | "satisfaction" | "wage" | "terrain";
 export type Mode = { kind: "select" } | { kind: "moveArmy"; army: number } | { kind: "pickPeaceAreas" };
 
 export interface Toast {
@@ -178,7 +178,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
             governments: message.governments,
             history: new History(message.data.goods.length),
             historyVersion: 0,
-            selectedGood: message.data.config.military.foodGood,
+            selectedGood: firstNecessityGood(message.data),
             layer: "realms",
             mode: { kind: "select" },
             peaceAreas: [],
@@ -192,6 +192,12 @@ export function createGameStore(port: Port): StoreApi<GameState> {
           if (history && snapshot.government) {
             history.realm.push(snapshot.gameDay, [population, snapshot.government.treasury]);
             for (const detail of snapshot.detail) history.track(detail.area);
+            for (const [area, series] of history.areaStats) {
+              series.push(snapshot.gameDay, [
+                snapshot.areas.population[area] as number,
+                snapshot.areas.wageLevel[area] as number,
+              ]);
+            }
           }
           set({
             snapshot,
@@ -236,6 +242,12 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     },
   }));
   return store;
+}
+
+/** The good shown first: the first one satisfying a necessity, such as food. */
+function firstNecessityGood(data: StaticData): number {
+  const good = data.goods.find((g) => g.satisfies && data.needs[g.satisfies.need]?.tier === "necessity");
+  return good?.id ?? 0;
 }
 
 function summarize(state: GameState, eliminated: boolean): Summary {

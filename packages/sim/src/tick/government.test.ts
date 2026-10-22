@@ -5,7 +5,7 @@ import type { GovernmentAreaState, JobAssignment, World } from "../types";
 import { runHiring } from "./hiring";
 import { advanceInfrastructure } from "./infrastructure";
 import { buildInfrastructure, runJobs } from "./jobs";
-import { runMarket } from "./market";
+import { evaluateStandingOrders, runMarket } from "./market";
 import { hourlyOutputPerWorker, runProduction } from "./production";
 import { privateUsedPerTick, scratchOf } from "./scratch";
 import { runTaxes } from "./taxes";
@@ -97,6 +97,48 @@ describe("market orders (phase 2)", () => {
     const target = (3 * privateUsedPerTick(areaOf(world, 1), grain)) / world.config.pace.gameDaysPerTick;
     expect(stateOf(world, 1).depot[grain]).toBeGreaterThan(0.8 * target);
     expect(stateOf(world, 1).depot[grain]).toBeLessThan(1.1 * target);
+  });
+
+  it("paces standing trades by their own size when nobody else uses the good", () => {
+    const world = realmWorld();
+    const tools = goodId(world, "tools");
+    const area = areaOf(world, 1);
+    for (const flow of [area.demanded, area.consumed, area.inputDemanded, area.produced]) flow[tools] = 0;
+    send(world, {
+      type: "addStandingOrder",
+      order: { areas: [1], rule: { kind: "buyBelowPrice", good: tools, maximumPrice: 100, maximumDepotQuantity: 50 } },
+    });
+    evaluateStandingOrders(world);
+    const [trade] = scratchOf(world).standingTrades;
+    expect(trade).toMatchObject({ area: 1, good: tools, side: "buy", quantity: 50 });
+    expect(trade?.maximumQuantityPerDay).toBeCloseTo(50 * world.config.government.standingOrderShareOfDemandPerDay, 12);
+  });
+});
+
+describe("policies", () => {
+  it("apply a setting for every good before the settings for one good, realm first, then area", () => {
+    const world = realmWorld();
+    const [grain, tools] = [goodId(world, "grain"), goodId(world, "tools")];
+    const set = (good: number | null, value: number, area?: number) =>
+      send(
+        world,
+        area === undefined
+          ? { type: "setRealmPolicy", setting: { policy: "productionTaxRate", good, value } }
+          : { type: "setAreaPolicy", area, setting: { policy: "productionTaxRate", good, value } },
+      );
+    expect(set(grain, 0.3)).toBeNull();
+    expect(set(null, 0.1)).toBeNull(); // sent after, yet the grain rate stays more specific
+    expect(set(null, 0.2, 1)).toBeNull();
+    expect(set(tools, 0.05, 1)).toBeNull();
+    const rates = (area: number) => Array.from(stateOf(world, area).resolvedPolicies.productionTaxRate);
+    expect(rates(0)[grain]).toBeCloseTo(0.3, 12);
+    expect(rates(0)[tools]).toBeCloseTo(0.1, 12);
+    // The area's setting for every good overrides the realm's, even the realm's setting for grain.
+    expect(rates(1)[grain]).toBeCloseTo(0.2, 12);
+    expect(rates(1)[tools]).toBeCloseTo(0.05, 12);
+    expect(send(world, { type: "setRealmPolicy", setting: { policy: "priceFloor", good: 99, value: 1 } })).toMatch(
+      /unknown good/,
+    );
   });
 });
 

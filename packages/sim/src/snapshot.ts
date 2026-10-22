@@ -35,6 +35,7 @@ export interface StaticData {
   areas: { name: string; x: number; y: number; terrain: Terrain; isCoastal: boolean }[];
   edges: StaticEdge[];
   map: MapLayout | null;
+  naturalCapacityMaximum: Float32Array; // area-major: area × goodCount + good; 0 where a good cannot be extracted
 }
 
 /** Full state of one owned area, for its own government. */
@@ -69,6 +70,7 @@ export interface GovernmentView {
   depotTransfers: DepotTransfer[];
   researchLevel: number;
   researchProgress: number;
+  soldierWage: number;
 }
 
 /** What every player sees of every government. */
@@ -94,6 +96,7 @@ export interface AreaDetail {
   imported: Float32Array;
   exported: Float32Array;
   privateWorkers: Float32Array;
+  naturalCapacity: Float32Array; // current extraction capacity per day, after depletion
 }
 
 export interface Snapshot {
@@ -110,6 +113,7 @@ export interface Snapshot {
     fortificationLevel: Uint8Array;
     siegeProgress: Float32Array;
     besieger: Int16Array; // -1 when not besieged
+    militia: Float32Array; // militia defending a neutral area; 0 for owned areas
   };
   detail: AreaDetail[];
   edges: {
@@ -148,7 +152,15 @@ export function buildStaticData(world: World): StaticData {
     })),
     edges: world.edges.map((_, id) => staticEdge(world, id)),
     map: world.map,
+    naturalCapacityMaximum: capacityTable(world),
   };
+}
+
+function capacityTable(world: World): Float32Array {
+  const goodCount = world.goods.length;
+  const table = new Float32Array(world.areas.length * goodCount);
+  for (const area of world.areas) table.set(area.naturalCapacityMaximum, area.id * goodCount);
+  return table;
 }
 
 /** The dynamic state as seen by `viewer` (null for a spectator), for a receiver that knows `knownEdges` edges. */
@@ -165,6 +177,7 @@ export function buildSnapshot(world: World, viewer: GovernmentId | null, knownEd
     fortificationLevel: new Uint8Array(n),
     siegeProgress: new Float32Array(n),
     besieger: new Int16Array(n),
+    militia: new Float32Array(n),
   };
   for (const area of world.areas) {
     const i = area.id;
@@ -178,6 +191,7 @@ export function buildSnapshot(world: World, viewer: GovernmentId | null, knownEd
     areas.fortificationLevel[i] = area.fortificationLevel;
     areas.siegeProgress[i] = area.siegeProgress;
     areas.besieger[i] = area.besiegingGovernment ?? -1;
+    areas.militia[i] = area.owner === null ? area.militia : 0;
   }
 
   const m = world.edges.length;
@@ -246,6 +260,7 @@ function detailFor(world: World, owned: readonly AreaId[]): AreaDetail[] {
         imported: Float32Array.from(area.imported),
         exported: Float32Array.from(area.exported),
         privateWorkers: Float32Array.from(area.privateWorkers),
+        naturalCapacity: Float32Array.from(area.naturalCapacity),
       };
     });
 }
@@ -283,6 +298,7 @@ function governmentView(government: World["governments"][number]): GovernmentVie
     depotTransfers: government.depotTransfers.map((t) => ({ ...t })),
     researchLevel: government.researchLevel,
     researchProgress: government.researchProgress,
+    soldierWage: government.soldierWage,
   };
 }
 
@@ -301,6 +317,7 @@ export function snapshotTransferables(snapshot: Snapshot): ArrayBuffer[] {
       detail.imported,
       detail.exported,
       detail.privateWorkers,
+      detail.naturalCapacity,
     ])
       add(view);
   }

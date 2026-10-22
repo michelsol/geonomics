@@ -44,6 +44,7 @@ export function createGovernment(world: World, init: GovernmentInit): Government
     depotTransfers: [],
     researchLevel: 0,
     researchProgress: 0,
+    soldierWage: world.config.military.soldierWage,
   };
   world.governments.push(government);
   for (const row of world.relations) row.push("peace");
@@ -135,7 +136,10 @@ export function neutralPolicies(goodCount: number): ResolvedPolicies {
   };
 }
 
-/** Merges the realm policies, then the area's overrides, into the area's resolved policies. */
+/**
+ * Merges the realm policies, then the area's overrides, into the area's resolved policies. Within each, a setting for
+ * every good (good null) applies before the settings for one good, so the more specific one wins.
+ */
 export function resolvePolicies(government: Government, area: AreaId): void {
   const state = government.areaStates.get(area);
   if (!state) return;
@@ -147,8 +151,10 @@ export function resolvePolicies(government: Government, area: AreaId): void {
   resolved.headTaxPerPersonPerDay = 0;
   resolved.priceCeiling.fill(Number.POSITIVE_INFINITY);
   resolved.priceFloor.fill(0);
-  for (const setting of government.realmPolicies) applySetting(resolved, setting);
-  for (const setting of state.policyOverrides) applySetting(resolved, setting);
+  for (const settings of [government.realmPolicies, state.policyOverrides]) {
+    for (const setting of settings) if (setting.good === null) applySetting(resolved, setting);
+    for (const setting of settings) if (setting.good !== null) applySetting(resolved, setting);
+  }
 }
 
 /** A null value restores the neutral value: no tax, no ceiling, no floor. */
@@ -158,9 +164,9 @@ function applySetting(resolved: ResolvedPolicies, setting: PolicySetting): void 
     resolved.headTaxPerPersonPerDay = value ?? 0;
     return;
   }
-  const g = setting.good as number;
   const neutral = setting.policy === "priceCeiling" ? Number.POSITIVE_INFINITY : 0;
-  resolved[setting.policy][g] = value ?? neutral;
+  if (setting.good === null) resolved[setting.policy].fill(value ?? neutral);
+  else resolved[setting.policy][setting.good] = value ?? neutral;
 }
 
 /** Replaces the setting of the same policy and good, or appends it. */

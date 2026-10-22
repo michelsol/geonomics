@@ -3,12 +3,11 @@ import { realmPopulation } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { Chart } from "../Chart";
 import { fmt, Section, Stat, Swatch } from "../components";
-import { AreaLink, useSend, useView } from "./common";
+import { AreaLink, useView } from "./common";
 import { PolicyEditor } from "./PolicyEditor";
 
 export function GovernmentPanel() {
   const view = useView();
-  const send = useSend();
   const history = useGame((state) => state.history);
   useGame((state) => state.historyVersion);
   const endGame = useGame((state) => state.endGame);
@@ -26,7 +25,6 @@ export function GovernmentPanel() {
         Math.max((days.at(-1) as number) - (days.at(-1 - span) as number), 1e-9)
       : 0;
   const research = data.config.government;
-  const firstArea = government.areaStates[0];
 
   return (
     <>
@@ -54,23 +52,15 @@ export function GovernmentPanel() {
 
       {realm && realm.length > 1 && (
         <Section title="History">
-          <Chart
-            x={days}
-            series={[
-              { label: "treasury", color: "#ffd54a", values: treasuries },
-              { label: "population", color: "#5fa8f0", values: realm.channel(0), scale: "y2" },
-            ]}
-          />
+          <p className="chart-caption">Treasury (mh)</p>
+          <Chart x={days} height={140} series={[{ label: "treasury", color: "#3987e5", values: treasuries }]} />
+          <p className="chart-caption">Population</p>
+          <Chart x={days} height={140} series={[{ label: "population", color: "#3987e5", values: realm.channel(0) }]} />
         </Section>
       )}
 
-      <Section title="Realm policies">
-        <PolicyEditor
-          settings={government.realmPolicies.filter((s) => s.value !== null)}
-          onSet={(setting) => send({ type: "setRealmPolicy", setting })}
-          onClear={(setting) => send({ type: "setRealmPolicy", setting: { ...setting, value: null } })}
-          resolvedHeadTax={firstArea?.resolved.headTaxPerPersonPerDay ?? 0}
-        />
+      <Section title="Taxes and price controls">
+        <PolicyEditor />
       </Section>
 
       <Section title="Session">

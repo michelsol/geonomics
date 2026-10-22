@@ -170,17 +170,10 @@ function validate(world: World, government: Government, command: Command): strin
       if (!army) return reason;
       return command.stance === "hold" || command.stance === "attack" ? null : "stance must be hold or attack";
     }
-    case "supplyArmy": {
-      const { army, reason } = ownArmy(world, government, command.army);
-      if (!army) return reason;
-      const state = army.location.kind === "area" ? government.areaStates.get(army.location.area) : undefined;
-      if (!state) return "the army must stand in an area of its government";
-      if (!isAmount(command.food) || !isAmount(command.weapons)) return "quantities must be finite and non-negative";
-      const { foodGood, weaponsGood } = world.config.military;
-      if (command.food > (state.depot[foodGood] as number) || command.weapons > (state.depot[weaponsGood] as number))
-        return "not enough goods in the depot";
-      return null;
-    }
+    case "setSoldierWage":
+      return isAmount(command.wage) && command.wage <= MAXIMUM_WAGE_OFFER
+        ? null
+        : `soldier wage must be within [0, ${MAXIMUM_WAGE_OFFER}]`;
     case "declareWar": {
       if (!isIndex(command.target, world.governments.length)) return "unknown government";
       if (command.target === government.id) return "a government cannot declare war on itself";
@@ -228,7 +221,7 @@ function validateSetting(world: World, setting: PolicySetting): string | null {
     return null;
   }
   if (!PER_GOOD_POLICIES.includes(policy)) return "unknown policy";
-  if (!isIndex(good, world.goods.length)) return "unknown good";
+  if (good !== null && !isIndex(good, world.goods.length)) return "unknown good"; // null: every good
   if (value === null) return null;
   if (typeof value !== "number" || !Number.isFinite(value)) return "policy value must be finite";
   if (RATE_POLICIES.includes(policy)) {
@@ -285,11 +278,6 @@ function validateRule(world: World, rule: StandingRule): string | null {
         validateGood(world, rule.good) ??
         ([rule.maximumPrice, rule.maximumDepotQuantity].every(isAmount) ? null : "numbers must be non-negative")
       );
-    case "supplyArmies": {
-      const { foodGood, weaponsGood } = world.config.military;
-      if (rule.good !== foodGood && rule.good !== weaponsGood) return "armies are supplied with food or weapons only";
-      return isAmount(rule.daysOfSupply) ? null : "numbers must be non-negative";
-    }
     default:
       return "unknown rule";
   }
@@ -390,7 +378,12 @@ const sameJob = (a: GovernmentJob, b: GovernmentJob): boolean =>
 function execute(world: World, government: Government, command: Command): void {
   switch (command.type) {
     case "setRealmPolicy":
-      upsertSetting(government.realmPolicies, command.setting);
+      // The realm has nothing to fall back on, so a null value removes its setting.
+      if (command.setting.value === null)
+        government.realmPolicies = government.realmPolicies.filter(
+          (s) => !(s.policy === command.setting.policy && s.good === command.setting.good),
+        );
+      else upsertSetting(government.realmPolicies, command.setting);
       for (const area of government.ownedAreas) resolvePolicies(government, area);
       return;
     case "setAreaPolicy":
@@ -471,7 +464,6 @@ function execute(world: World, government: Government, command: Command): void {
         location: { kind: "area", area: area.id },
         path: [],
         soldiers,
-        food: 0,
         weapons: 0,
         stance: "hold",
       });
@@ -492,16 +484,9 @@ function execute(world: World, government: Government, command: Command): void {
     case "setArmyStance":
       (world.armies.get(command.army) as Army).stance = command.stance;
       return;
-    case "supplyArmy": {
-      const army = world.armies.get(command.army) as Army;
-      const depot = stateOf(government, (army.location as { area: AreaId }).area).depot;
-      const { foodGood, weaponsGood } = world.config.military;
-      depot[foodGood] = (depot[foodGood] as number) - command.food;
-      depot[weaponsGood] = (depot[weaponsGood] as number) - command.weapons;
-      army.food += command.food;
-      army.weapons += command.weapons;
+    case "setSoldierWage":
+      government.soldierWage = command.wage;
       return;
-    }
     case "declareWar":
       setRelation(world, government.id, command.target, "war");
       return;

@@ -1,9 +1,16 @@
-// Government jobs and wage offers per owned area.
+// Employment in the realm or one area, and government jobs and wage offers per owned area.
 import type { GovernmentJob } from "@geonomics/sim";
 import { useState } from "react";
+import { employmentOf } from "../../state/selectors";
 import { useGame } from "../../state/store";
-import { fmt, NumberField, Section, Select } from "../components";
+import { fmt, NumberField, pct, Section, Select } from "../components";
 import { areaName, ownedOptions, useSend, useView } from "./common";
+
+// Categorical slots 1 and 2 of the chart palette (dark steps), validated against the panel surface; the unemployed
+// are a neutral gray, since they are the absence of a job rather than a third kind of one.
+const PRIVATE_COLOR = "#3987e5";
+const GOVERNMENT_COLOR = "#d95926";
+const UNEMPLOYED_COLOR = "#5b6270";
 
 type JobKind = GovernmentJob["kind"];
 const JOB_LABELS: Record<JobKind, string> = {
@@ -60,6 +67,11 @@ export function JobsPanel() {
     <>
       <Section title="Area">
         <Select label="Jobs area" value={area} options={ownedOptions(view)} onChange={selectArea} />
+      </Section>
+
+      <EmploymentSection area={area} />
+
+      <Section title="Wages">
         <div className="row">
           <span>Wage offer</span>
           <NumberField
@@ -68,9 +80,9 @@ export function JobsPanel() {
             min={0}
             onChange={(wageOffer) => send({ type: "setWageOffer", area, wageOffer })}
           />
-          <span className="muted">wage level here {fmt(view.snapshot.areas.wageLevel[area] as number)}</span>
+          <span className="muted">average wage here {fmt(view.snapshot.areas.wageLevel[area] as number)}</span>
         </div>
-        <span className="muted">Workers only take government jobs paying at least the local wage level.</span>
+        <span className="muted">Workers only take government jobs paying at least the average wage here.</span>
       </Section>
 
       <Section title="Jobs">
@@ -138,5 +150,94 @@ export function JobsPanel() {
         </div>
       </Section>
     </>
+  );
+}
+
+/** Who works at what, as a share bar (private, government, unemployed) and a table of private jobs by good. */
+function EmploymentSection({ area }: { area: number }) {
+  const view = useView();
+  const [scope, setScope] = useState<"area" | "realm">("area");
+  if (!view) return null;
+  const { data, snapshot, government } = view;
+  const areas = scope === "realm" ? government.ownedAreas : [area];
+  const employment = employmentOf(data, snapshot, government, areas);
+  const total = employment.privateTotal + employment.government + employment.unemployed;
+  const parts = [
+    { label: "Private jobs", value: employment.privateTotal, color: PRIVATE_COLOR },
+    { label: "Government jobs", value: employment.government, color: GOVERNMENT_COLOR },
+    { label: "Unemployed", value: employment.unemployed, color: UNEMPLOYED_COLOR },
+  ];
+  const rows = data.goods
+    .map((good) => ({
+      good,
+      workers: employment.privateWorkers[good.id] as number,
+      output: employment.producedPerDay[good.id] as number,
+    }))
+    .filter((row) => row.workers >= 0.5 || row.output > 1e-6)
+    .sort((a, b) => b.workers - a.workers);
+  const most = Math.max(1, ...rows.map((row) => row.workers));
+
+  return (
+    <Section
+      title="Employment"
+      actions={
+        <Select
+          label="Employment scope"
+          value={scope}
+          options={[
+            { value: "area", label: areaName(data, area) },
+            { value: "realm", label: "Whole realm" },
+          ]}
+          onChange={setScope}
+        />
+      }
+    >
+      <div className="share-bar" data-testid="employment-bar" role="img" aria-label="Workforce by kind of job">
+        {parts
+          .filter((part) => part.value > 0)
+          .map((part) => (
+            <span
+              key={part.label}
+              style={{ flexGrow: part.value, background: part.color }}
+              title={`${part.label}: ${fmt(part.value)} (${pct(part.value / total)})`}
+            />
+          ))}
+      </div>
+      <div className="share-legend">
+        {parts.map((part) => (
+          <span key={part.label}>
+            <span className="swatch" style={{ background: part.color }} />
+            {part.label} {fmt(part.value)} · {total > 0 ? pct(part.value / total) : "—"}
+          </span>
+        ))}
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Private job</th>
+            <th className="num">Workers</th>
+            <th aria-label="Share of private workers" />
+            <th className="num" title="Units produced per day, government output included">
+              Output/day
+            </th>
+            <th className="num">Per worker</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ good, workers, output }) => (
+            <tr key={good.id}>
+              <td title={good.unit}>{good.name}</td>
+              <td className="num">{fmt(workers)}</td>
+              <td style={{ width: "22%" }}>
+                <div className="inline-bar" style={{ width: `${(100 * workers) / most}%` }} />
+              </td>
+              <td className="num">{fmt(output)}</td>
+              <td className="num">{workers >= 0.5 ? fmt(output / workers) : "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <span className="hint">Output per day in each good's unit; per worker is output over private workers.</span>
+    </Section>
   );
 }

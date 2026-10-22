@@ -1,4 +1,4 @@
-// Market orders, standing orders and depot transfers.
+// Depots, market orders, standing orders and depot transfers.
 import type { StandingRule } from "@geonomics/sim";
 import { useState } from "react";
 import { useGame } from "../../state/store";
@@ -11,7 +11,6 @@ const RULES: { value: RuleKind; label: string }[] = [
   { value: "keepDepotStock", label: "Keep depot stocked" },
   { value: "sellAbovePrice", label: "Sell above price" },
   { value: "buyBelowPrice", label: "Buy below price" },
-  { value: "supplyArmies", label: "Supply armies" },
 ];
 
 export function OrdersPanel() {
@@ -26,6 +25,15 @@ export function OrdersPanel() {
     scope: "all" as "all" | "area",
   });
   const [transfer, setTransfer] = useState({ from: -1, to: -1, good: 0, quantity: 10 });
+  const [depotArea, setDepotArea] = useState(-1);
+  const [order, setOrder] = useState({
+    area: -1,
+    good: 0,
+    side: "buy" as "buy" | "sell",
+    quantity: 100,
+    limit: 1,
+    perDay: 10,
+  });
   if (!view) return null;
   const { data, government } = view;
   const goodName = (g: number) => data.goods[g]?.name ?? "?";
@@ -33,6 +41,9 @@ export function OrdersPanel() {
   const from = transfer.from >= 0 ? transfer.from : (government.ownedAreas[0] ?? 0);
   const to = transfer.to >= 0 ? transfer.to : (government.ownedAreas[1] ?? government.ownedAreas[0] ?? 0);
   const scopeArea = selected !== null && government.ownedAreas.includes(selected) ? selected : government.capital;
+  const pick = (area: number) => (area >= 0 && government.ownedAreas.includes(area) ? area : (scopeArea ?? 0));
+  const depot = government.areaStates.find((s) => s.area === pick(depotArea));
+  const held = depot ? data.goods.filter((good) => (depot.depot[good.id] as number) > 0.01) : [];
 
   const buildRule = (): StandingRule => {
     switch (rule.kind) {
@@ -42,15 +53,12 @@ export function OrdersPanel() {
         return { kind: "sellAbovePrice", good: rule.good, minimumPrice: rule.b, keepDaysOfDemand: rule.a };
       case "buyBelowPrice":
         return { kind: "buyBelowPrice", good: rule.good, maximumPrice: rule.b, maximumDepotQuantity: rule.a };
-      case "supplyArmies":
-        return { kind: "supplyArmies", good: rule.good, daysOfSupply: rule.a };
     }
   };
   const ruleLabels: Record<RuleKind, [string, string | null]> = {
     keepDepotStock: ["days of demand", "max price"],
     sellAbovePrice: ["days kept", "min price"],
     buyBelowPrice: ["max quantity", "max price"],
-    supplyArmies: ["days of food", null],
   };
   const describeRule = (r: StandingRule) => {
     switch (r.kind) {
@@ -60,17 +68,34 @@ export function OrdersPanel() {
         return `Sell ${goodName(r.good)} above ${fmt(r.minimumPrice)}, keep ${fmt(r.keepDaysOfDemand)} days`;
       case "buyBelowPrice":
         return `Buy ${goodName(r.good)} below ${fmt(r.maximumPrice)}, up to ${fmt(r.maximumDepotQuantity)}`;
-      case "supplyArmies":
-        return `Supply armies with ${fmt(r.daysOfSupply)} days of ${goodName(r.good)}`;
     }
   };
 
   return (
     <>
-      <Section title="Market orders">
-        {government.marketOrders.length === 0 && (
-          <span className="muted">None. Place orders from an area you own.</span>
+      <Section title="Depots">
+        <Select label="Depot area" value={pick(depotArea)} options={owned} onChange={setDepotArea} />
+        {held.length === 0 ? (
+          <span className="muted">Empty</span>
+        ) : (
+          <table data-testid="depot">
+            <tbody>
+              {held.map((good) => (
+                <tr key={good.id}>
+                  <td>{good.name}</td>
+                  <td className="num">{fmt(depot?.depot[good.id] as number)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
+        <span className="hint">
+          The government's goods in each area: bought, produced by government jobs or taken as taxes in kind.
+        </span>
+      </Section>
+
+      <Section title="Market orders">
+        {government.marketOrders.length === 0 && <span className="muted">None.</span>}
         {government.marketOrders.map((order) => (
           <div className="list-item" key={order.id}>
             <div className="row" style={{ justifyContent: "space-between" }}>
@@ -87,6 +112,75 @@ export function OrdersPanel() {
             </span>
           </div>
         ))}
+      </Section>
+
+      <Section title="Place a market order">
+        <div className="row">
+          <Select
+            label="Order area"
+            value={pick(order.area)}
+            options={owned}
+            onChange={(area) => setOrder({ ...order, area })}
+          />
+          <Select
+            label="Order side"
+            value={order.side}
+            options={[
+              { value: "buy", label: "Buy" },
+              { value: "sell", label: "Sell" },
+            ]}
+            onChange={(side) => setOrder({ ...order, side })}
+          />
+          <Select
+            label="Order good"
+            value={order.good}
+            options={goodOptions(data, true)}
+            onChange={(good) => setOrder({ ...order, good })}
+          />
+        </div>
+        <div className="row">
+          <NumberField
+            label="Quantity"
+            value={order.quantity}
+            min={0}
+            onChange={(quantity) => setOrder({ ...order, quantity })}
+          />
+          <NumberField
+            label="Limit price"
+            value={order.limit}
+            min={0}
+            onChange={(limit) => setOrder({ ...order, limit })}
+          />
+          <NumberField
+            label="Per day"
+            value={order.perDay}
+            min={0}
+            onChange={(perDay) => setOrder({ ...order, perDay })}
+          />
+          <button
+            type="button"
+            className="primary"
+            onClick={() =>
+              send({
+                type: "placeMarketOrder",
+                order: {
+                  area: pick(order.area),
+                  good: order.good,
+                  side: order.side,
+                  remainingQuantity: order.quantity,
+                  limitPrice: order.limit,
+                  maximumQuantityPerDay: order.perDay,
+                },
+              })
+            }
+          >
+            Place
+          </button>
+        </div>
+        <span className="hint">
+          Quantity · limit price · units per day. Buying a good nobody else uses (weapons) makes producers start making
+          it.
+        </span>
       </Section>
 
       <Section title="Standing orders">

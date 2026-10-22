@@ -24,16 +24,35 @@ function order(world: World, government: number, ...commands: Command[]): void {
   expect(rejections).toEqual([]);
 }
 
-/** An equipped and fed army of `soldiers` for government 0, standing in `area`, raised between two ticks. */
+/** An equipped army of `soldiers` for government 0, standing in `area`, raised between two ticks. */
 function equippedArmy(world: World, area: number, soldiers: number): Army {
   expect(
     applyCommand(world, { player: "player0", government: 0, command: { type: "recruitArmy", area, soldiers } }),
   ).toBeNull();
   const army = [...world.armies.values()].at(-1) as Army;
   army.weapons = soldiers;
-  army.food = 100 * soldiers * world.config.military.foodPerSoldierPerDay;
   return army;
 }
+
+describe("weapons", () => {
+  it("are made once the government buys them, though nobody else uses them", () => {
+    const world = scenarios.chain10.build({ catalog: readCatalog("medium") });
+    warmUp(world);
+    createGovernment(world, { capital: 0, areas: [0, 1, 2], controller: { kind: "human", player: "player0" } });
+    const weapons = world.config.military.weaponsGood;
+    const price = 2 * (world.goods[weapons]?.laborValue ?? 0);
+    expect(world.areas.every((area) => (area.stock[weapons] as number) < 1)).toBe(true);
+    order(world, 0, {
+      type: "addStandingOrder",
+      order: {
+        areas: [1],
+        rule: { kind: "buyBelowPrice", good: weapons, maximumPrice: price, maximumDepotQuantity: 200 },
+      },
+    });
+    for (let day = 0; day < 60; day++) runTick(world);
+    expect(world.governments[0]?.areaStates.get(1)?.depot[weapons]).toBeGreaterThan(190);
+  });
+});
 
 describe("the §7 example", () => {
   it("1,000 equipped soldiers take an unfortified area of 10,000 people in about 20 days", () => {

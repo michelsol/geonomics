@@ -40,15 +40,14 @@ export function returnSoldiers(world: World, army: Army, count: number): void {
 }
 
 /**
- * Disbands an army: its soldiers rejoin the population where it stands, and what it carries goes to its
- * government's depot there, or to the area's stock if the government does not own the area.
+ * Disbands an army: its soldiers rejoin the population where it stands, and its weapons go to its government's depot
+ * there, or to the area's stock if the government does not own the area.
  */
 export function disbandArmy(world: World, army: Army): void {
   returnSoldiers(world, army, army.soldiers);
   const area = world.areas[armyArea(army)] as Area;
   const store = world.governments[army.owner]?.areaStates.get(area.id)?.depot ?? area.stock;
-  const { foodGood, weaponsGood } = world.config.military;
-  store[foodGood] = (store[foodGood] as number) + army.food;
+  const { weaponsGood } = world.config.military;
   store[weaponsGood] = (store[weaponsGood] as number) + army.weapons;
   world.armies.delete(army.id);
 }

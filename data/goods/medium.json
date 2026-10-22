@@ -80,5 +80,5 @@
       "satisfies": null
     }
   ],
-  "military": {"foodGood": "bread", "weaponsGood": "weapons"}
+  "military": {"weaponsGood": "weapons"}
 }
