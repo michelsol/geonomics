@@ -17,10 +17,10 @@ Section numbers (§) refer to the specification.
 
 | Path | Package | Holds |
 | --- | --- | --- |
-| `packages/sim` | `@geotrade/sim` | Data model, config, catalog loader, tick, commands, AI, map generation, save format. No browser or network dependency. |
-| `packages/net` | `@geotrade/net` | PeerJS host and client, message types, snapshot and price table encoding |
-| `apps/web` | `@geotrade/web` | React interface, PixiJS map, simulation worker entry point |
-| `tools/headless` | `@geotrade/headless` | Node runner, diagnostics, convergence scenarios, benchmarks |
+| `packages/sim` | `@geonomics/sim` | Data model, config, catalog loader, tick, commands, AI, map generation, save format. No browser or network dependency. |
+| `packages/net` | `@geonomics/net` | PeerJS host and client, message types, snapshot and price table encoding |
+| `apps/web` | `@geonomics/web` | React interface, PixiJS map, simulation worker entry point |
+| `tools/headless` | `@geonomics/headless` | Node runner, diagnostics, convergence scenarios, benchmarks |
 | `data/goods` | — | Goods catalogs (small, medium, large) |
 
 Internal packages are consumed as TypeScript source (their `exports` point at `src/`), so there is no build step between packages.

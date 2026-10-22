@@ -1,5 +1,5 @@
 {
-  "name": "@geotrade/headless",
+  "name": "@geonomics/headless",
   "private": true,
   "type": "module",
   "scripts": {
@@ -7,7 +7,7 @@
     "typecheck": "tsc -p ."
   },
   "dependencies": {
-    "@geotrade/sim": "workspace:*"
+    "@geonomics/sim": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.23.15"

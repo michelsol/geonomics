@@ -36,7 +36,7 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @geotrade/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @geonomics/web exec playwright install --with-deps chromium
       - run: pnpm e2e
       - uses: actions/upload-artifact@v7
         if: failure()

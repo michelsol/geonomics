@@ -1,5 +1,5 @@
 {
-  "name": "@geotrade/web",
+  "name": "@geonomics/web",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,8 +10,8 @@
     "e2e": "playwright test"
   },
   "dependencies": {
-    "@geotrade/net": "workspace:*",
-    "@geotrade/sim": "workspace:*",
+    "@geonomics/net": "workspace:*",
+    "@geonomics/sim": "workspace:*",
     "pixi.js": "^8.22.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

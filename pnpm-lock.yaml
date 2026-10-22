@@ -181,10 +181,10 @@ importers:
 
   apps/web:
     dependencies:
-      '@geotrade/net':
+      '@geonomics/net':
         specifier: workspace:*
         version: link:../../packages/net
-      '@geotrade/sim':
+      '@geonomics/sim':
         specifier: workspace:*
         version: link:../../packages/sim
       pixi.js:
@@ -224,7 +224,7 @@ importers:
 
   packages/net:
     dependencies:
-      '@geotrade/sim':
+      '@geonomics/sim':
         specifier: workspace:*
         version: link:../sim
       '@msgpack/msgpack':
@@ -238,7 +238,7 @@ importers:
 
   tools/headless:
     dependencies:
-      '@geotrade/sim':
+      '@geonomics/sim':
         specifier: workspace:*
         version: link:../../packages/sim
     devDependencies:

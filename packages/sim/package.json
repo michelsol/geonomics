@@ -1,5 +1,5 @@
 {
-  "name": "@geotrade/sim",
+  "name": "@geonomics/sim",
   "private": true,
   "type": "module",
   "exports": {

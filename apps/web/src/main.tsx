@@ -7,6 +7,6 @@ if (!root) throw new Error("Missing #root element");
 
 createRoot(root).render(
   <StrictMode>
-    <h1>GeoTrade</h1>
+    <h1>Geonomics</h1>
   </StrictMode>,
 );
