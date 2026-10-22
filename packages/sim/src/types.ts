@@ -111,6 +111,7 @@ export interface Area {
   airportLevel: number; // 0 = no airport; raises the capacity of the area's air routes
   airportProgress: number; // worker-days accumulated toward the next airport level
   siegeProgress: number; // 0 to 1; the area changes owner when it reaches 1
+  militia: number; // neutral areas: militia still standing; back to population × militiaShare when no attacker is present
   besiegingGovernment: GovernmentId | null; // government currently besieging the area, if any
 
   // Per-good arrays, indexed by GoodId

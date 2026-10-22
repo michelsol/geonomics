@@ -39,6 +39,7 @@ export function createArea(init: AreaInit, goodCount: number, needCount: number)
     airportLevel: init.airportLevel ?? 0,
     airportProgress: 0,
     siegeProgress: 0,
+    militia: 0,
     besiegingGovernment: null,
     stock: perGood(),
     price: perGood(),

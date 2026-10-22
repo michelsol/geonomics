@@ -67,6 +67,7 @@ export function initializeWorld(world: World): void {
     area.savings = e.targetSavingsDays * area.population * income;
     area.satisfaction = 1;
     area.necessitySatisfaction = 1;
+    area.militia = area.population * world.config.military.militiaShare;
   }
 }
 

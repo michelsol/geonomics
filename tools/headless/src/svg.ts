@@ -1,4 +1,5 @@
-// Debug view of a generated map: Voronoi cells by terrain, realms, water, land edges, sea and air routes, capitals.
+// Debug view of a generated map: Voronoi cells by terrain, realms, water, land edges, sea and air routes, armies
+// and capitals.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Terrain, World } from "@geonomics/sim";
@@ -56,6 +57,16 @@ export function writeMapSvg(world: World, path: string): void {
     if (area.airportLevel > 0)
       markers.push(`<rect x="${x - 12}" y="${y - 12}" width="24" height="24" fill="#b0303a"/>`);
     else if (area.portLevel > 0) markers.push(`<circle cx="${x}" cy="${y}" r="8" fill="#1d3d73"/>`);
+  }
+  for (const army of world.armies.values()) {
+    const area = world.areas[army.location.kind === "area" ? army.location.area : army.location.from];
+    const color = world.governments[army.owner]?.color ?? "#000";
+    if (area) {
+      const { x, y } = area.position;
+      markers.push(
+        `<path d="M${x} ${y - 30}L${x + 26} ${y + 15}L${x - 26} ${y + 15}Z" fill="${color}" stroke="#000" stroke-width="4"/>`,
+      );
+    }
   }
   for (const government of world.governments) {
     const area = government.capital === null ? undefined : world.areas[government.capital];

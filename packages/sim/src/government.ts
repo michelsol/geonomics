@@ -1,4 +1,5 @@
-// Governments: founding, ownership and policy resolution (specification §6).
+// Governments: founding, ownership, captures and policy resolution (specifications §6 and §7).
+import { disbandArmy } from "./army";
 import type {
   Area,
   AreaId,
@@ -168,4 +169,53 @@ export function upsertSetting(settings: PolicySetting[], setting: PolicySetting)
   const copy = { policy: setting.policy, good: setting.good, value: setting.value };
   if (index >= 0) settings[index] = copy;
   else settings.push(copy);
+}
+
+/**
+ * Hands an area to a new owner after a capture or a peace treaty: its fortification level drops by one, the old
+ * owner's jobs end and their workers become unemployed, its depot passes to the new owner and its orders on the area
+ * are cancelled. Unless `settle` is false, the old owner's capital then moves if needed (see settleRealm).
+ */
+export function transferArea(world: World, area: Area, newOwner: GovernmentId, settle = true): void {
+  const previous = area.owner === null ? undefined : world.governments[area.owner];
+  const state = previous?.areaStates.get(area.id);
+  area.fortificationLevel = Math.max(0, area.fortificationLevel - 1);
+  area.fortificationProgress = 0;
+  area.siegeProgress = 0;
+  area.besiegingGovernment = null;
+  area.militia = 0;
+  if (state) for (const job of state.jobs) area.unemployedWorkers += job.workers;
+  setOwner(world, area, newOwner);
+  const depot = world.governments[newOwner]?.areaStates.get(area.id)?.depot as Float64Array;
+  if (state) for (let g = 0; g < depot.length; g++) depot[g] = (depot[g] as number) + (state.depot[g] as number);
+  if (!previous) return;
+  previous.marketOrders = previous.marketOrders.filter((order) => order.area !== area.id);
+  if (settle) settleRealm(world, previous);
+}
+
+/**
+ * After areas changed hands: a government that lost its capital moves it to its most populous remaining area, and
+ * one with no area left is eliminated. Peace treaties settle once all their transfers are applied.
+ */
+export function settleRealm(world: World, government: Government): void {
+  if (government.isEliminated) return;
+  if (government.ownedAreas.length === 0) {
+    eliminate(world, government);
+    return;
+  }
+  if (government.capital !== null && government.areaStates.has(government.capital)) return;
+  const remaining = government.ownedAreas.map((id) => world.areas[id] as Area);
+  remaining.sort((a, b) => b.population - a.population || a.id - b.id);
+  government.capital = (remaining[0] as Area).id;
+}
+
+/** A government with no area left is eliminated: its armies disband where they stand and its orders end. */
+export function eliminate(world: World, government: Government): void {
+  government.isEliminated = true;
+  government.capital = null;
+  for (const army of [...world.armies.values()]) if (army.owner === government.id) disbandArmy(world, army);
+  government.marketOrders = [];
+  government.standingOrders = [];
+  government.depotTransfers = [];
+  world.peaceProposals = world.peaceProposals.filter((p) => p.from !== government.id && p.to !== government.id);
 }

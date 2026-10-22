@@ -1,4 +1,6 @@
-// Phase 5: taxes, subsidies and wages (specification §6, Tax collection, Hiring and wages).
+// Phase 5: taxes, subsidies and wages of workers and soldiers (specification §6, Tax collection, Hiring and wages;
+// specification §7, Armies).
+import { armyArea } from "../army";
 import { EPSILON } from "../math";
 import type { Area, GovernmentAreaState, World } from "../types";
 import { policiesOf, type Scratch, scratchOf } from "./scratch";
@@ -7,6 +9,7 @@ export function runTaxes(world: World): void {
   const scratch = scratchOf(world);
   const days = world.config.pace.gameDaysPerTick;
   const wagePerWorker = world.config.economy.hoursPerWorkerDay * days;
+  const wagePerSoldier = world.config.military.soldierWage * wagePerWorker;
   const { paymentDue } = scratch;
   scratch.paidShare.length = world.governments.length;
 
@@ -23,12 +26,18 @@ export function runTaxes(world: World): void {
     }
     let bill = 0;
     for (const id of government.ownedAreas) bill += paymentDue[id] as number;
+    // Soldiers are paid in the area where their army stands, or the one it left while marching.
+    for (const army of world.armies.values()) if (army.owner === government.id) bill += army.soldiers * wagePerSoldier;
 
     // Subsidies and wages are paid from the treasury, all scaled down together when it runs short.
     const share = bill > EPSILON ? Math.min(1, Math.max(0, government.treasury) / bill) : 1;
     scratch.paidShare[government.id] = share;
     government.treasury -= bill * share;
     for (const id of government.ownedAreas) (world.areas[id] as Area).savings += (paymentDue[id] as number) * share;
+    for (const army of world.armies.values()) {
+      if (army.owner !== government.id) continue;
+      (world.areas[armyArea(army)] as Area).savings += army.soldiers * wagePerSoldier * share;
+    }
   }
 }
 

@@ -181,7 +181,7 @@ Findings: [design-notes.md](design-notes.md#map-generation-roadmap-stage-5).
 
 Findings: [design-notes.md](design-notes.md#government-roadmap-stage-6).
 
-## Stage 7: War and conquest
+## Stage 7: War and conquest ✅
 
 **Goal:** war as an economic activity (§7).
 
@@ -201,6 +201,8 @@ Findings: [design-notes.md](design-notes.md#government-roadmap-stage-6).
 - The §7 example holds within 20%: 1,000 equipped soldiers take an unfortified area of 10,000 people in about 20 days.
 - Blocked edges stop trade and migration.
 - Peace transfers areas and money.
+
+Findings: [design-notes.md](design-notes.md#war-and-conquest-roadmap-stage-7).
 
 ## Stage 8: Web app, single player
 

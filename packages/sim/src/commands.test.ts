@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { AI_PLAYER, MAXIMUM_MARKET_ORDERS, MAXIMUM_STANDING_ORDERS, transferPath } from "./commands";
 import { foundGovernments } from "./government";
 import { goodId, PLAYER, realmWorld, send } from "./testing";
-import type { Command, GovernmentAreaState, World } from "./types";
+import { runTick } from "./tick/tick";
+import type { Army, Command, GovernmentAreaState, World } from "./types";
 
 const stateOf = (world: World, area: number, government = 0) =>
   world.governments[government]?.areaStates.get(area) as GovernmentAreaState;
@@ -296,5 +297,181 @@ describe("founding", () => {
       ["peace", "peace"],
       ["peace", "peace"],
     ]);
+  });
+});
+
+describe("armies", () => {
+  const recruit = (world: World, area = 1, soldiers = 100, player = PLAYER, government = 0) =>
+    send(world, { type: "recruitArmy", area, soldiers }, player, government);
+  const onlyArmy = (world: World) => [...world.armies.values()][0] as Army;
+
+  it("recruits from the workforce and the population", () => {
+    const world = realmWorld();
+    const area = world.areas[1] as World["areas"][number];
+    const before = { population: area.population, unemployed: area.unemployedWorkers };
+    expect(recruit(world)).toBeNull();
+    const army = onlyArmy(world);
+    expect(army).toMatchObject({ owner: 0, soldiers: 100, food: 0, weapons: 0, stance: "hold" });
+    expect(army.location).toEqual({ kind: "area", area: 1 });
+    expect(area.population).toBeCloseTo(before.population - 100, 9);
+    expect(area.unemployedWorkers).toBeCloseTo(before.unemployed - 100, 9);
+  });
+
+  it("rejects recruiting in foreign areas, empty armies and more than the workforce", () => {
+    const world = realmWorld();
+    expect(recruit(world, 3)).toMatch(/not owned/);
+    expect(recruit(world, 1, 0)).toMatch(/at least one/);
+    expect(recruit(world, 1, 6000)).toMatch(/not enough/);
+    expect(world.armies.size).toBe(0);
+  });
+
+  it("disbands part or all of an army, never someone else's", () => {
+    const world = realmWorld();
+    recruit(world);
+    recruit(world, 3, 50, AI_PLAYER, 1);
+    const [own, foreign] = [...world.armies.values()] as [Army, Army];
+    expect(send(world, { type: "disbandArmy", army: own.id, soldiers: 101 })).toMatch(/size/);
+    expect(send(world, { type: "disbandArmy", army: foreign.id, soldiers: 1 })).toMatch(/does not belong/);
+    expect(send(world, { type: "disbandArmy", army: own.id, soldiers: 40 })).toBeNull();
+    expect(own.soldiers).toBe(60);
+    expect(send(world, { type: "disbandArmy", army: own.id, soldiers: 60 })).toBeNull();
+    expect(world.armies.has(own.id)).toBe(false);
+  });
+
+  it("plans marches over land and by sea from its own ports only", () => {
+    const world = realmWorld();
+    recruit(world);
+    recruit(world, 3, 50, AI_PLAYER, 1);
+    const [own, foreign] = [...world.armies.values()] as [Army, Army];
+    expect(send(world, { type: "moveArmy", army: own.id, destination: 2 })).toBeNull();
+    expect(own.path).toEqual([0, 2]);
+    expect(send(world, { type: "moveArmy", army: foreign.id, destination: 0 }, AI_PLAYER, 1)).toBeNull();
+    expect(send(world, { type: "moveArmy", army: foreign.id, destination: 2 }, AI_PLAYER, 1)).toMatch(/cannot reach/);
+    expect(send(world, { type: "moveArmy", army: own.id, destination: 9 })).toMatch(/unknown area/);
+  });
+
+  it("sets stances and loads supplies from the local depot", () => {
+    const world = realmWorld();
+    recruit(world);
+    const army = onlyArmy(world);
+    const { foodGood, weaponsGood } = world.config.military;
+    expect(send(world, { type: "setArmyStance", army: army.id, stance: "attack" })).toBeNull();
+    expect(army.stance).toBe("attack");
+    expect(send(world, { type: "setArmyStance", army: army.id, stance: "flee" } as unknown as Command)).toMatch(
+      /stance/,
+    );
+    stateOf(world, 1).depot[foodGood] = 100;
+    stateOf(world, 1).depot[weaponsGood] = 10;
+    expect(send(world, { type: "supplyArmy", army: army.id, food: 60, weapons: 10 })).toBeNull();
+    expect(army).toMatchObject({ food: 60, weapons: 10 });
+    expect(stateOf(world, 1).depot[foodGood]).toBe(40);
+    expect(send(world, { type: "supplyArmy", army: army.id, food: 41, weapons: 0 })).toMatch(/not enough/);
+    army.location = { kind: "edge", edge: 0, from: 1, daysTravelled: 1 };
+    expect(send(world, { type: "supplyArmy", army: army.id, food: 1, weapons: 0 })).toMatch(/must stand/);
+  });
+
+  it("accepts supplyArmies standing orders for food and weapons only", () => {
+    const world = realmWorld();
+    const { foodGood, weaponsGood } = world.config.military;
+    const add = (good: number) =>
+      send(world, {
+        type: "addStandingOrder",
+        order: { areas: "all", rule: { kind: "supplyArmies", good, daysOfSupply: 5 } },
+      });
+    expect(add(foodGood)).toBeNull();
+    expect(add(weaponsGood)).toBeNull();
+    expect(add(goodId(world, "ore"))).toMatch(/food or weapons/);
+  });
+});
+
+describe("diplomacy", () => {
+  const war = (world: World) => send(world, { type: "declareWar", target: 1 });
+  const proposal = (world: World, overrides: object = {}) =>
+    ({
+      type: "proposePeace",
+      proposal: {
+        from: 0,
+        to: 1,
+        areaTransfers: [{ area: 3, newOwner: 0 }],
+        payment: 500,
+        expiresAtDay: world.gameDay + 30,
+        ...overrides,
+      },
+    }) as Command;
+
+  it("declares war on both sides, once", () => {
+    const world = realmWorld();
+    expect(war(world)).toBeNull();
+    expect(world.relations[0]?.[1]).toBe("war");
+    expect(world.relations[1]?.[0]).toBe("war");
+    expect(war(world)).toMatch(/already/);
+    expect(send(world, { type: "declareWar", target: 0 })).toMatch(/itself/);
+    expect(send(world, { type: "declareWar", target: 5 })).toMatch(/unknown/);
+  });
+
+  it("validates peace proposals", () => {
+    const world = realmWorld();
+    expect(send(world, proposal(world))).toMatch(/at war/);
+    war(world);
+    expect(send(world, proposal(world, { from: 1 }))).toMatch(/sending government/);
+    expect(send(world, proposal(world, { expiresAtDay: world.gameDay }))).toMatch(/future/);
+    expect(send(world, proposal(world, { payment: Number.NaN }))).toMatch(/finite/);
+    expect(send(world, proposal(world, { areaTransfers: [{ area: 3, newOwner: 1 }] }))).toMatch(/other side/);
+    expect(
+      send(
+        world,
+        proposal(world, {
+          areaTransfers: [
+            { area: 3, newOwner: 0 },
+            { area: 3, newOwner: 0 },
+          ],
+        }),
+      ),
+    ).toMatch(/twice/);
+    expect(send(world, proposal(world))).toBeNull();
+    expect(world.peaceProposals).toHaveLength(1);
+  });
+
+  it("makes peace: areas change hands, the payment moves and the relation is restored", () => {
+    const world = realmWorld();
+    war(world);
+    send(world, { type: "setRealmPolicy", setting: { policy: "consumptionTaxRate", good: 0, value: 0.1 } });
+    // Give government 1 a second area so it survives the treaty.
+    (world.governments[0] as World["governments"][number]).treasury = 1000;
+    send(
+      world,
+      proposal(world, {
+        areaTransfers: [
+          { area: 3, newOwner: 0 },
+          { area: 2, newOwner: 1 },
+        ],
+      }),
+    );
+    const id = world.peaceProposals[0]?.id as number;
+    expect(send(world, { type: "answerPeace", proposalId: id, accept: true })).toMatch(/no such/); // not addressed to 0
+    const treasury1 = world.governments[1]?.treasury as number;
+    expect(send(world, { type: "answerPeace", proposalId: id, accept: true }, AI_PLAYER, 1)).toBeNull();
+    expect(world.relations[0]?.[1]).toBe("peace");
+    expect(world.areas[3]?.owner).toBe(0);
+    expect(world.areas[2]?.owner).toBe(1);
+    expect(stateOf(world, 3).resolvedPolicies.consumptionTaxRate[0]).toBe(0.1);
+    expect(world.governments[0]?.treasury).toBe(500);
+    expect(world.governments[1]?.treasury).toBe(treasury1 + 500);
+    expect(world.governments[1]?.capital).toBe(2);
+    expect(world.peaceProposals).toHaveLength(0);
+  });
+
+  it("rejects an acceptance the payer cannot afford, and drops refused or expired proposals", () => {
+    const world = realmWorld();
+    war(world);
+    send(world, proposal(world, { payment: 1e12 }));
+    const id = world.peaceProposals[0]?.id as number;
+    expect(send(world, { type: "answerPeace", proposalId: id, accept: true }, AI_PLAYER, 1)).toMatch(/cannot cover/);
+    expect(send(world, { type: "answerPeace", proposalId: id, accept: false }, AI_PLAYER, 1)).toBeNull();
+    expect(world.peaceProposals).toHaveLength(0);
+    send(world, proposal(world, { expiresAtDay: world.gameDay + 2 }));
+    for (let i = 0; i < 4; i++) runTick(world);
+    expect(world.peaceProposals).toHaveLength(0);
+    expect(world.relations[0]?.[1]).toBe("war");
   });
 });

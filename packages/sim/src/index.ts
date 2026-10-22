@@ -1,5 +1,6 @@
 // Simulation: data model, config, catalog loader, tick, commands, AI, map generation, save format.
 // No browser or network dependency.
+export * from "./army";
 export * from "./catalog";
 export * from "./commands";
 export * from "./config";

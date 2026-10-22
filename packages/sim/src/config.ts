@@ -91,6 +91,7 @@ export interface WorldConfig {
     combatLethalityPerDay: number; // losses per day per unit of enemy power over own power per soldier
     militiaShare: number; // share of a neutral area's population that defends it
     siegeRatePerDay: number; // siege progress per day per unit of power per inhabitant
+    siegeDecayRatePerDay: number; // speed at which siege progress decays once the attackers leave
     foragingShare: number; // largest share of an area's food stock an army takes per day
     battleStockDestructionPerDay: number; // share of an area's stock destroyed per day of fighting
     battleCivilianLossPerDay: number; // share of an area's population lost per day of fighting
@@ -200,6 +201,7 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
     combatLethalityPerDay: 0.05,
     militiaShare: 0.02,
     siegeRatePerDay: 0.25,
+    siegeDecayRatePerDay: 0.1,
     foragingShare: 0.2,
     battleStockDestructionPerDay: 0.02,
     battleCivilianLossPerDay: 0.002,

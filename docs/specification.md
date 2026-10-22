@@ -182,6 +182,7 @@ interface Area {
   airportLevel: number;                 // 0 = no airport; raises the capacity of the area's air routes
   airportProgress: number;              // worker-days accumulated toward the next airport level
   siegeProgress: number;                // 0 to 1; the area changes owner when it reaches 1
+  militia: number;                      // neutral areas: militia still standing (section 7, Neutral areas)
   besiegingGovernment: GovernmentId | null; // government currently besieging the area, if any
 
   // Per-good arrays, indexed by GoodId
@@ -406,11 +407,12 @@ The host validates every command before applying it. A rejected command changes 
 | Numbers | Every number must be finite; quantities, worker targets, soldiers and prices must be ≥ 0 |
 | Policies | Production and consumption tax rates and tariffs must be within [−1, 5]; head tax, ceilings and floors ≥ 0. Head tax takes no good; every other policy takes one |
 | Wages | `wageOffer` must be within [0, 10] |
-| Recruiting | Soldiers must not exceed the area's unemployed and private workers |
+| Recruiting | At least one soldier, and no more than the area's unemployed and private workers |
+| Armies | `moveArmy` needs a reachable destination under the marching rules; `supplyArmy` needs the army standing in an owned area and the goods in its depot; `disbandArmy` at most the army's soldiers; `supplyArmies` rules name the food or weapons good |
 | Jobs | `buildPort` only in coastal areas; `buildInfrastructure` only on a land edge touching the area; `produce` never a service, and a primary good only where the area has natural capacity for it |
 | Goods | Market orders, transfers and standing rules never name a service |
 | Transfers | Two different owned areas; the quantity at most what the source depot holds; a non-blocked path between them; a treasury that covers the transport |
-| Diplomacy | No war on oneself; peace only with a government at war; a payment must fit in the payer's treasury when the proposal is answered |
+| Diplomacy | No war on oneself, an eliminated government or one already at war; peace only with a government at war, from the sending government, expiring in the future, with each listed area going from one side to the other; when accepted, a payment must fit in the payer's treasury and the listed areas must still belong to their side |
 | Limits | At most 1,000 open market orders and 200 standing orders per government, so a client cannot slow the host down |
 
 ## 4. Pace, stability and convergence
@@ -591,6 +593,7 @@ interface WorldConfig {
     foragingShare: number;              // largest share of an area's food stock an army takes per day (default 0.2)
     battleStockDestructionPerDay: number; // share of an area's stock destroyed per day of fighting (default 0.02)
     battleCivilianLossPerDay: number;   // share of an area's population lost per day of fighting (default 0.002)
+    siegeDecayRatePerDay: number;       // speed at which siege progress decays once the attackers leave (default 0.1)
   };
   map: {                                // map generation (section 5, Map generation)
     landAreaCount: number;              // areas on a generated map (default 1000)
@@ -1033,31 +1036,32 @@ War is an economic activity: soldiers are withdrawn from the workforce, eat food
 
 ### Relations
 
-Every pair of governments is at `peace` or `war`. A `declareWar` command takes effect immediately. Peace needs a `proposePeace` command accepted by the other side; a proposal can transfer areas and include a money payment.
+Every pair of governments is at `peace` or `war`. A `declareWar` command takes effect immediately, on both sides. Peace needs a `proposePeace` command accepted by the other side; a proposal can transfer areas and include a money payment.
 
-An edge is **blocked** when its two areas belong to governments at war, or when either area is under siege. Blocked edges carry no trade, migration or depot transfers.
+An edge is **blocked** when its two areas belong to governments at war, or when either area is under siege. Blocked edges carry no trade, migration or depot transfers. Armies still cross them.
 
 ### Neutral areas
 
-Areas with no owner defend themselves with a militia of `population × militiaShare` (default 2%). Militia has no equipment and no fortifications. Owned areas rely on armies and fortifications only.
+Areas with no owner defend themselves with a militia. `Area.militia` is `population × militiaShare` (default 2%) whenever no attacker is present. Combat depletes it, and militia losses are also losses of population. The militia has no equipment and no fortifications, and once it falls below one soldier the attackers besiege the area. Owned areas rely on armies and fortifications only.
 
 ### Armies
 
-- **Recruiting** takes soldiers from the area's unemployed workers first, then from private jobs, and removes them from the population.
-- **Disbanding** returns soldiers to the population of the area where the army stands, as unemployed workers.
-- **Marching** follows the shortest path by `travelDays`. Crossing an edge takes its `travelDays`, divided by `militaryResponsiveness`.
-- **Sea crossings** are allowed only from an area owned by the army's government with `portLevel` ≥ 1, so an invasion by sea needs a friendly port to embark from. Armies never use air routes.
-- **Wages** of `soldierWage × hoursPerWorkerDay × soldiers × days` go from the treasury into the savings of the area where the army stands.
+- **Recruiting** takes soldiers from the area's unemployed workers first, then from private jobs, and removes them from the population. A new army carries nothing and holds.
+- **Disbanding** returns soldiers to the population of the area where the army stands (or the area it left, while marching) as unemployed workers. A fully disbanded army leaves what it carries in its government's depot there, or in the area's stock if the government does not own the area.
+- **Marching** follows the fastest path by `travelDays` over active land and sea edges. Crossing an edge takes its `travelDays`; each tick an army covers `days × militaryResponsiveness` days of travel, carrying leftover days into the next edge. A new order replans from the area the army stands in or is heading to.
+- **Sea crossings** are allowed only from an area owned by the army's government with `portLevel` ≥ 1. This is checked when the path is planned and again when the army sets out; an army that can no longer embark stops. So an invasion by sea needs a friendly port to embark from. Armies never use air routes.
+- **Attacking.** An army in `attack` stance attacks every area it stands in that is neutral or owned by a government at war with its own. It stays there until the area falls or the war ends, then follows the rest of its path. An army in `hold` stance never attacks and passes through.
+- **Wages** of `soldierWage × hoursPerWorkerDay × soldiers × days` go from the treasury into the savings of the area where the army stands (or the area it left). They join the government's bill and are scaled down with it when the treasury is short (section 6, Tax collection).
 
 ### Upkeep
 
-Each tick, an army eats `foodPerSoldierPerDay × soldiers × days` from its carried food:
+Each tick, after consumption, an army eats `foodPerSoldierPerDay × soldiers × days` from its carried food:
 
-1. In an owned area, it first refills from the local depot when a `supplyArmies` standing order or a `supplyArmy` command asks for it.
-2. In enemy or neutral territory, it **forages**: it takes food from the area's private stock, up to `foragingShare` of that stock per day.
-3. When carried food runs out, soldiers desert at `desertionRatePerDay`.
+1. **Refill.** In an owned area, it first refills from the local depot, through a `supplyArmy` command or as `supplyArmies` standing orders for the area ask. Food is refilled up to `daysOfSupply` days of eating plus this tick's meal, and weapons up to one per soldier.
+2. **Foraging.** In enemy or neutral territory, the army forages: it takes what it lacks for this tick from the area's private stock of the food good, up to `foragingShare` of that stock per day. Foraged food counts as consumed in that area.
+3. **Desertion.** Soldiers who could not eat desert at `desertionRatePerDay × unfed share`, scaled by `militaryResponsiveness`. Deserters join the area's population as unemployed workers.
 
-Carried weapons wear out at `weaponWearRatePerDay`.
+An army with fewer than one soldier is disbanded. Carried weapons wear out at `weaponWearRatePerDay` in phase 10.
 
 ### Power
 
@@ -1068,7 +1072,7 @@ armyPower    = soldiers * powerPerSoldier
 defensePower = (sum of defending army power + militia) * (1 + fortificationLevel)
 ```
 
-Defenders are the owner's armies in the area (any stance) plus militia for neutral areas. Attackers are armies in `attack` stance whose government is at war with the owner, or any attacking army in a neutral area.
+Defenders are the owner's armies in the area (any stance), plus militia for a neutral area. Attackers are the attacking armies standing there (see Armies).
 
 ### Combat
 
@@ -1078,37 +1082,53 @@ Combat runs every tick in an area where attackers and defenders are both present
 k = combatLethalityPerDay * militaryResponsiveness * days
 attackerSoldiersLost = min(attackerSoldiers, k * defensePower / attackerPowerPerSoldier)
 defenderSoldiersLost = min(defenderSoldiers, k * attackPower / defenderPowerPerSoldier)
-// losses are shared across the armies of each side in proportion to their soldiers
+// powers per soldier are averages over each side; militia counts as defenders with power 1
+// losses are shared across the armies of each side (and the militia) in proportion to their soldiers
 // militia losses reduce the neutral area's population
 ```
 
-Each day of fighting also destroys `battleStockDestructionPerDay` of the area's stock and `battleCivilianLossPerDay` of its population.
+Each tick of fighting also destroys `fraction(battleStockDestructionPerDay)` of the area's stock and kills `fraction(battleCivilianLossPerDay)` of its population.
 
-When several governments attack the same area, they fight the defender together but not each other unless they are also at war. Siege progress goes to the attacker with the most power present.
+Several governments attacking the same area fight the defender together. Armies of governments at war with each other fight only in an area owned by one of them; in a neutral or third area they ignore each other.
 
 ### Siege and capture
 
-Once no defender is left, attackers besiege the area:
+Once no defender is left, the attacking government with the most attack power present besieges the area. It becomes `besiegingGovernment`, and the area's edges are blocked. If another government takes the lead, progress restarts from zero.
 
 ```typescript
 siegeProgress += siegeRatePerDay * militaryResponsiveness * days
-               * attackPower / ((1 + fortificationLevel) * max(population, 1))
+               * leaderAttackPower / ((1 + fortificationLevel) * max(population, 1))
 ```
 
-With default values, 1,000 equipped soldiers take an unfortified area of 10,000 people in about 20 days. Siege progress decays back to zero once attackers leave.
+With default values, 1,000 equipped soldiers take an unfortified area of 10,000 people in about 20 days, plus a few days to defeat its militia.
 
-When `siegeProgress` reaches 1:
+Without attackers, siege progress decays:
+- by `fraction(siegeDecayRatePerDay)` per tick, scaled by `militaryResponsiveness`;
+- also by 0.005 per day, so it reaches zero.
 
-- The area's owner becomes the besieger, and its fortification level drops by one.
+At zero, `besiegingGovernment` is cleared.
+
+When `siegeProgress` reaches 1, the area changes owner. The same rules apply to every transfer, including peace treaties:
+
+- The area's owner becomes the besieger, and its fortification level drops by one. Siege progress and militia are reset.
 - The old owner's depot in that area is merged into the new owner's depot there.
-- The old owner's government jobs there end; their workers become unemployed.
+- The old owner's government jobs there end; their workers become unemployed. Its market orders on the area are cancelled.
 - The new owner's realm policies apply.
 - If it was the old owner's capital, the capital moves to its most populous remaining area.
-- A government with no area left is eliminated, and its armies disband where they stand.
+- A government with no area left is eliminated:
+  - its armies disband where they stand;
+  - its orders, standing orders, depot transfers and peace proposals are dropped;
+  - its `capital` becomes null.
 
 ### Peace
 
-An accepted proposal sets the relation to `peace`, transfers the listed areas with the same rules as a capture, and moves the payment between treasuries. Payments larger than the payer's treasury are rejected when the proposal is answered.
+**Proposing.** A proposal goes from one government to another it is at war with. It lists areas, each owned by one side and going to the other, and a payment from the proposer (negative to demand one). It expires at a future game day; expired proposals are dropped in phase 0.
+
+**Accepting.** The answer is rejected if the payer's treasury cannot cover the payment, or if a listed area has changed hands. On acceptance:
+- the relation becomes `peace`;
+- the listed areas are transferred with the same rules as a capture, with capitals and eliminations settled after all transfers;
+- the payment moves between treasuries;
+- every other pending proposal between the two governments is dropped.
 
 ## 8. Simulation tick
 
@@ -1121,14 +1141,14 @@ function runTick(world: World, commands: CommandEnvelope[]): CommandRejection[] 
 0. **Commands and automation.** Validate each command against its sender's government and apply it, in order; `runTick` returns the rejected ones with their reasons. Rebuild `resolvedPolicies` where a setting changed. Handle war declarations, peace answers and expired proposals. Evaluate AI decisions and standing orders, which produce the same effects. Recompute `Edge.isBlocked`.
 1. **Production.** For each good in catalog order: primary goods with diminishing returns on natural capacity, crafted goods limited by labor and by inputs rationed between their users. Private output goes to area stock, government output to depots. Production taxes and subsidies are owed on private output. Record `produced`, `inputDemanded`, `outputLimitedByInputs` and the marginal output per worker.
 2. **Government market and logistics.** Execute buy and sell orders at local prices, then the trades issued by standing orders. Advance depot transfers and deliver those that arrive.
-3. **Consumption and army upkeep.** Compute purchasing power from wage level and savings. Compute demand per need at consumer prices including consumption tax, split it between substitutes, consume from stock, then run the spillover pass. Compute `satisfaction` and `necessitySatisfaction`. Armies refill from depots, forage or eat carried food; unfed soldiers desert.
+3. **Consumption and army upkeep.** Compute purchasing power from wage level and savings. Compute demand per need at consumer prices including consumption tax, split it between substitutes, consume from stock, then run the spillover pass. Compute `satisfaction` and `necessitySatisfaction`. Then armies refill from depots or forage, and eat carried food; unfed soldiers desert.
 4. **Trade.** From the snapshot, move each edge's shipping rates toward their targets and compute flows per active, non-blocked edge of every mode, good and direction, including transport and tariffs. Cap sea and air routes at their capacity and imports at the buyer's savings. Apply all goods and money movements together. Record `imported` and `exported`.
 5. **Taxes, subsidies and wages.** Collect taxes from savings, with the shortfall taken in kind. Pay subsidies, government wages and soldier wages from the treasury, scaled down together if the treasury is short.
 6. **Prices.** Measure each good's scarcity against its stock target and flows, or for services against production and demand. Move each price toward the smoothed price times the scarcity premium, within the per-tick limit and the price bounds, then move `smoothedPrice` toward the price.
 7. **Labor.** Compute value added per job from smoothed prices and production taxes, and update `wageLevel`. Move private workers toward the labor each job needs, tilted by value added against the reservation wage, within `maxLaborShiftPerTick`. Then apply government hiring, quitting and firing.
-8. **Military.** Move marching armies. Resolve combat in contested areas. Advance or decay sieges. Transfer captured areas, move capitals and eliminate governments with no area left.
+8. **Military.** Move marching armies. Resolve combat in contested areas and refill the militia of neutral areas without attackers. Advance or decay sieges. Transfer captured areas, move capitals and eliminate governments with no area left.
 9. **Population.** Apply growth or starvation from `necessitySatisfaction`. Compute migration along active, non-blocked edges from the snapshot, scaled by each edge's mode, and apply it together.
-10. **Decay and progress.** Spoil stock, depots, transfers and army supplies. Regenerate natural capacity: `capacity += (maximum - capacity) × (1 - exp(-regenerationRatePerDay × days))`. Apply infrastructure, fortification, port, airport and research progress. If any port or airport level changed, update the capacity of the routes touching it; if an airport level changed, also rebuild the air routes. Increment `tick` and add `gameDaysPerTick` to `gameDay`.
+10. **Decay and progress.** Spoil stock, depots and transfers, and wear out carried weapons. Regenerate natural capacity: `capacity += (maximum - capacity) × (1 - exp(-regenerationRatePerDay × days))`. Apply infrastructure, fortification, port, airport and research progress. If any port or airport level changed, update the capacity of the routes touching it; if an airport level changed, also rebuild the air routes. Increment `tick` and add `gameDaysPerTick` to `gameDay`.
 
 All randomness (AI choices, tie-breaks, future events) uses the seeded generator in `World.randomSeed`, so a saved game with the same command log replays identically on the same device.
 

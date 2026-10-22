@@ -106,3 +106,30 @@ A government that buys in the glut and sells in the famine makes a clear profit.
 ### Cost
 
 Founded realms send their areas through the government code paths: the policy lookups, taxes, the market phase and depot spoilage. On the default 1,000-area map this adds about 7% to the tick (5.2 ms against 4.8 ms with the medium catalog). The economic diagnostics of every scenario are unchanged when no government acts.
+
+## War and conquest (roadmap stage 7)
+
+### Attacking armies hold what they attack
+
+At first, an army in attack stance stopped on entering an area it attacked, but set out again on the next tick, so it walked through enemy land without besieging anything. An attacking army now stays in an area until it falls or the war ends, then follows the rest of its path. A march order in attack stance is therefore a campaign: each area on the way is taken in turn. Armies in hold stance pass through.
+
+### The §7 example
+
+On the small catalog, 1,000 equipped soldiers attacking a neutral area of 10,000 people:
+- defeat its 200 militia in about 3 days;
+- then besiege it for about 20 days;
+- capture it 23 days after arriving.
+
+The siege runs a little slower than its nominal rate because weapons wear (equipment falls about 10%). The area slowly starves meanwhile, because a siege blocks its edges and cuts off its grain imports.
+
+### Treaties settle at the end
+
+Peace transfers are applied one by one, so a treaty that swaps areas could briefly leave a side with none, and eliminate it before it received its new area. Capital moves and eliminations are therefore settled once all of a treaty's transfers are done.
+
+### Militia only defends neutral areas
+
+Initialization gives every area a militia, but only neutral areas use it. Combat counts it only when the area has no owner, so owned areas without armies are besieged at once.
+
+### Soldiers and the workforce
+
+Recruits leave both the workforce and the population. Since the workforce is `population × workforceShare`, a realm at war holds slightly fewer workers than its population implies; disbanding restores it. The labor phase only counts workers it actually holds, so this never creates or loses anyone.
