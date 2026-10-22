@@ -12,6 +12,7 @@ The game runs in a browser, on desktop or mobile. The first human player hosts t
 - **One feedback loop drives everything.** Prices signal scarcity, labor moves toward the jobs that add the most value, and goods flow from cheap areas to expensive ones.
 - **Cheap per tick.** Cost is roughly proportional to (areas + edges) × goods. A few thousand areas must run comfortably on a phone.
 - **The government is a separate actor.** The base economy runs with no players at all. Human and AI governments use the same command interface.
+- **Open prices.** Every player, human or AI, sees the current price of every good in every area. Stocks, flows and government internals stay private. Markets themselves stay local: an area trades only with the areas its edges connect it to.
 - **Stability before realism.** Every adjustment is damped, bounded and scaled by global pace parameters (section 4).
 - **Sandbox first.** There is no mandatory win condition; goals can be layered on later.
 
@@ -51,6 +52,8 @@ An area's **savings** is the private money held by its inhabitants. Transactions
 
 Taxing without spending drains an area's savings, so it can no longer import. This is intended: it is the natural cost of over-taxation.
 
+Savings also feed back into demand: an area holding more than its target savings spends more, mostly on comforts and luxuries, and an area with depleted savings cuts back (section 5, Consumption). This pulls savings back toward the target through trade.
+
 When savings cannot cover a tax bill, the shortfall is collected **in kind**. Goods move from the area's stock to the government depot, valued at local prices.
 
 ### Time
@@ -65,6 +68,7 @@ The world is plain serializable data, owned by the simulation worker on the host
 
 ```typescript
 type GoodId = number;        // index into World.goods
+type NeedId = number;        // index into World.needs
 type AreaId = number;        // index into World.areas
 type EdgeId = number;        // index into World.edges
 type GovernmentId = number;  // index into World.governments
@@ -75,6 +79,7 @@ interface World {
   tick: number;                         // number of ticks simulated since the game started
   gameDay: number;                      // elapsed game time in days (sum of gameDaysPerTick over all ticks)
   config: WorldConfig;                  // all tunable parameters, including pace (section 4)
+  needs: Need[];                        // needs of the population, each satisfied by one or more goods
   goods: Good[];                        // catalog of goods, sorted so that every input comes before its outputs
   areas: Area[];                        // every area on the map
   edges: Edge[];                        // every connection between two areas
@@ -90,10 +95,31 @@ interface World {
 type Relation = "peace" | "war";
 ```
 
-### Goods
+### Needs and goods
+
+Inhabitants demand **needs**, not goods. A need such as food or energy can be satisfied by several goods, which then compete as substitutes: when bread is expensive, people eat more fish. Goods that satisfy no need, such as ore or flour, are only used as inputs.
 
 ```typescript
 type DemandTier = "necessity" | "comfort" | "luxury";
+
+interface Need {
+  id: NeedId;                           // index of this need in World.needs
+  key: string;                          // stable identifier used in catalog files, for example "food"
+  name: string;                         // display name, for example "Food"
+  unit: string;                         // what one need unit represents, for display only, for example "2,000 kcal"
+  tier: DemandTier;                     // importance of the need
+  demandPerPersonPerDay: number;        // need units one inhabitant wants per game day at reference prices
+  priceElasticity: number;              // how fast demand falls as the need's price rises above reference (0 = rigid)
+  wealthElasticity: number;             // how fast demand rises with purchasing power (luxuries > 0)
+  substitutionElasticity: number;       // how strongly consumers switch to the cheaper goods of this need
+  referenceUnitPrice: number;           // derived at startup: price of one need unit when all prices equal labor value
+}
+
+interface NeedSatisfaction {
+  need: NeedId;                         // need this good satisfies
+  unitsPerGood: number;                 // need units provided by one unit of the good
+  preference: number;                   // relative share of consumption when unit prices are equal
+}
 
 interface RecipeInput {
   good: GoodId;                         // input good consumed by the recipe
@@ -102,19 +128,19 @@ interface RecipeInput {
 
 interface Good {
   id: GoodId;                           // index of this good in World.goods
+  key: string;                          // stable identifier used in catalog files, for example "bread"
   name: string;                         // display name, for example "Bread"
+  unit: string;                         // what one unit represents, for display only, for example "kg"
   laborHoursPerUnit: number;            // worker-hours to produce one unit at productivity 1
   inputs: RecipeInput[];                // goods consumed per unit produced; empty for primary goods
   isPrimary: boolean;                   // extracted from nature, limited by an area's natural capacity
   isService: boolean;                   // cannot be stored or transported: produced and consumed in the same tick
-  transportWeight: number;              // multiplier applied to an edge's transport cost for one unit
+  transportWeight: number;              // tonnes of freight per unit, bulk included; multiplies an edge's cost per tonne
   spoilageRatePerDay: number;           // fraction of stored units lost per game day
   depletionPerUnitExtracted: number;    // primary goods: natural capacity lost per unit extracted (0 = renewable)
   regenerationRatePerDay: number;       // primary goods: share of lost capacity recovered per game day
-  tier: DemandTier;                     // importance of the need this good satisfies
-  demandPerPersonPerDay: number;        // units one inhabitant wants per game day when price equals labor value
-  priceElasticity: number;              // how fast demand falls as price rises above labor value (0 = rigid)
-  wealthElasticity: number;             // how fast demand rises with the area's wage level (luxuries > 0)
+  abundance: "common" | "regional" | "rare" | null; // primary goods: how widely map generation spreads capacity
+  satisfies: NeedSatisfaction | null;   // need this good is consumed for; null for pure inputs
   laborValue: number;                   // derived at startup: man-hours embodied in one unit, inputs included
 }
 ```
@@ -134,6 +160,11 @@ interface Area {
   productivity: number;                 // local multiplier on labor output (terrain, local know-how)
   unemployedWorkers: number;            // workers without a private or government job
   fortificationLevel: number;           // defensive multiplier built by government fortification jobs
+  isCoastal: boolean;                   // set by map generation: the area touches navigable water
+  portLevel: number;                    // 0 = no port; raises the capacity of the area's sea routes
+  portProgress: number;                 // worker-days accumulated toward the next port level
+  airportLevel: number;                 // 0 = no airport; raises the capacity of the area's air routes
+  airportProgress: number;              // worker-days accumulated toward the next airport level
   siegeProgress: number;                // 0 to 1; the area changes owner when it reaches 1
   besiegingGovernment: GovernmentId | null; // government currently besieging the area, if any
 
@@ -152,22 +183,32 @@ interface Area {
   imported: Float64Array;               // units received from neighbors this tick
   exported: Float64Array;               // units sent to neighbors this tick
   outputLimitedByInputs: Uint8Array;    // 1 if production of the good was capped by missing inputs this tick
-  satisfaction: number;                 // 0 to 1: tier-weighted share of demand that was met
-  necessitySatisfaction: number;        // 0 to 1: share of necessity demand that was met
+  needDemanded: Float64Array;           // per NeedId: need units the population wanted this tick
+  needConsumed: Float64Array;           // per NeedId: need units actually consumed, substitutes included
+  satisfaction: number;                 // 0 to 1: tier-weighted share of need demand that was met
+  necessitySatisfaction: number;        // 0 to 1: share of necessity need demand that was met
   wageLevel: number;                    // average value added per private worker-hour, in man-hours
 }
 
+type EdgeMode = "land" | "sea" | "air";
+
 interface Edge {
   id: EdgeId;                           // index of this edge in World.edges
+  mode: EdgeMode;                       // land border, sea route between two ports, or air route between two airports
   areaA: AreaId;                        // first connected area (edges are undirected)
   areaB: AreaId;                        // second connected area
-  baseTransportCost: number;            // man-hours to move one unit of weight across, before infrastructure
-  transportCost: number;                // current cost, lowered by infrastructure work
-  infrastructureProgress: number;       // worker-days of road building accumulated toward the next step
-  travelDays: number;                   // game days an army needs to cross this edge
+  distance: number;                     // map distance; sea routes use the distance over water
+  baseTransportCost: number;            // man-hours to move one tonne across, before infrastructure
+  transportCost: number;                // current cost, lowered by infrastructure work (land only)
+  infrastructureProgress: number;       // worker-days of road building accumulated toward the next step (land only)
+  capacityPerDay: number;               // largest tonnage carried per game day in each direction; Infinity on land
+  travelDays: number;                   // game days an army needs to cross this edge; Infinity on air routes
+  isActive: boolean;                    // false for an air route dropped by a rebuild; edges are never deleted
   isBlocked: boolean;                   // recomputed each tick: true when war or a siege stops all traffic
 }
 ```
+
+Land edges join neighboring areas and never change. Sea and air edges are **routes**: map generation creates the sea routes, and air routes are rebuilt when airports open or grow (section 5, Sea and air routes). Every system that walks edges, including trade, migration, depot transfers and marching, handles all three modes the same way, apart from the rules listed for each mode. `Area.edges` lists edges of all modes.
 
 ### Governments
 
@@ -176,6 +217,8 @@ type GovernmentJob =
   | { kind: "produce"; good: GoodId }               // state production; output goes to the local depot
   | { kind: "buildInfrastructure"; edge: EdgeId }   // lowers the transport cost of an adjacent edge
   | { kind: "fortify" }                             // raises the area's fortification level
+  | { kind: "buildPort" }                           // coastal areas only: raises the area's port level
+  | { kind: "buildAirport" }                        // raises the area's airport level
   | { kind: "research" };                           // raises the realm-wide productivity bonus
 
 interface JobAssignment {
@@ -389,7 +432,8 @@ A game starts from a state that is already almost balanced:
 1. Prices start at labor value; smoothed prices equal prices.
 2. Workers are allocated to cover local demand where local resources allow, and the rest go to the most valuable local jobs.
 3. Each area starts with `reserveDays` of demand in stock.
-4. The world then runs `warmupDays` with no players, at `warmupResponsivenessBoost` times the normal responsiveness, before the game opens.
+4. Each area starts with `targetSavingsDays` of income in savings, so savings neither boost nor dampen demand at first.
+5. The world then runs `warmupDays` with no players, at `warmupResponsivenessBoost` times the normal responsiveness, before the game opens.
 
 ### Global pace parameters
 
@@ -440,6 +484,28 @@ interface WorldConfig {
     priceFloorMultiple: number;         // lowest price as a multiple of labor value (default 0.1)
     priceCeilingMultiple: number;       // highest price as a multiple of labor value (default 10)
     tierWeights: { necessity: number; comfort: number; luxury: number }; // weights in satisfaction (default 3, 2, 1)
+    targetSavingsDays: number;          // days of income inhabitants like to hold; neutral point of the savings effect (default 30)
+    savingsElasticity: number;          // how strongly savings above or below target change purchasing power (default 0.5)
+    savingsFactorMin: number;           // lower clamp of savings relative to target (default 0.25)
+    savingsFactorMax: number;           // upper clamp of savings relative to target (default 4)
+  };
+  transport: {                          // distances in map units; neighboring areas are about 100 apart (read as km)
+    landCostPerDistance: number;        // map generation: base land cost per tonne per unit of distance, before terrain (default 0.003)
+    seaCostPerDistance: number;         // man-hours per tonne per unit of sea distance (default 0.0004)
+    airBaseCost: number;                // man-hours per tonne per flight, whatever the distance (default 3)
+    airCostPerDistance: number;         // man-hours per tonne per unit of distance flown (default 0.02)
+    seaRoutesPerPort: number;           // map generation links each port to this many nearest ports by sea (default 4)
+    airRoutesPerAirport: number;        // each airport links to this many nearest airports (default 3)
+    seaCapacityPerPortLevel: number;    // tonnes per day per direction on a sea route, per level of its smaller port (default 1000)
+    airCapacityPerAirportLevel: number; // tonnes per day per direction on an air route, per level of its smaller airport (default 20)
+    portWorkerDaysPerLevel: number;     // work needed per port level (default 4000)
+    airportWorkerDaysPerLevel: number;  // work needed per airport level (default 6000)
+    maximumPortLevel: number;           // highest port level (default 3)
+    maximumAirportLevel: number;        // highest airport level; airports at this level link to each other as hubs (default 3)
+    initialAirportShare: number;        // share of the most populous areas given an airport of level 1 at start (default 0.05)
+    seaTravelDaysPerDistance: number;   // game days an army needs per unit of sea distance (default 0.01)
+    migrationFactorBySea: number;       // migration over a sea route, relative to a land edge (default 0.5)
+    migrationFactorByAir: number;       // migration over an air route, relative to a land edge (default 0.25)
   };
   population: {
     growthRatePerDay: number;           // relative growth per day at full necessity satisfaction (default 0.0001)
@@ -459,9 +525,13 @@ interface WorldConfig {
     researchWorkerDaysPerLevel: number; // work needed per research level (default 10000)
     researchProductivityBonus: number;  // productivity added per research level (default 0.05)
   };
+  network: {
+    priceTableRate: number;             // global price table broadcasts per wall-clock second (default 1)
+    snapshotRate: number;               // snapshots per wall-clock second for owned areas and the viewport (default 3)
+  };
   military: {
-    foodGood: GoodId;                   // good soldiers eat
-    weaponsGood: GoodId;                // good soldiers are equipped with
+    foodGood: GoodId;                   // good soldiers eat; taken from the goods catalog
+    weaponsGood: GoodId;                // good soldiers are equipped with; taken from the goods catalog
     foodPerSoldierPerDay: number;       // units of food eaten per soldier per game day
     weaponWearRatePerDay: number;       // share of carried weapons worn out per day (default 0.005)
     desertionRatePerDay: number;        // share of soldiers leaving per day without food (default 0.05)
@@ -515,27 +585,52 @@ Private production draws inputs from the area's stock; government production dra
 
 ### Consumption
 
+Consumption has three parts: the area's purchasing power, the demand for each need split between the goods that satisfy it, and a spillover pass when some of those goods run out.
+
+**Purchasing power** combines income and savings. Savings near `targetSavingsDays` of income are neutral. More savings raise demand and fewer lower it, mostly for needs with a high `wealthElasticity`:
+
 ```typescript
-consumerPrice = price * (1 + consumptionTaxRate)
-demanded = population * good.demandPerPersonPerDay * days
-         * (good.laborValue / consumerPrice) ** good.priceElasticity
-         * max(wageLevel, 0.1) ** good.wealthElasticity
-consumed = min(stock, demanded)
+incomePerPersonPerDay = max(wageLevel, 0.1) * hoursPerWorkerDay * workforceShare
+savingsDays     = savings / max(population * incomePerPersonPerDay, epsilon)
+savingsFactor   = clamp(savingsDays / targetSavingsDays, savingsFactorMin, savingsFactorMax) ** savingsElasticity
+purchasingPower = max(wageLevel, 0.1) * savingsFactor
 ```
 
-`necessitySatisfaction` is the share of necessity demand met. `satisfaction` is the same share across all goods, weighted by `tierWeights`.
+The effect stabilizes itself. Consumption inside an area does not move money, but higher demand raises local prices, which pulls in imports and spends savings down toward the target. An area with depleted savings demands less, so its prices fall, it exports more and its savings refill.
+
+**Demand per need** and the **split between substitutes**: each good competes on the price of the need units it provides.
+
+```typescript
+consumerPrice[g] = price[g] * (1 + consumptionTaxRate[g])
+unitPrice[g]     = consumerPrice[g] / g.satisfies.unitsPerGood         // price of one need unit through g
+share[g]         = g.satisfies.preference * unitPrice[g] ** -need.substitutionElasticity
+                   / sum of the same over all goods of the need
+needPrice        = sum over goods of the need of share[g] * unitPrice[g]
+
+needDemanded = population * need.demandPerPersonPerDay * days
+             * (need.referenceUnitPrice / needPrice) ** need.priceElasticity
+             * purchasingPower ** need.wealthElasticity
+demanded[g]  = needDemanded * share[g] / g.satisfies.unitsPerGood
+consumed[g]  = min(stock[g], demanded[g])
+```
+
+**Spillover:** after the first pass, the need units left unmet by goods that ran out are spread over the goods of the same need that still have stock, in proportion to `share` and capped by that stock. One pass is enough. `demanded` keeps the value from before spillover, so a scarce good keeps its upward price pressure while its substitutes cover the shortfall. `needConsumed` is the sum of `consumed[g] × unitsPerGood` over the need's goods.
+
+`referenceUnitPrice` is `needPrice` computed once at startup, with every consumer price equal to labor value. At those prices and at a purchasing power of 1, an area demands exactly `demandPerPersonPerDay`. A substitution elasticity of 0 keeps shares fixed by preference; 2 to 4 lets consumers switch strongly toward the cheapest good while keeping some variety.
+
+`necessitySatisfaction` is the sum of `needConsumed` divided by the sum of `needDemanded` over necessity needs. `satisfaction` is the same ratio over all needs, with each need weighted by its tier in `tierWeights`.
 
 ### Trade
 
-Trade is computed per edge, per good and per direction, from a snapshot of the state before trade; all flows are applied together afterward. An area splits its exportable surplus evenly between its edges.
+Trade is computed per edge, per good and per direction, from a snapshot of the state before trade; all flows are applied together afterward. Land, sea and air edges use the same formula. An area splits its exportable surplus of a good evenly between the edges where that good has a positive gap, so an area with many routes does not spread its exports over routes that would not take them.
 
 ```typescript
 transport  = edge.transportCost * good.transportWeight
 tariffs    = crossesBorder ? sellerPrice * exportTariffRate[seller] + sellerPrice * importTariffRate[buyer] : 0
 gap        = buyerPrice - sellerPrice - transport - tariffs
-if (gap <= 0 || edge.isBlocked || good.isService) skip
+if (gap <= 0 || !edge.isActive || edge.isBlocked || good.isService) skip
 
-exportable = max(0, sellerStock - reserveDays * sellerDemandedPerDay) / sellerEdgeCount
+exportable = max(0, sellerStock - reserveDays * sellerDemandedPerDay) / sellerEdgesWithPositiveGap
 quantity   = exportable * fraction(tradeRatePerDay) * min(1, tradeGapSensitivity * gap / buyerPrice)
 unitPaid   = sellerPrice + transport + tariffs + gap / 2   // the buyer and seller split the gain
 quantity   = min(quantity, buyerSavings / unitPaid)        // the buyer can only spend what it has
@@ -543,7 +638,29 @@ quantity   = min(quantity, buyerSavings / unitPaid)        // the buyer can only
 
 The seller receives `sellerPrice + gap / 2` per unit. Tariffs go to the respective treasuries. The transport share disappears as labor spent on carrying.
 
+**Capacity.** Sea and air routes carry at most `capacityPerDay × days` tonnes in each direction. When the flows of all goods in one direction exceed it, the route is filled greedily, in order of gap per tonne, so the most profitable cargo goes first. Land edges have infinite capacity and skip this step. Routes are few, so the sort costs little.
+
 Goods reach distant areas by being re-exported over several ticks. Price differences spread through the network like heat, so no area ever needs to know about areas that are not its neighbors.
+
+### Sea and air routes
+
+Sea and air traffic reuse edges instead of adding a separate system. A route is an `Edge` with `mode: "sea"` or `"air"` between two distant areas. Trade, tariffs, blocking, migration and depot transfers then work unchanged, and cost per tick stays proportional to edges × goods. The route graph is kept sparse on purpose. Because prices spread hop by hop, a few routes per port or airport are enough to connect distant markets; joining every airport to every other one would add edges with the square of the number of airports and gain little.
+
+| | Sea routes | Air routes |
+| --- | --- | --- |
+| Endpoints | Two coastal areas, both with `portLevel` ≥ 1 | Two areas, both with `airportLevel` ≥ 1 |
+| Created by | Map generation: each coastal area is linked to its `seaRoutesPerPort` nearest coastal areas by distance over water | Rebuilt whenever an airport opens or grows: each airport is linked to its `airRoutesPerAirport` nearest airports, and airports at `maximumAirportLevel` are all linked to each other as hubs |
+| Base transport cost | `seaCostPerDistance × distance` | `airBaseCost + airCostPerDistance × distance` |
+| Capacity per day and direction | `seaCapacityPerPortLevel × min(portLevel)` | `airCapacityPerAirportLevel × min(airportLevel)` |
+| Suits | Heavy bulk goods over long distances | Light, valuable or perishable goods |
+| Armies | Can embark from a port owned by their government; crossing takes `seaTravelDaysPerDistance × distance` | Cannot use them |
+| Migration | Multiplied by `migrationFactorBySea` | Multiplied by `migrationFactorByAir` |
+
+- Map generation gives every coastal area a port of level 1, so the base economy trades by sea with no players. It also gives an airport of level 1 to the `initialAirportShare` most populous areas.
+- Governments raise port and airport levels with the `buildPort` and `buildAirport` jobs. Captures leave port and airport levels intact. An air route dropped by a rebuild is deactivated (`isActive` set to false) instead of deleted, so edge ids stay stable, and it is reactivated if a later rebuild picks the same pair again.
+- Infrastructure jobs do not lower route costs; they raise route capacity through port and airport levels.
+- Rebuilding air routes runs only on a change of airport level, which is rare. It is a nearest-neighbor search over the airports, done in phase 10, never as part of the normal per-tick work.
+- Blocking works as on land: a route is blocked when its two endpoints belong to governments at war, or when either endpoint is under siege. Naval combat and blockades are possible future additions.
 
 ### Prices
 
@@ -590,31 +707,56 @@ population *= exp(growth * demographyResponsiveness * days)
 
 attractiveness = (1 - migrationWageWeight) * satisfaction
                + migrationWageWeight * wageLevel / (wageLevel + 1)
-// per edge, from the less attractive area to the more attractive one
-migrants = population * fraction(migrationRatePerDay) * (attractivenessDifference) / edgeCount
+// per active, non-blocked edge, from the less attractive area to the more attractive one
+modeFactor = land: 1, sea: migrationFactorBySea, air: migrationFactorByAir
+migrants = population * fraction(migrationRatePerDay) * attractivenessDifference * modeFactor / edgeCount
 ```
 
 New inhabitants and migrants join `unemployedWorkers` in proportion to `workforceShare`; the labor phase places them.
 
-### Starter goods
+### Goods catalogs
 
-A small catalog to validate the dynamics before adding more. All numbers are first guesses for tuning.
+Needs and goods are loaded from a JSON catalog chosen when a game is created. Three catalogs ship with the game, all in an industrial to modern setting. All numbers are plausible first guesses for tuning in the headless runner.
 
-| Good | Kind | Tier | Labor hours | Inputs | Weight | Spoilage / day |
-| --- | --- | --- | --- | --- | --- | --- |
-| Grain | Primary | — | 0.5 | — | 1 | 0.002 |
-| Wood | Primary | Necessity (fuel) | 0.4 | — | 2 | 0 |
-| Ore | Primary | — | 1.0 | — | 3 | 0 |
-| Clay | Primary | — | 0.3 | — | 2 | 0 |
-| Wool | Primary | — | 0.8 | — | 1 | 0.001 |
-| Bread | Crafted | Necessity | 0.3 | 1 grain | 1 | 0.1 |
-| Planks | Crafted | — | 0.5 | 1 wood | 2 | 0 |
-| Cloth | Crafted | Comfort | 1.5 | 2 wool | 0.5 | 0.001 |
-| Pottery | Crafted | Comfort | 0.8 | 1 clay | 1 | 0 |
-| Tools | Crafted | Comfort | 2.0 | 1 ore, 0.5 planks | 1 | 0.002 |
-| Furniture | Crafted | Luxury | 4.0 | 2 planks, 0.1 tools | 3 | 0 |
-| Weapons | Crafted | — (military) | 3.0 | 1 ore, 1 planks | 1 | 0.002 |
-| Healthcare | Service | Comfort | 1.0 | — | — | — |
+| Catalog | File | Goods | Needs | Purpose |
+| --- | --- | --- | --- | --- |
+| Small | `data/goods/small.json` | 5 | food, equipment | Unit tests and convergence scenarios |
+| Medium | `data/goods/medium.json` | 14 | food, energy, clothing, household, health | Balancing, short games, slow devices |
+| Large | `data/goods/large.json` | 54 | food, energy, shelter, clothing, household, health, mobility, communication, education, leisure | Full games |
+
+**Format.** A catalog holds `name`, `description`, `needs`, `goods` and `military`.
+
+- **Needs and goods** carry the fields of the `Need` and `Good` interfaces, minus the derived ones (`id`, `laborValue`, `referenceUnitPrice`).
+- **References** between needs, goods and recipe inputs use string `key`s, resolved to ids at load.
+- **`kind`** is `"primary"`, `"crafted"` or `"service"`. The loader derives `isPrimary` and `isService` from it.
+- **`military`** names the `foodGood` and `weaponsGood` used for `WorldConfig.military`.
+
+```json
+{
+  "key": "bread", "name": "Bread", "unit": "kg", "kind": "crafted", "laborHoursPerUnit": 0.2,
+  "transportWeight": 0.0012, "spoilageRatePerDay": 0.1, "depletionPerUnitExtracted": 0,
+  "regenerationRatePerDay": 0, "abundance": null,
+  "inputs": [{"good": "flour", "quantity": 0.007}, {"good": "electricity", "quantity": 0.05}],
+  "satisfies": {"need": "food", "unitsPerGood": 1.3, "preference": 1}
+}
+```
+
+The loader rejects a catalog if any of these hold:
+
+- A key is duplicated or a reference does not resolve.
+- An input is listed after the good that uses it.
+- A service is used as an input.
+- A primary good has inputs or no `abundance`.
+- A need has no good satisfying it.
+
+**Conventions used by the shipped catalogs:**
+
+- `transportWeight` is in tonnes per unit, so land transport between neighbors (about 0.3 man-hours per tonne) costs a few percent of the value of most goods. Stone, sand and timber are the exceptions: they barely travel by land and are what sea routes are for.
+- Need units are physical where that makes sense (2,000 kcal of food, 10 kWh of energy, 10 passenger-km). Heterogeneous needs such as health, household goods, education and leisure use value units: one unit is one man-hour of that need at reference prices, and each good's `unitsPerGood` equals its labor value.
+- Goods that are used together, such as a car and its fuel, are bundled into a service whose recipe consumes both (car travel). Durables enter that service as a small input per use, which stands in for depreciation. The model therefore needs no complementary demand.
+- Electricity is a crafted good with a spoilage of 1 per day and a near-zero weight. It moves over the grid like any good but cannot be stored.
+
+**Calibration rule.** At labor-value prices and a purchasing power of 1, the full consumption basket should cost 70–85% of the labor available per person (`hoursPerWorkerDay × workforceShare`, 4 hours by default), and necessities should take roughly 30–40% of the basket. The rest of the labor is left for government jobs, armies and transport. The shipped catalogs use about 73% of the labor; necessities take 32% of the small basket, 29% of the medium one and 35% of the large one.
 
 ## 6. Government mechanics
 
@@ -698,6 +840,8 @@ Fired and quitting workers return to `unemployedWorkers`. Unpaid workers quit at
 | `produce` | Produces a good with the normal recipe, drawing inputs from the depot and adding output to it. |
 | `buildInfrastructure` | Adds worker-days to an adjacent edge. Each `infrastructureWorkerDaysPerStep` multiplies its transport cost by `infrastructureStepFactor`, down to `minimumTransportCostFactor` of the base. |
 | `fortify` | Adds worker-days toward the next fortification level of the area, up to `maximumFortificationLevel`. |
+| `buildPort` | Coastal areas only. Each `portWorkerDaysPerLevel` raises `portLevel` by one, up to `maximumPortLevel`, which raises the capacity of the area's sea routes. |
+| `buildAirport` | Each `airportWorkerDaysPerLevel` raises `airportLevel` by one, up to `maximumAirportLevel`. The first level opens air routes; the maximum level makes the airport a hub. |
 | `research` | Adds worker-days to the realm's research. Each level adds `researchProductivityBonus` to productivity in every owned area. |
 
 ### Standing orders
@@ -723,6 +867,7 @@ Areas with no owner defend themselves with a militia of `population × militiaSh
 - **Recruiting** takes soldiers from the area's unemployed workers first, then from private jobs, and removes them from the population.
 - **Disbanding** returns soldiers to the population of the area where the army stands, as unemployed workers.
 - **Marching** follows the shortest path by `travelDays`. Crossing an edge takes its `travelDays`, divided by `militaryResponsiveness`.
+- **Sea crossings** are allowed only from an area owned by the army's government with `portLevel` ≥ 1, so an invasion by sea needs a friendly port to embark from. Armies never use air routes.
 - **Wages** of `soldierWage × hoursPerWorkerDay × soldiers × days` go from the treasury into the savings of the area where the army stands.
 
 ### Upkeep
@@ -797,14 +942,14 @@ function runTick(world: World, commands: CommandEnvelope[]): void
 0. **Commands and automation.** Validate each command against its sender's government and apply it. Evaluate AI decisions and standing orders, which produce the same effects. Rebuild `resolvedPolicies` where a setting changed. Handle war declarations, peace answers and expired proposals. Recompute `Edge.isBlocked`.
 1. **Production.** For each good in catalog order: primary goods with diminishing returns on natural capacity, crafted goods limited by labor and inputs. Private output goes to area stock, government output to depots. Record `produced`, `outputLimitedByInputs` and the marginal output per worker.
 2. **Government market and logistics.** Execute buy and sell orders at local prices. Advance depot transfers and deliver those that arrive.
-3. **Consumption and army upkeep.** Compute demand at consumer prices including consumption tax, consume from stock, compute `satisfaction` and `necessitySatisfaction`. Armies refill from depots, forage or eat carried food; unfed soldiers desert.
-4. **Trade.** From the snapshot, compute flows per non-blocked edge, good and direction, including transport and tariffs. Apply all goods and money movements together. Record `imported` and `exported`.
+3. **Consumption and army upkeep.** Compute purchasing power from wage level and savings. Compute demand per need at consumer prices including consumption tax, split it between substitutes, consume from stock, then run the spillover pass. Compute `satisfaction` and `necessitySatisfaction`. Armies refill from depots, forage or eat carried food; unfed soldiers desert.
+4. **Trade.** From the snapshot, compute flows per active, non-blocked edge of every mode, good and direction, including transport and tariffs. Cap sea and air routes at their capacity. Apply all goods and money movements together. Record `imported` and `exported`.
 5. **Taxes, subsidies and wages.** Collect taxes from savings, with the shortfall taken in kind. Pay subsidies, government wages and soldier wages from the treasury, scaled down together if the treasury is short.
 6. **Prices.** Move each price toward clearing the stock target, within the per-tick limit and the price bounds. Update `smoothedPrice`.
 7. **Labor.** Compute value added per job from smoothed prices and production taxes, and update `wageLevel`. Move private workers toward the target allocation within `maxLaborShiftPerTick`. Apply government hiring, quitting and firing.
 8. **Military.** Move marching armies. Resolve combat in contested areas. Advance or decay sieges. Transfer captured areas, move capitals and eliminate governments with no area left.
-9. **Population.** Apply growth or starvation from `necessitySatisfaction`. Compute migration along non-blocked edges from the snapshot and apply it together.
-10. **Decay and progress.** Spoil stock, depots, transfers and army supplies. Regenerate natural capacity. Apply infrastructure, fortification and research progress. Increment `tick` and add `gameDaysPerTick` to `gameDay`.
+9. **Population.** Apply growth or starvation from `necessitySatisfaction`. Compute migration along active, non-blocked edges from the snapshot, scaled by each edge's mode, and apply it together.
+10. **Decay and progress.** Spoil stock, depots, transfers and army supplies. Regenerate natural capacity. Apply infrastructure, fortification, port, airport and research progress. If any port or airport level changed, update the capacity of the routes touching it; if an airport level changed, also rebuild the air routes. Increment `tick` and add `gameDaysPerTick` to `gameDay`.
 
 All randomness (AI choices, tie-breaks, future events) uses the seeded generator in `World.randomSeed`, so a saved game with the same command log replays identically on the same device.
 
@@ -850,24 +995,44 @@ The main thread forwards local and remote commands to the worker, updates its ow
 | Message | Direction | Content |
 | --- | --- | --- |
 | `hello` | Client to host | Player name, protocol version |
-| `welcome` | Host to client | Player id, static data: goods, area names and positions, edges, config |
+| `welcome` | Host to client | Player id, static data: needs, goods, area names and positions, edges, config |
 | `lobby` | Host to client | Players and their government assignments |
 | `command` | Client to host | One `CommandEnvelope` |
 | `commandRejected` | Host to client | The rejected command and the reason |
 | `snapshot` | Host to client | Dynamic state at one tick (below) |
+| `priceTable` | Host to client | Prices of every good in every area (below) |
 | `hostStatus` | Host to client | Running, paused or hidden; current speed |
 
 ### Snapshots
 
-The host broadcasts snapshots at a fixed rate (default 3 per second), independent of the tick rate. A snapshot contains:
+The host broadcasts snapshots at `snapshotRate` (default 3 per second), independent of the tick rate. A snapshot contains:
 
 - `tick` and `gameDay`.
-- Per area: owner, population, savings, wage level, satisfaction, and stock and price arrays.
-- Per edge: transport cost and blocked state.
+- Per area, for every area: owner, population, wage level, satisfaction, port and airport levels, and siege progress.
+- Per area, for the receiving player's owned areas and their direct neighbors: savings and the price, stock, produced, consumed, imported and exported arrays at full precision. Other areas' stocks and flows are not sent.
+- Per edge: transport cost, capacity, active and blocked state, plus the full data of any route edge created since the last snapshot.
 - All armies, relations and pending peace proposals.
 - The receiving player's full government state (treasury, depots, jobs, orders); other governments as a public summary.
 
-Typed arrays are sent as `Float32Array`. With 1,000 areas and 13 goods, stock and prices alone are about 104 KB per snapshot. Start with full snapshots, then optimize by sending each client only its owned areas, their neighbors and its viewport at the full rate.
+Typed arrays are sent as `Float32Array`.
+
+### Price table
+
+Prices are public: every client receives the price of every good in every area, whatever it owns. This is the **open prices** principle. The host sends a `priceTable` message at `priceTableRate` (default once per second). The message carries the `tick` and one `Uint16Array` of areas × goods.
+
+To halve the size, each price is quantized on a log scale between the price floor and the price ceiling multiples:
+
+```typescript
+q = round(65535 * (ln(price / laborValue) - ln(priceFloorMultiple))
+              / (ln(priceCeilingMultiple) - ln(priceFloorMultiple)))
+```
+
+With the default bounds, one step is less than 0.01% of the price. With 1,000 areas and 54 goods, the table is about 108 KB. Clients build their own price history from successive tables for the charts. AI governments read the same table and see no more than human players.
+
+The interface uses the table in two places:
+
+- A **price map** colors every area by the price of a chosen good relative to its labor value.
+- A **good panel** lists the lowest, median and highest price, each with the area where it occurs, so players can spot trade and arbitrage opportunities at a glance.
 
 ### Joining
 

@@ -1,0 +1,289 @@
+{
+  "name": "large",
+  "description": "Fifty-four industrial and modern goods covering ten needs. Need units marked 'man-hour' are value units: one unit is one man-hour of that need at reference prices.",
+  "needs": [
+    {"key": "food", "name": "Food", "unit": "2,000 kcal", "tier": "necessity", "demandPerPersonPerDay": 1.5, "priceElasticity": 0.15, "wealthElasticity": 0.05, "substitutionElasticity": 2},
+    {"key": "energy", "name": "Household energy", "unit": "10 kWh", "tier": "necessity", "demandPerPersonPerDay": 3.5, "priceElasticity": 0.3, "wealthElasticity": 0.2, "substitutionElasticity": 1.5},
+    {"key": "shelter", "name": "Shelter", "unit": "person-day of housing", "tier": "necessity", "demandPerPersonPerDay": 1, "priceElasticity": 0.2, "wealthElasticity": 0.3, "substitutionElasticity": 0},
+    {"key": "clothing", "name": "Clothing", "unit": "garment", "tier": "comfort", "demandPerPersonPerDay": 0.1, "priceElasticity": 0.6, "wealthElasticity": 0.6, "substitutionElasticity": 0},
+    {"key": "household", "name": "Household goods", "unit": "man-hour of goods", "tier": "comfort", "demandPerPersonPerDay": 0.12, "priceElasticity": 0.8, "wealthElasticity": 0.8, "substitutionElasticity": 1},
+    {"key": "health", "name": "Health", "unit": "man-hour of care", "tier": "comfort", "demandPerPersonPerDay": 0.35, "priceElasticity": 0.3, "wealthElasticity": 0.6, "substitutionElasticity": 0.5},
+    {"key": "mobility", "name": "Mobility", "unit": "10 passenger-km", "tier": "comfort", "demandPerPersonPerDay": 4, "priceElasticity": 0.5, "wealthElasticity": 0.7, "substitutionElasticity": 1.5},
+    {"key": "communication", "name": "Communication", "unit": "person-day of connectivity", "tier": "comfort", "demandPerPersonPerDay": 1, "priceElasticity": 0.4, "wealthElasticity": 0.5, "substitutionElasticity": 0},
+    {"key": "education", "name": "Education", "unit": "man-hour of teaching", "tier": "comfort", "demandPerPersonPerDay": 0.2, "priceElasticity": 0.4, "wealthElasticity": 0.6, "substitutionElasticity": 0.5},
+    {"key": "leisure", "name": "Leisure", "unit": "man-hour of leisure", "tier": "luxury", "demandPerPersonPerDay": 0.6, "priceElasticity": 1.2, "wealthElasticity": 1.4, "substitutionElasticity": 1.5}
+  ],
+  "goods": [
+    {
+      "key": "grain", "name": "Grain", "unit": "100 kg", "kind": "primary", "laborHoursPerUnit": 0.5, "transportWeight": 0.1, "spoilageRatePerDay": 0.001, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": "common",
+      "inputs": [],
+      "satisfies": null
+    },
+    {
+      "key": "fruit_vegetables", "name": "Fruit and vegetables", "unit": "10 kg", "kind": "primary", "laborHoursPerUnit": 1, "transportWeight": 0.012, "spoilageRatePerDay": 0.03, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": "common",
+      "inputs": [],
+      "satisfies": {"need": "food", "unitsPerGood": 2, "preference": 2}
+    },
+    {
+      "key": "livestock", "name": "Livestock", "unit": "100 kg live weight", "kind": "primary", "laborHoursPerUnit": 6, "transportWeight": 0.15, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": "common",
+      "inputs": [],
+      "satisfies": null
+    },
+    {
+      "key": "raw_milk", "name": "Raw milk", "unit": "100 L", "kind": "primary", "laborHoursPerUnit": 2, "transportWeight": 0.11, "spoilageRatePerDay": 0.15, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": "common",
+      "inputs": [],
+      "satisfies": null
+    },
+    {
+      "key": "fish", "name": "Fish", "unit": "10 kg", "kind": "primary", "laborHoursPerUnit": 2, "transportWeight": 0.012, "spoilageRatePerDay": 0.08, "depletionPerUnitExtracted": 0.005, "regenerationRatePerDay": 0.02, "abundance": "regional",
+      "inputs": [],
+      "satisfies": {"need": "food", "unitsPerGood": 6, "preference": 1}
+    },
+    {
+      "key": "coffee_tea", "name": "Coffee and tea", "unit": "kg", "kind": "primary", "laborHoursPerUnit": 0.8, "transportWeight": 0.0012, "spoilageRatePerDay": 0.0005, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": "rare",
+      "inputs": [],
+      "satisfies": {"need": "leisure", "unitsPerGood": 0.8, "preference": 0.6}
+    },
+    {
+      "key": "cotton", "name": "Cotton", "unit": "10 kg", "kind": "primary", "laborHoursPerUnit": 0.4, "transportWeight": 0.012, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": "regional",
+      "inputs": [],
+      "satisfies": null
+    },
+    {
+      "key": "timber", "name": "Timber", "unit": "m³", "kind": "primary", "laborHoursPerUnit": 1, "transportWeight": 0.7, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.002, "regenerationRatePerDay": 0.01, "abundance": "common",
+      "inputs": [],
+      "satisfies": null
+    },
+    {
+      "key": "coal", "name": "Coal", "unit": "100 kg", "kind": "primary", "laborHoursPerUnit": 1.5, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional",
+      "inputs": [],
+      "satisfies": {"need": "energy", "unitsPerGood": 80, "preference": 0.2}
+    },
+    {
+      "key": "crude_oil", "name": "Crude oil", "unit": "barrel", "kind": "primary", "laborHoursPerUnit": 3, "transportWeight": 0.14, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional",
+      "inputs": [],
+      "satisfies": null
+    },
+    {
+      "key": "natural_gas", "name": "Natural gas", "unit": "100 m³", "kind": "primary", "laborHoursPerUnit": 2, "transportWeight": 0.08, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional",
+      "inputs": [],
+      "satisfies": {"need": "energy", "unitsPerGood": 100, "preference": 1}
+    },
+    {
+      "key": "iron_ore", "name": "Iron ore", "unit": "100 kg", "kind": "primary", "laborHoursPerUnit": 0.3, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional",
+      "inputs": [],
+      "satisfies": null
+    },
+    {
+      "key": "copper_ore", "name": "Copper ore", "unit": "100 kg concentrate", "kind": "primary", "laborHoursPerUnit": 0.6, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "rare",
+      "inputs": [],
+      "satisfies": null
+    },
+    {
+      "key": "bauxite", "name": "Bauxite", "unit": "100 kg", "kind": "primary", "laborHoursPerUnit": 0.3, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "rare",
+      "inputs": [],
+      "satisfies": null
+    },
+    {
+      "key": "stone_sand", "name": "Stone and sand", "unit": "100 kg", "kind": "primary", "laborHoursPerUnit": 0.05, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": "common",
+      "inputs": [],
+      "satisfies": null
+    },
+    {
+      "key": "gold_ore", "name": "Gold ore", "unit": "100 kg concentrate", "kind": "primary", "laborHoursPerUnit": 4, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.0001, "regenerationRatePerDay": 0, "abundance": "rare",
+      "inputs": [],
+      "satisfies": null
+    },
+    {
+      "key": "electricity", "name": "Electricity", "unit": "10 kWh", "kind": "crafted", "laborHoursPerUnit": 0.02, "transportWeight": 0.0001, "spoilageRatePerDay": 1, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "coal", "quantity": 0.04}],
+      "satisfies": {"need": "energy", "unitsPerGood": 1, "preference": 6}
+    },
+    {
+      "key": "fuel", "name": "Fuel", "unit": "100 L", "kind": "crafted", "laborHoursPerUnit": 0.5, "transportWeight": 0.085, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "crude_oil", "quantity": 0.65}],
+      "satisfies": {"need": "energy", "unitsPerGood": 100, "preference": 0.5}
+    },
+    {
+      "key": "lumber", "name": "Lumber", "unit": "m³", "kind": "crafted", "laborHoursPerUnit": 2, "transportWeight": 0.55, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "timber", "quantity": 1.6}],
+      "satisfies": null
+    },
+    {
+      "key": "paper", "name": "Paper", "unit": "100 kg", "kind": "crafted", "laborHoursPerUnit": 1.5, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "timber", "quantity": 0.4},{"good": "electricity", "quantity": 6}],
+      "satisfies": null
+    },
+    {
+      "key": "steel", "name": "Steel", "unit": "100 kg", "kind": "crafted", "laborHoursPerUnit": 0.8, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "iron_ore", "quantity": 1.6},{"good": "coal", "quantity": 0.8},{"good": "electricity", "quantity": 2}],
+      "satisfies": null
+    },
+    {
+      "key": "aluminium", "name": "Aluminium", "unit": "100 kg", "kind": "crafted", "laborHoursPerUnit": 1.5, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "bauxite", "quantity": 4},{"good": "electricity", "quantity": 100}],
+      "satisfies": null
+    },
+    {
+      "key": "copper", "name": "Copper", "unit": "100 kg", "kind": "crafted", "laborHoursPerUnit": 2, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "copper_ore", "quantity": 3},{"good": "electricity", "quantity": 30}],
+      "satisfies": null
+    },
+    {
+      "key": "cement", "name": "Cement", "unit": "100 kg", "kind": "crafted", "laborHoursPerUnit": 0.15, "transportWeight": 0.1, "spoilageRatePerDay": 0.0005, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "stone_sand", "quantity": 1.5},{"good": "coal", "quantity": 0.12},{"good": "electricity", "quantity": 1}],
+      "satisfies": null
+    },
+    {
+      "key": "glass", "name": "Glass", "unit": "100 kg", "kind": "crafted", "laborHoursPerUnit": 0.8, "transportWeight": 0.12, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "stone_sand", "quantity": 1.2},{"good": "natural_gas", "quantity": 0.15}],
+      "satisfies": null
+    },
+    {
+      "key": "chemicals", "name": "Chemicals", "unit": "100 kg", "kind": "crafted", "laborHoursPerUnit": 1.5, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "natural_gas", "quantity": 0.5},{"good": "crude_oil", "quantity": 0.3},{"good": "electricity", "quantity": 5}],
+      "satisfies": null
+    },
+    {
+      "key": "plastics", "name": "Plastics", "unit": "100 kg", "kind": "crafted", "laborHoursPerUnit": 1, "transportWeight": 0.12, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "crude_oil", "quantity": 0.9},{"good": "natural_gas", "quantity": 0.2},{"good": "electricity", "quantity": 5}],
+      "satisfies": null
+    },
+    {
+      "key": "fabric", "name": "Fabric", "unit": "10 kg", "kind": "crafted", "laborHoursPerUnit": 1.5, "transportWeight": 0.012, "spoilageRatePerDay": 0.0002, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "cotton", "quantity": 1.1},{"good": "chemicals", "quantity": 0.02},{"good": "electricity", "quantity": 2}],
+      "satisfies": null
+    },
+    {
+      "key": "electronic_components", "name": "Electronic components", "unit": "kg", "kind": "crafted", "laborHoursPerUnit": 2, "transportWeight": 0.0012, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "copper", "quantity": 0.003},{"good": "plastics", "quantity": 0.003},{"good": "chemicals", "quantity": 0.002},{"good": "electricity", "quantity": 3}],
+      "satisfies": null
+    },
+    {
+      "key": "machinery", "name": "Machinery", "unit": "100 kg", "kind": "crafted", "laborHoursPerUnit": 8, "transportWeight": 0.12, "spoilageRatePerDay": 0.0002, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "steel", "quantity": 0.8},{"good": "copper", "quantity": 0.1},{"good": "electronic_components", "quantity": 2},{"good": "electricity", "quantity": 10}],
+      "satisfies": null
+    },
+    {
+      "key": "flour", "name": "Flour", "unit": "100 kg", "kind": "crafted", "laborHoursPerUnit": 0.4, "transportWeight": 0.1, "spoilageRatePerDay": 0.002, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "grain", "quantity": 1.3},{"good": "electricity", "quantity": 1}],
+      "satisfies": null
+    },
+    {
+      "key": "bread", "name": "Bread", "unit": "kg", "kind": "crafted", "laborHoursPerUnit": 0.2, "transportWeight": 0.0012, "spoilageRatePerDay": 0.1, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "flour", "quantity": 0.007},{"good": "electricity", "quantity": 0.05}],
+      "satisfies": {"need": "food", "unitsPerGood": 1.3, "preference": 1}
+    },
+    {
+      "key": "meat", "name": "Meat", "unit": "10 kg", "kind": "crafted", "laborHoursPerUnit": 1.5, "transportWeight": 0.012, "spoilageRatePerDay": 0.05, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "livestock", "quantity": 0.2},{"good": "electricity", "quantity": 0.5}],
+      "satisfies": {"need": "food", "unitsPerGood": 10, "preference": 2}
+    },
+    {
+      "key": "dairy", "name": "Dairy products", "unit": "10 kg", "kind": "crafted", "laborHoursPerUnit": 0.6, "transportWeight": 0.012, "spoilageRatePerDay": 0.04, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "raw_milk", "quantity": 0.1},{"good": "electricity", "quantity": 0.3}],
+      "satisfies": {"need": "food", "unitsPerGood": 4, "preference": 0.8}
+    },
+    {
+      "key": "processed_food", "name": "Processed food", "unit": "10 kg", "kind": "crafted", "laborHoursPerUnit": 1.5, "transportWeight": 0.013, "spoilageRatePerDay": 0.001, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "grain", "quantity": 0.03},{"good": "meat", "quantity": 0.2},{"good": "fruit_vegetables", "quantity": 0.3},{"good": "steel", "quantity": 0.01},{"good": "electricity", "quantity": 1}],
+      "satisfies": {"need": "food", "unitsPerGood": 7.5, "preference": 0.6}
+    },
+    {
+      "key": "beer_wine", "name": "Beer and wine", "unit": "100 L", "kind": "crafted", "laborHoursPerUnit": 2, "transportWeight": 0.15, "spoilageRatePerDay": 0.0005, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "grain", "quantity": 0.15},{"good": "fruit_vegetables", "quantity": 1},{"good": "glass", "quantity": 0.5}],
+      "satisfies": {"need": "leisure", "unitsPerGood": 3.66, "preference": 1}
+    },
+    {
+      "key": "clothing", "name": "Clothing", "unit": "garment (1 kg)", "kind": "crafted", "laborHoursPerUnit": 1, "transportWeight": 0.0015, "spoilageRatePerDay": 0.0003, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "fabric", "quantity": 0.1},{"good": "plastics", "quantity": 0.002}],
+      "satisfies": {"need": "clothing", "unitsPerGood": 1, "preference": 1}
+    },
+    {
+      "key": "furniture", "name": "Furniture", "unit": "piece (30 kg)", "kind": "crafted", "laborHoursPerUnit": 6, "transportWeight": 0.05, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "lumber", "quantity": 0.04},{"good": "fabric", "quantity": 0.2},{"good": "steel", "quantity": 0.05}],
+      "satisfies": {"need": "household", "unitsPerGood": 6.71, "preference": 1}
+    },
+    {
+      "key": "home_appliances", "name": "Home appliances", "unit": "appliance (40 kg)", "kind": "crafted", "laborHoursPerUnit": 6, "transportWeight": 0.06, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "steel", "quantity": 0.25},{"good": "plastics", "quantity": 0.08},{"good": "copper", "quantity": 0.03},{"good": "electronic_components", "quantity": 0.5}],
+      "satisfies": {"need": "household", "unitsPerGood": 8.35, "preference": 1}
+    },
+    {
+      "key": "housing", "name": "Housing", "unit": "person-day of housing", "kind": "service", "laborHoursPerUnit": 0.5, "transportWeight": 0, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "cement", "quantity": 0.004},{"good": "lumber", "quantity": 0.0005},{"good": "glass", "quantity": 0.0005},{"good": "steel", "quantity": 0.002}],
+      "satisfies": {"need": "shelter", "unitsPerGood": 1, "preference": 1}
+    },
+    {
+      "key": "cars", "name": "Cars", "unit": "car (1.3 t)", "kind": "crafted", "laborHoursPerUnit": 250, "transportWeight": 2.5, "spoilageRatePerDay": 0.0001, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "steel", "quantity": 9},{"good": "aluminium", "quantity": 1.5},{"good": "plastics", "quantity": 1.5},{"good": "glass", "quantity": 0.4},{"good": "fabric", "quantity": 0.2},{"good": "electronic_components", "quantity": 20}],
+      "satisfies": null
+    },
+    {
+      "key": "car_travel", "name": "Car travel", "unit": "10 passenger-km", "kind": "service", "laborHoursPerUnit": 0.06, "transportWeight": 0, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "cars", "quantity": 0.000045},{"good": "fuel", "quantity": 0.007}],
+      "satisfies": {"need": "mobility", "unitsPerGood": 1, "preference": 1.5}
+    },
+    {
+      "key": "public_transport", "name": "Public transport", "unit": "10 passenger-km", "kind": "service", "laborHoursPerUnit": 0.08, "transportWeight": 0, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "fuel", "quantity": 0.002},{"good": "electricity", "quantity": 0.3},{"good": "machinery", "quantity": 0.0005}],
+      "satisfies": {"need": "mobility", "unitsPerGood": 1, "preference": 1}
+    },
+    {
+      "key": "phones", "name": "Phones", "unit": "phone (0.2 kg)", "kind": "crafted", "laborHoursPerUnit": 4, "transportWeight": 0.0005, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "electronic_components", "quantity": 0.1},{"good": "aluminium", "quantity": 0.0005},{"good": "glass", "quantity": 0.0003},{"good": "plastics", "quantity": 0.0005}],
+      "satisfies": null
+    },
+    {
+      "key": "telecom", "name": "Telecom", "unit": "person-day of connectivity", "kind": "service", "laborHoursPerUnit": 0.08, "transportWeight": 0, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "phones", "quantity": 0.0015},{"good": "electricity", "quantity": 0.05},{"good": "electronic_components", "quantity": 0.002}],
+      "satisfies": {"need": "communication", "unitsPerGood": 1, "preference": 1}
+    },
+    {
+      "key": "medicine", "name": "Medicine", "unit": "100 doses (1 kg)", "kind": "crafted", "laborHoursPerUnit": 1.5, "transportWeight": 0.0015, "spoilageRatePerDay": 0.0005, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "chemicals", "quantity": 0.01},{"good": "plastics", "quantity": 0.002},{"good": "paper", "quantity": 0.002},{"good": "electricity", "quantity": 0.5}],
+      "satisfies": {"need": "health", "unitsPerGood": 1.59, "preference": 0.3}
+    },
+    {
+      "key": "healthcare", "name": "Healthcare", "unit": "hour of care", "kind": "service", "laborHoursPerUnit": 1, "transportWeight": 0, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "medicine", "quantity": 0.05},{"good": "electricity", "quantity": 0.5},{"good": "machinery", "quantity": 0.002},{"good": "paper", "quantity": 0.001}],
+      "satisfies": {"need": "health", "unitsPerGood": 1.15, "preference": 0.7}
+    },
+    {
+      "key": "books", "name": "Books", "unit": "10 books (5 kg)", "kind": "crafted", "laborHoursPerUnit": 3, "transportWeight": 0.006, "spoilageRatePerDay": 0.0002, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "paper", "quantity": 0.05},{"good": "chemicals", "quantity": 0.002}],
+      "satisfies": {"need": "education", "unitsPerGood": 3.13, "preference": 0.2}
+    },
+    {
+      "key": "education", "name": "Education", "unit": "student-hour", "kind": "service", "laborHoursPerUnit": 0.12, "transportWeight": 0, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "books", "quantity": 0.002},{"good": "paper", "quantity": 0.001},{"good": "electricity", "quantity": 0.05}],
+      "satisfies": {"need": "education", "unitsPerGood": 0.133, "preference": 0.8}
+    },
+    {
+      "key": "restaurant_meals", "name": "Restaurant meals", "unit": "meal", "kind": "service", "laborHoursPerUnit": 0.4, "transportWeight": 0, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "meat", "quantity": 0.025},{"good": "fruit_vegetables", "quantity": 0.04},{"good": "bread", "quantity": 0.1},{"good": "dairy", "quantity": 0.01},{"good": "electricity", "quantity": 0.3}],
+      "satisfies": {"need": "leisure", "unitsPerGood": 0.562, "preference": 1.5}
+    },
+    {
+      "key": "entertainment", "name": "Entertainment", "unit": "hour of entertainment", "kind": "service", "laborHoursPerUnit": 0.15, "transportWeight": 0, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "electricity", "quantity": 0.2},{"good": "electronic_components", "quantity": 0.005},{"good": "paper", "quantity": 0.0005}],
+      "satisfies": {"need": "leisure", "unitsPerGood": 0.179, "preference": 1.5}
+    },
+    {
+      "key": "tourism", "name": "Tourism", "unit": "guest-night", "kind": "service", "laborHoursPerUnit": 1.2, "transportWeight": 0, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "fuel", "quantity": 0.03},{"good": "fabric", "quantity": 0.01},{"good": "electricity", "quantity": 1},{"good": "processed_food", "quantity": 0.05}],
+      "satisfies": {"need": "leisure", "unitsPerGood": 1.5, "preference": 1}
+    },
+    {
+      "key": "jewelry", "name": "Jewelry", "unit": "piece (10 g)", "kind": "crafted", "laborHoursPerUnit": 4, "transportWeight": 0.00002, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "gold_ore", "quantity": 0.5}],
+      "satisfies": {"need": "leisure", "unitsPerGood": 6, "preference": 0.5}
+    },
+    {
+      "key": "weapons", "name": "Weapons", "unit": "rifle-equivalent (5 kg)", "kind": "crafted", "laborHoursPerUnit": 6, "transportWeight": 0.006, "spoilageRatePerDay": 0.0005, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": null,
+      "inputs": [{"good": "steel", "quantity": 0.04},{"good": "plastics", "quantity": 0.005},{"good": "electronic_components", "quantity": 0.05},{"good": "chemicals", "quantity": 0.01}],
+      "satisfies": null
+    }
+  ],
+  "military": {"foodGood": "processed_food", "weaponsGood": "weapons"}
+}
