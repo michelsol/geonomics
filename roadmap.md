@@ -121,7 +121,7 @@ Internal packages are consumed as TypeScript source (their `exports` point at `s
 
 **Spec changes from this stage:** the headless runs showed that the first rules for prices, trade and labor oscillated or seized up (§4, Why the loops are shaped this way). Prices now have a long-run part and a scarcity premium, trade flows have inertia and scale with the buyer's reserve, labor follows demand and stock with a value-added tilt against a reservation wage that follows savings, and transport is paid to the exporter so money is conserved.
 
-## Stage 4: Sea and air routes
+## Stage 4: Sea and air routes ✅
 
 **Goal:** distant markets connect through routes (§5, Sea and air routes).
 

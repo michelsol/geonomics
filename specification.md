@@ -726,7 +726,7 @@ Sea and air traffic reuse edges instead of adding a separate system. A route is 
 - Map generation gives every coastal area a port of level 1, so the base economy trades by sea with no players. It also gives an airport of level 1 to the `initialAirportShare` most populous areas.
 - Governments raise port and airport levels with the `buildPort` and `buildAirport` jobs. Captures leave port and airport levels intact. An air route dropped by a rebuild is deactivated (`isActive` set to false) instead of deleted, so edge ids stay stable, and it is reactivated if a later rebuild picks the same pair again.
 - Infrastructure jobs do not lower route costs; they raise route capacity through port and airport levels.
-- Rebuilding air routes runs only on a change of airport level, which is rare. It is a nearest-neighbor search over the airports, done in phase 10, never as part of the normal per-tick work.
+- Rebuilding air routes runs only on a change of airport level, which is rare. It is a nearest-neighbor search over the airports by straight-line distance, ties going to the lower area id, done in phase 10, never as part of the normal per-tick work. Every port or airport level change also recomputes the capacity of the routes touching that area.
 - Blocking works as on land: a route is blocked when its two endpoints belong to governments at war, or when either endpoint is under siege. Naval combat and blockades are possible future additions.
 
 ### Prices

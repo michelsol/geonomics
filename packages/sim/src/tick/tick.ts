@@ -2,6 +2,7 @@
 import type { Area, CommandEnvelope, World } from "../types";
 import { runConsumption } from "./consumption";
 import { runDecay } from "./decay";
+import { advanceInfrastructure } from "./infrastructure";
 import { runLabor } from "./labor";
 import { runPopulation } from "./population";
 import { runPrices } from "./prices";
@@ -21,6 +22,7 @@ export function runTick(world: World, _commands: readonly CommandEnvelope[] = []
   runLabor(world); // 7
   runPopulation(world); // 9
   runDecay(world); // 10
+  advanceInfrastructure(world); // 10
   world.tick += 1;
   world.gameDay += world.config.pace.gameDaysPerTick;
 }

@@ -1,8 +1,42 @@
 // Phase 4: trade (specification §5, Trade). Flows are computed from the state before trade and applied together,
 // so the result never depends on the order of edges or areas.
 import { EPSILON, fractionPerTick, reserveDaysOf } from "../math";
-import type { Area, Edge, World } from "../types";
+import type { Area, AreaId, Edge, EdgeId, GoodId, World } from "../types";
 import { policiesOf, pushFlow, type Scratch, scratchOf, usedPerTick } from "./scratch";
+
+/**
+ * Tonnes carried over each edge in the last trade phase, at index 2 × EdgeId for A to B and 2 × EdgeId + 1 for
+ * B to A. Recomputed every tick and not part of the saved world.
+ */
+export function lastTradeTonnage(world: World): Float64Array {
+  return scratchOf(world).edgeTonnage;
+}
+
+export interface TradeFlow {
+  edge: EdgeId;
+  good: GoodId;
+  seller: AreaId;
+  buyer: AreaId;
+  quantity: number; // units delivered
+}
+
+/** Every flow delivered in the last trade phase, for diagnostics and the interface. */
+export function lastTradeFlows(world: World): TradeFlow[] {
+  const flows = scratchOf(world).flows;
+  const result: TradeFlow[] = [];
+  for (let f = 0; f < flows.count; f++) {
+    const quantity = flows.quantity[f] as number;
+    if (quantity <= 0) continue;
+    result.push({
+      edge: flows.edge[f] as number,
+      good: flows.good[f] as number,
+      seller: flows.seller[f] as number,
+      buyer: flows.buyer[f] as number,
+      quantity,
+    });
+  }
+  return result;
+}
 
 export function runTrade(world: World): void {
   const scratch = scratchOf(world);
