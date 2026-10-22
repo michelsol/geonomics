@@ -52,7 +52,7 @@ An area's **savings** is the private money held by its inhabitants. Transactions
 
 Taxing without spending drains an area's savings, so it can no longer import. This is intended: it is the natural cost of over-taxation.
 
-The buyer pays the transport, and it goes to the exporting area, whose carriers do the work. Trade between neutral areas therefore conserves money: without it, every long-distance purchase would destroy money, and a world without governments, which has no source of money, would slowly stop trading.
+Transport is paid by the buyer to the exporting area, whose carriers do the work, so trade between neutral areas conserves money.
 
 Savings also feed back into demand and wages: an area holding more than its target savings spends more, mostly on comforts and luxuries, and its workers ask for more; an area with depleted savings cuts back and its workers accept less, so its goods get cheaper and sell abroad (section 5, Consumption and Labor allocation). Both pull savings back toward the target through trade.
 
@@ -433,8 +433,6 @@ Each loop must react at least three times slower than the loop it depends on. Fa
 
 A rate from a half-life: `rate = ln(2) / halfLifeDays`.
 
-Job allocation follows quantities first (local demand, exports and stock) and prices only tilt it (section 5, Labor allocation), so it can run at the pace of the smoothed price without chasing it.
-
 ### Rule 4: decide jobs on smoothed prices
 
 Workers choose jobs from `smoothedPrice`, a slow moving average, not from the current price. This breaks the classic cobweb cycle, where a one-day price spike pulls in workers who then flood the market.
@@ -478,16 +476,7 @@ A headless runner (Node) simulates thousands of days and reports, per area and g
 - **Unmet necessities:** share of necessity demand not met.
 - **Labor churn:** share of the workforce changing jobs per day.
 
-Two regression scenarios must converge: two areas with complementary resources (price gap settles near transport cost within 60 days), and a 10-area chain (prices settle along a smooth gradient within 200 days). "Near" has a precise meaning: a buyer that imports all it uses settles at a gap of `1 / (reserveDaysOf(good) × tradeGapSensitivity)` of its price above transport, which is 1% for durable goods and 5% for goods kept one day.
-
-### Why the loops are shaped this way
-
-The headless runs behind these rules showed four traps, each of which made the economy oscillate or seize up:
-
-- **Two integrators in a loop.** A price that keeps rising while stock is short, feeding labor that keeps moving while value added is high, oscillates however slow each step is. The price therefore has two parts (section 5, Prices): `smoothedPrice` integrates scarcity slowly and is what jobs follow, and `price` adds a premium proportional to the current scarcity, which is what trade and consumers see.
-- **Instant trade overshoots.** With daily ticks and reserves of one to five days, a flow that reacts at once to the price gap empties one market into the next and back. Shipping rates therefore move toward their target with inertia, and scale with the buyer's reserve so perishable goods are damped as much as durable ones.
-- **Reserves block exports.** An exporter that only ships what exceeds its own reserve never sees foreign demand. Exporters keep only part of their reserve when shipping, and count their exports in their stock target and their labor plan.
-- **Money leaks.** Transport paid to nobody drains money from a world without governments, and a wage floor that never moves keeps resource-poor areas from ever exporting. Transport goes to the exporter's carriers, and the wage workers accept follows savings.
+Two regression scenarios must converge: two areas with complementary resources (price gap settles near transport cost within 60 days), and a 10-area chain (prices settle along a smooth gradient within 200 days). A buyer that imports all it uses settles at a gap of `1 / (reserveDaysOf(good) × tradeGapSensitivity)` of its price above transport.
 
 ### WorldConfig
 
@@ -620,8 +609,6 @@ outputLimitedByInputs = output < maximumByLabor
 marginalOutputPerWorker = hourlyOutputPerWorker(good) * min over inputs of ration[input.good]
 ```
 
-An extra worker only adds output as far as inputs are available, so value added falls smoothly as an input runs short instead of flipping to zero.
-
 **Input rationing.** Several goods often share one input; electricity, for example, feeds most recipes. A scarce input is split between its users in proportion to what each one requests, not handed to whichever comes first in the catalog. This takes one pass, because catalog order guarantees that when good `i` is reached, all of its production for the tick is done and all of its users come later:
 
 ```typescript
@@ -633,7 +620,7 @@ inputDemanded[i] = requested[i]
 
 A user limited by another input takes less than its ration, and the rest stays in stock. Producers draw before consumers in the same tick.
 
-`inputDemanded` matters as much as consumer demand. **Total demand** for a good is `max(demanded, consumed) + inputDemanded`: what consumers wanted or, when they fell back on it because a substitute ran out, what they actually ate, plus what producers requested. It is the demand used by the price target, the exportable surplus, the labor plan, government buy orders, standing orders and the initial stock. Without inputs, intermediate goods such as ore or flour would show no demand and their prices would fall to the floor; without spillover, an area eating fish in place of missing bread would never plan for the extra fish.
+`inputDemanded` matters as much as consumer demand. **Total demand** for a good is `max(demanded, consumed) + inputDemanded`: what consumers wanted or, when they fell back on it because a substitute ran out, what they actually ate, plus what producers requested. It is the demand used by the price target, the exportable surplus, the labor plan, government buy orders, standing orders and the initial stock.
 
 Private production draws inputs from the area's stock. Government production draws from the government depot, with its own rationing over the depot, and is not part of `inputDemanded`. Services are produced like crafted goods but go straight to consumption and never enter stock.
 
@@ -699,11 +686,7 @@ unitPaid   = sellerPrice + transport + tariffs + gap / 2   // the buyer and sell
 
 After capacity (below), an area whose imports would cost more than its savings has all of them scaled down by the same ratio: the buyer can only spend what it has, across all its edges and goods together. The seller receives `sellerPrice + transport + gap / 2` per unit, the transport going to its carriers; tariffs go to the respective treasuries.
 
-Three choices keep trade stable with daily ticks and short reserves:
-
-- **Inertia.** Because the rate moves toward its target at `tradeRatePerDay` (half-life 3 days), trade cannot slosh a whole stock back and forth between two areas whose prices are almost equal.
-- **Scaled by the reserve.** The target is a share of the buyer's reserve, not of its daily use, so a perishable good kept one day is damped as much as a durable one kept five. In exchange a perishable good needs a wider gap to travel: at steady state, a buyer importing all it uses holds a gap of `1 / (reserveDaysOf(good) × tradeGapSensitivity)` above transport.
-- **Exporters see foreign demand.** The seller dips into its reserve down to `exportReserveShare` of it, and its exports, counted at the smoothed shipping rates, raise its stock target and its labor plan. An exporter that only shipped what exceeded its own reserve would never notice that its neighbors want more.
+The rate's inertia keeps trade from sloshing between areas whose prices are almost equal. Scaling by the reserve damps perishable goods as much as durable ones; in exchange they need a wider gap to travel.
 
 **Capacity.** Sea and air routes carry at most `capacityPerDay × days` tonnes in each direction. When the flows of all goods in one direction exceed it, the route is filled greedily, in order of gap per tonne, so the most profitable cargo goes first. Land edges have infinite capacity and skip this step. Routes are few, so the sort costs little.
 
@@ -731,7 +714,7 @@ Sea and air traffic reuse edges instead of adding a separate system. A route is 
 
 ### Prices
 
-Every good has two prices. `smoothedPrice` is the **long-run price**: it drifts up for as long as the good stays scarce and down for as long as it stays abundant, and jobs follow it. `price` is the **market price**: the long-run price times a premium proportional to the current scarcity, which trade, consumers and the price table see. A price that only drifted with scarcity would oscillate against the labor it attracts; the premium answers scarcity at once, while the drift finds the level where supply and demand balance.
+Every good has two prices. `smoothedPrice` is the **long-run price**: it drifts while the good stays scarce or abundant, and jobs follow it. `price` is the **market price**: the long-run price times a premium proportional to current scarcity, which trade, consumers and the price table see.
 
 Scarcity is measured by a **pressure** between -1 and 1. Storable goods are priced on stock, with a flow term that reacts before the stock has moved far; exports count in the stock target, so an exporter keeps a reserve for its customers. Perishable goods keep a smaller target, so their reserve never rots faster than `maxReserveSpoilageShare` of demand: bread keeps about 1 day, fish 1.25 days and electricity a third of a day. Services have no stock, so they are priced on flows within the tick.
 
@@ -758,8 +741,6 @@ price          = clamp(price * exp(logChange), floor, ceiling)
 smoothedPrice  = clamp(smoothedPrice + fraction(priceSmoothingRatePerDay) * (price - smoothedPrice), floor, ceiling)
 ```
 
-With the defaults, the market price sits at most 10% above or below the long-run price, and the long-run price drifts by up to about 0.7% per day: it takes weeks, not days, for a good to become several times dearer, which leaves labor and trade time to answer.
-
 ### Labor allocation
 
 Workers move toward a target allocation: the labor needed to meet total demand, exports included, and to bring the stock back to its reserve, tilted toward jobs whose value added beats the **reservation wage**, the value per hour below which workers would rather stay unemployed. Value added is computed from smoothed prices and after production taxes or subsidies.
@@ -783,9 +764,7 @@ change(job) = fraction(laborMobilityRatePerDay) * (target(job) - workers(job))
 // scale all changes down if more than maxLaborShiftPerTick of the workforce would change jobs
 ```
 
-The quantity part lets labor follow demand without waiting for prices; the tilt makes each job settle where it adds about the reservation wage. A job adding more grows beyond its local need and exports, a job adding less shrinks and its good is imported. Primary goods with scarce capacity therefore earn a rent: their price rises until the last worker adds the reservation wage.
-
-Because the reservation wage follows savings, trade balances itself. An area that imports more than it exports loses savings, accepts less, prices its goods lower and starts exporting; a rich area asks more and imports more. Without this, a resource-poor area would pay for every input it imports, never undercut anyone, and run out of money.
+Each job settles where it adds about the reservation wage: a job adding more grows beyond local need and exports, a job adding less shrinks and its good is imported. Because the reservation wage follows savings, an area importing more than it exports gets cheaper until it exports.
 
 A good is producible in an area if it is primary with natural capacity there, or crafted with a recipe. Workers stuck without inputs see their marginal output fall with the input's ration and drift away.
 

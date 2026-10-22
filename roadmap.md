@@ -7,8 +7,8 @@ Section numbers (§) refer to the specification.
 ## Ground rules
 
 - **Simulation first, interface later.** Stages 1 to 7 build the whole simulation in `packages/sim` and check it in the headless runner. Nothing in them needs a browser.
-- **Spec first for unspecified areas.** Map generation (stage 5), the interface (stage 8) and the AI (stage 10) are not yet in the specification. Each of those stages starts by writing its section and agreeing on it before any code.
-- **The spec stays true.** When implementation shows that a rule must change, update the specification in the same change.
+- **Spec first for unspecified areas.** Map generation (stage 5), the interface (stage 8) and the AI (stage 10) start by writing their section of the specification.
+- **The spec stays true.** The specification is not a fixed contract: when implementation shows that a rule must change, update it in the same change. It holds rules only; rationale and findings go to [docs/design-notes.md](docs/design-notes.md).
 - **Determinism.** The same seed and the same command log must produce the same world, bit for bit, on the same device. From stage 3 on, a test hashes the world after N ticks and compares two runs.
 - **Budgets.** One tick for 3,000 areas × 54 goods must stay under 30 ms on a desktop and 100 ms on a mid-range phone. A full snapshot plus price table must stay under 300 KB. The headless runner reports both from stage 5 on.
 - **Tuning is continuous.** Every stage that touches the economy ends with a headless run of all three catalogs (`data/goods/`) and, if needed, retuned numbers.
@@ -119,7 +119,7 @@ Internal packages are consumed as TypeScript source (their `exports` point at `s
 - Substitution works: cutting fish capacity raises the bread share and keeps food satisfaction.
 - Savings above target drain through imports.
 
-**Spec changes from this stage:** the headless runs showed that the first rules for prices, trade and labor oscillated or seized up (§4, Why the loops are shaped this way). Prices now have a long-run part and a scarcity premium, trade flows have inertia and scale with the buyer's reserve, labor follows demand and stock with a value-added tilt against a reservation wage that follows savings, and transport is paid to the exporter so money is conserved.
+Rationale for the rules this stage changed: [docs/design-notes.md](docs/design-notes.md).
 
 ## Stage 4: Sea and air routes ✅
 
