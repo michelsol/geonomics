@@ -100,6 +100,22 @@ test("the panels resize by dragging the divider", async ({ page }, testInfo) => 
   await expect.poll(async () => (await side.boundingBox())?.width ?? 0).toBeGreaterThan(before + 100);
 });
 
+test("the market table sorts by column, and counts show no decimals", async ({ page }) => {
+  await startGame(page);
+  await expect(page.getByTestId("population")).not.toContainText(".");
+  const market = page.getByTestId("market");
+  await market.getByRole("button", { name: "Price" }).click();
+  await expect(market.getByRole("columnheader", { name: /Price/ })).toHaveAttribute("aria-sort", "descending");
+  const prices = await market.locator("tbody tr td:nth-child(2)").allTextContents();
+  const values = prices.map((text) => {
+    const number = Number.parseFloat(text.replace("<", ""));
+    return text.endsWith("k") ? number * 1e3 : text.endsWith("M") ? number * 1e6 : number;
+  });
+  expect(values).toEqual([...values].sort((a, b) => b - a));
+  await market.getByRole("button", { name: /Price/ }).click();
+  await expect(market.getByRole("columnheader", { name: /Price/ })).toHaveAttribute("aria-sort", "ascending");
+});
+
 test("rejected commands are explained", async ({ page }) => {
   await startGame(page);
   await openTab(page, "Armies");

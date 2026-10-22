@@ -2,7 +2,7 @@
 import { realmPopulation } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { Chart } from "../Chart";
-import { fmt, Section, Stat, Swatch } from "../components";
+import { count, fmt, Section, Stat, Swatch } from "../components";
 import { AreaLink, useView } from "./common";
 import { PolicyEditor } from "./PolicyEditor";
 
@@ -36,7 +36,7 @@ export function GovernmentPanel() {
         <div className="stats">
           <Stat label="Treasury" value={`${fmt(government.treasury)} mh`} testId="treasury" />
           <Stat label="Per day" value={`${perDay >= 0 ? "+" : ""}${fmt(perDay)}`} />
-          <Stat label="Population" value={fmt(realmPopulation(snapshot))} />
+          <Stat label="Population" value={count(realmPopulation(snapshot))} />
           <Stat label="Areas" value={government.ownedAreas.length} />
           <Stat
             label="Research"

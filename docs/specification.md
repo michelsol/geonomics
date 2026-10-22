@@ -1297,7 +1297,7 @@ Mouse or one finger pans and the wheel or a pinch zooms around the pointer. A cl
 
 | Panel | Shows | Actions |
 | --- | --- | --- |
-| Area | Owner, terrain, population, average wage, satisfaction, port, airport and fortification levels, siege; charts of population and average wage over time; natural resources (maximum capacity, and current capacity and extraction where detail is sent). For areas not the player's: militia or defending armies, defense power, the soldiers needed to win and the siege time. For own areas and their neighbors: price, stock, production, consumption and trade per good. For other areas: prices only | Read only |
+| Area | Owner, terrain, population, average wage, satisfaction, port, airport and fortification levels, siege; for own areas and their neighbors, savings per person and unemployed; natural resources (maximum capacity, and current capacity and extraction where detail is sent). For areas not the player's: militia or defending armies, defense power, the soldiers needed to win and the siege time. For own areas and their neighbors: price, stock, production, consumption and trade per good. For other areas: prices only | Sort the market table by any column |
 | Good | Lowest, median and highest price with their areas; a chart over time of the world's lowest, median and highest price and the selected area's price | Show the good on the price map |
 | Realm | Treasury and its change per day, realm population and areas, research level, charts of treasury and population; every tax and price control, realm-wide and per area | Set or remove a policy for all areas or one area, and for one good or all goods |
 | Orders | Depot contents per area, open market orders, standing orders, depot transfers in transit | Place and cancel market orders in any own area; add and remove standing orders; transfer goods between depots |
@@ -1306,6 +1306,8 @@ Mouse or one finger pans and the wheel or a pinch zooms around the pointer. A cl
 | Diplomacy | Relations with every government, pending proposals | Declare war; propose peace (payment and areas picked on the map); accept or refuse proposals |
 
 A rejected command is shown as a short message with its reason.
+
+Numbers show at most two decimals, and none from 100 up; from 10,000 they are compact (24.3k, 1.23M). A nonzero value too small to show reads "<0.01". Quantities that are whole by nature, such as people, workers, soldiers and days, show as whole numbers (24,312), compact only from a million.
 
 ### Time controls
 

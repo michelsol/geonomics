@@ -99,10 +99,6 @@ describe("game store", () => {
     expect(state().snapshot?.government?.id).toBe(0);
     expect(state().history?.realm.length).toBe(1);
     expect(state().history?.areaPrices.size).toBeGreaterThan(0);
-    const capital = world.governments[0]?.capital as number;
-    const stats = state().history?.areaStats.get(capital);
-    expect(stats?.channel(0)).toEqual([Math.fround(world.areas[capital]?.population as number)]);
-    expect(stats?.channel(1)).toEqual([Math.fround(world.areas[capital]?.wageLevel as number)]);
     state().receive({ type: "priceTable", tick: 0, gameDay: 0, table: encodePriceTable(world) });
     const [low, median, high] = [0, 1, 2].map((c) => state().history?.goodPrices[0]?.channel(c)[0] as number);
     expect(low).toBeLessThanOrEqual(median as number);

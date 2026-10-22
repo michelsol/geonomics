@@ -3,7 +3,7 @@ import type { Army } from "@geonomics/sim";
 import { useState } from "react";
 import { realmWageLevel } from "../../state/selectors";
 import { useGame } from "../../state/store";
-import { fmt, NumberField, pct, Section, Select, Stat, Swatch } from "../components";
+import { count, fmt, NumberField, pct, Section, Select, Stat, Swatch } from "../components";
 import { AreaLink, areaName, ownedOptions, useSend, useView } from "./common";
 
 export function ArmiesPanel() {
@@ -43,7 +43,7 @@ export function ArmiesPanel() {
         </div>
         <div className="stats">
           <Stat label="Realm average wage" value={fmt(averageWage)} />
-          <Stat label="Soldiers" value={fmt(soldiers)} />
+          <Stat label="Soldiers" value={count(soldiers)} />
           <Stat label="Pay per day" value={`${fmt(bill)} mh`} testId="army-bill" />
         </div>
         <span className="hint">
@@ -97,7 +97,7 @@ export function ArmiesPanel() {
             <div className="list-item" key={army.id}>
               <span>
                 <Swatch color={snapshot.governments[army.owner]?.color ?? "#fff"} />
-                {fmt(army.soldiers)} soldiers of {snapshot.governments[army.owner]?.name} at{" "}
+                {count(army.soldiers)} soldiers of {snapshot.governments[army.owner]?.name} at{" "}
                 {areaName(data, army.location.kind === "area" ? army.location.area : army.location.from)}
               </span>
             </div>
@@ -217,7 +217,7 @@ function ArmyCard({
     <div className="list-item" data-testid="army">
       <div className="row" style={{ justifyContent: "space-between" }}>
         <button type="button" className="link" onClick={onSelect}>
-          {selected ? "▸ " : ""}Army {army.id}: {fmt(army.soldiers)} soldiers
+          {selected ? "▸ " : ""}Army {army.id}: {count(army.soldiers)} soldiers
         </button>
         <span className="muted">{army.stance}</span>
       </div>
@@ -225,7 +225,7 @@ function ArmyCard({
         {army.location.kind === "area" ? "in " : "marching from "}
         <AreaLink area={at} />
         {army.path.length > 0 ? ` → ${areaName(data, army.path.at(-1) as number)}` : ""} · equipped {pct(equipment)} ·
-        power {fmt(army.soldiers * (1 + equipment))}
+        power {count(army.soldiers * (1 + equipment))}
       </span>
       <div className="row">
         <button type="button" onClick={onMove}>

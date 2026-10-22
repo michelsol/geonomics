@@ -179,10 +179,8 @@ Food made armies hard to run: loading supplies, standing orders per depot, forag
 
 Combat follows Lanchester's square law. With `A` attackers of power `a` each and `D` defenders of power `d` each, attackers lose `k·d·D/a` per day and defenders `k·a·A/d`. Then `(a/d)·A² − (d/a)·D²` stays constant, so the attackers win exactly when `a·A > d·D`: when their total power beats the defense power. Fortifications multiply the defense power. The Area panel turns this into "more than N equipped soldiers" (power 2 each) and adds the siege time once the defenders fall, from `siegeRatePerDay × power / ((1 + fortification) × population)`.
 
-### Area history
-
-Population and average wage are recorded for the areas the player can see in detail or has selected, like area prices: two channels of 365 Float32 samples, about 3 KB per area, so well under 1 MB for a large realm. Samples follow snapshots in wall time, so at top speed they are many game days apart.
-
 ### Charts
 
-The realm and area histories used a second y axis for population. They are now separate small charts, one measure each: two scales on one chart invite reading the crossing of the lines as meaningful. Employment is a part-to-whole, shown as one stacked bar (private, government, unemployed) with a legend, and the jobs by good as a table with inline bars rather than a pie, so a dozen goods stay readable.
+The realm history used a second y axis for population. Treasury and population are now separate small charts, one measure each: two scales on one chart invite reading the crossing of the lines as meaningful. Employment is a part-to-whole, shown as one stacked bar (private, government, unemployed) with a legend, and the jobs by good as a table with inline bars rather than a pie, so a dozen goods stay readable.
+
+Population and average-wage charts per area were tried and removed after playtesting: the Area panel reads better as a snapshot of the present, with history left to the Realm and Good panels.

@@ -1,20 +1,16 @@
-// The selected area: public figures, history, resources, defense, and stocks and flows where visible.
+// The selected area: public figures, resources, defense, and a sortable market table.
+import { useState } from "react";
 import { mapControls } from "../../map/MapView";
 import { capacityMaximum, conquestEstimate, detailOf, priceOf } from "../../state/selectors";
 import { useGame } from "../../state/store";
-import { Chart } from "../Chart";
-import { fmt, pct, Section, Stat, Swatch } from "../components";
-import { type PanelProps, useView } from "./common";
+import { count, fmt, pct, Section, Stat, Swatch } from "../components";
+import { type PanelName, type PanelProps, useView } from "./common";
 
 const WAGE_HINT = "Mean value added per private worker-hour, weighted by workers, in man-hours (not a median).";
 
 export function AreaPanel({ onOpen }: PanelProps) {
   const view = useView();
   const area = useGame((state) => state.selectedArea);
-  const table = useGame((state) => state.priceTable);
-  const selectGood = useGame((state) => state.selectGood);
-  const history = useGame((state) => state.history);
-  useGame((state) => state.historyVersion); // redraw the charts with every new sample
   if (!view) return <p className="muted">Waiting for the first snapshot…</p>;
   if (area === null) return <p className="muted">Click an area on the map.</p>;
   const { data, snapshot, government } = view;
@@ -25,7 +21,6 @@ export function AreaPanel({ onOpen }: PanelProps) {
   const own = owner === government.id;
   const detail = detailOf(snapshot, area);
   const siege = snapshot.areas.siegeProgress[area] as number;
-  const stats = history?.areaStats.get(area);
   const days = data.config.pace.gameDaysPerTick;
   const resources = data.goods.filter((good) => good.isPrimary && capacityMaximum(data, area, good.id) > 0);
   const headTax = government.areaStates.find((s) => s.area === area)?.resolved.headTaxPerPersonPerDay;
@@ -55,7 +50,7 @@ export function AreaPanel({ onOpen }: PanelProps) {
           {static_.isCoastal ? " · coast" : ""}
         </div>
         <div className="stats">
-          <Stat label="Population" value={fmt(snapshot.areas.population[area] as number)} />
+          <Stat label="Population" value={count(snapshot.areas.population[area] as number)} testId="population" />
           <Stat label="Average wage" value={fmt(snapshot.areas.wageLevel[area] as number)} />
           <Stat label="Necessities met" value={pct(snapshot.areas.necessitySatisfaction[area] as number)} />
           <Stat label="Satisfaction" value={pct(snapshot.areas.satisfaction[area] as number)} />
@@ -63,8 +58,14 @@ export function AreaPanel({ onOpen }: PanelProps) {
             label="Port · airport · fort"
             value={`${snapshot.areas.portLevel[area]} · ${snapshot.areas.airportLevel[area]} · ${snapshot.areas.fortificationLevel[area]}`}
           />
-          {detail && <Stat label="Savings" value={fmt(detail.savings)} />}
-          {detail && <Stat label="Unemployed" value={fmt(detail.unemployedWorkers)} />}
+          {detail && (
+            <Stat
+              label="Savings per person"
+              value={`${fmt(detail.savings / Math.max(snapshot.areas.population[area] as number, 1))} mh`}
+              title="Average private savings per inhabitant, in man-hours"
+            />
+          )}
+          {detail && <Stat label="Unemployed" value={count(detail.unemployedWorkers)} />}
           {siege > 0 && <Stat label="Siege" value={pct(siege)} />}
         </div>
         <p className="hint">Average wage: {WAGE_HINT}</p>
@@ -77,24 +78,6 @@ export function AreaPanel({ onOpen }: PanelProps) {
           </div>
         )}
       </Section>
-
-      {stats && stats.length > 1 && (
-        <Section title="History">
-          <p className="chart-caption">Population</p>
-          <Chart
-            x={stats.xs()}
-            height={140}
-            testId="area-population-chart"
-            series={[{ label: "population", color: "#3987e5", values: stats.channel(0) }]}
-          />
-          <p className="chart-caption">Average wage (mh per hour)</p>
-          <Chart
-            x={stats.xs()}
-            height={140}
-            series={[{ label: "average wage", color: "#3987e5", values: stats.channel(1) }]}
-          />
-        </Section>
-      )}
 
       {!own && <Defense area={area} />}
 
@@ -145,62 +128,7 @@ export function AreaPanel({ onOpen }: PanelProps) {
         <span className="hint">Units per day. See a good across the map with the Resources layer.</span>
       </Section>
 
-      <Section title={detail ? "Market" : "Prices"}>
-        <table>
-          <thead>
-            <tr>
-              <th>Good</th>
-              <th className="num">Price</th>
-              {detail && (
-                <>
-                  <th className="num">Stock</th>
-                  <th className="num">Made</th>
-                  <th className="num">Used</th>
-                  <th className="num">Trade</th>
-                </>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {data.goods.map((good) => {
-              const price = detail
-                ? (detail.price[good.id] as number)
-                : table
-                  ? priceOf(data, table, area, good.id)
-                  : 0;
-              return (
-                <tr key={good.id}>
-                  <td>
-                    <button
-                      type="button"
-                      className="link"
-                      onClick={() => {
-                        selectGood(good.id);
-                        onOpen("good");
-                      }}
-                    >
-                      {good.name}
-                    </button>
-                  </td>
-                  <td className="num" title={`labor value ${fmt(good.laborValue)}`}>
-                    {fmt(price)}
-                  </td>
-                  {detail && (
-                    <>
-                      <td className="num">{good.isService ? "—" : fmt(detail.stock[good.id] as number)}</td>
-                      <td className="num">{fmt(detail.produced[good.id] as number)}</td>
-                      <td className="num">{fmt(detail.consumed[good.id] as number)}</td>
-                      <td className="num">
-                        {fmt((detail.imported[good.id] as number) - (detail.exported[good.id] as number))}
-                      </td>
-                    </>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </Section>
+      <MarketTable area={area} onOpen={onOpen} />
     </>
   );
 }
@@ -214,15 +142,15 @@ function Defense({ area }: { area: number }) {
   return (
     <Section title="Defense">
       <div className="stats">
-        {neutral && <Stat label="Militia" value={fmt(estimate.militia)} testId="militia" />}
+        {neutral && <Stat label="Militia" value={count(estimate.militia)} testId="militia" />}
         {!neutral && <Stat label="Army power here" value={fmt(estimate.armyPower)} />}
         <Stat label="Fortification" value={`×${1 + estimate.fortification}`} />
         <Stat label="Defense power" value={fmt(estimate.defensePower)} />
       </div>
       {estimate.defensePower > 0 ? (
         <p data-testid="soldiers-needed">
-          Win with more than <strong>{fmt(Math.ceil(estimate.equippedNeeded))}</strong> equipped soldiers, or{" "}
-          {fmt(Math.ceil(estimate.unequippedNeeded))} without weapons. Bring a margin: the battle costs soldiers.
+          Win with more than <strong>{count(Math.ceil(estimate.equippedNeeded))}</strong> equipped soldiers, or{" "}
+          {count(Math.ceil(estimate.unequippedNeeded))} without weapons. Bring a margin: the battle costs soldiers.
         </p>
       ) : (
         <p>No defenders: an attacking army besieges it at once.</p>
@@ -234,6 +162,143 @@ function Defense({ area }: { area: number }) {
           ? ` The militia is ${pct(view.data.config.military.militiaShare)} of the population, unequipped; it refills while no attacker is present.`
           : ""}
       </p>
+    </Section>
+  );
+}
+
+type SortKey = "good" | "price" | "stock" | "made" | "used" | "trade";
+interface Sort {
+  key: SortKey | null; // null: catalog order, inputs before their outputs
+  descending: boolean;
+}
+
+const COLUMNS: { key: SortKey; label: string; detailOnly: boolean }[] = [
+  { key: "good", label: "Good", detailOnly: false },
+  { key: "price", label: "Price", detailOnly: false },
+  { key: "stock", label: "Stock", detailOnly: true },
+  { key: "made", label: "Made", detailOnly: true },
+  { key: "used", label: "Used", detailOnly: true },
+  { key: "trade", label: "Trade", detailOnly: true },
+];
+const SORT_KEY = "geonomics.marketSort";
+
+function storedSort(): Sort {
+  try {
+    const sort = JSON.parse(localStorage.getItem(SORT_KEY) ?? "null") as Sort | null;
+    if (sort && (sort.key === null || COLUMNS.some((c) => c.key === sort.key))) return sort;
+  } catch {
+    // Unreadable or blocked storage: start in catalog order.
+  }
+  return { key: null, descending: false };
+}
+
+function saveSort(sort: Sort): void {
+  try {
+    localStorage.setItem(SORT_KEY, JSON.stringify(sort));
+  } catch {
+    // Private windows may refuse storage; the order then lasts while the panel is open.
+  }
+}
+
+/** Prices of every good, plus stocks and flows where the snapshot carries them; columns sort on click. */
+function MarketTable({ area, onOpen }: { area: number; onOpen: (panel: PanelName) => void }) {
+  const view = useView();
+  const table = useGame((state) => state.priceTable);
+  const selectGood = useGame((state) => state.selectGood);
+  const [sort, setSort] = useState(storedSort);
+  if (!view) return null;
+  const { data, snapshot } = view;
+  const detail = detailOf(snapshot, area);
+  const columns = COLUMNS.filter((c) => detail || !c.detailOnly);
+  const rows = data.goods.map((good) => {
+    const g = good.id;
+    return {
+      good,
+      price: detail ? (detail.price[g] as number) : table ? priceOf(data, table, area, g) : 0,
+      stock: detail && !good.isService ? (detail.stock[g] as number) : 0,
+      made: detail ? (detail.produced[g] as number) : 0,
+      used: detail ? (detail.consumed[g] as number) : 0,
+      trade: detail ? (detail.imported[g] as number) - (detail.exported[g] as number) : 0,
+    };
+  });
+  const key = sort.key !== null && columns.some((c) => c.key === sort.key) ? sort.key : null;
+  if (key !== null) {
+    const sign = sort.descending ? -1 : 1;
+    rows.sort((a, b) => {
+      const order = key === "good" ? a.good.name.localeCompare(b.good.name) : a[key] - b[key];
+      return sign * order || a.good.id - b.good.id;
+    });
+  }
+  const click = (column: SortKey) => {
+    // Numbers sort largest first, names A to Z; clicking the sorted column again flips it.
+    const next =
+      key === column ? { key: column, descending: !sort.descending } : { key: column, descending: column !== "good" };
+    setSort(next);
+    saveSort(next);
+  };
+
+  return (
+    <Section title={detail ? "Market" : "Prices"}>
+      <table data-testid="market">
+        <thead>
+          <tr>
+            {columns.map((column) => (
+              <th
+                key={column.key}
+                className={column.key === "good" ? undefined : "num"}
+                aria-sort={key === column.key ? (sort.descending ? "descending" : "ascending") : undefined}
+              >
+                <button type="button" className="sort" onClick={() => click(column.key)}>
+                  {column.label}
+                  {key === column.key ? (sort.descending ? " ▼" : " ▲") : ""}
+                </button>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.good.id}>
+              <td>
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => {
+                    selectGood(row.good.id);
+                    onOpen("good");
+                  }}
+                >
+                  {row.good.name}
+                </button>
+              </td>
+              <td className="num" title={`labor value ${fmt(row.good.laborValue)}`}>
+                {fmt(row.price)}
+              </td>
+              {detail && (
+                <>
+                  <td className="num">{row.good.isService ? "—" : fmt(row.stock)}</td>
+                  <td className="num">{fmt(row.made)}</td>
+                  <td className="num">{fmt(row.used)}</td>
+                  <td className="num">{fmt(row.trade)}</td>
+                </>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {key !== null && (
+        <button
+          type="button"
+          className="link hint"
+          onClick={() => {
+            const next = { key: null, descending: false };
+            setSort(next);
+            saveSort(next);
+          }}
+        >
+          Back to catalog order
+        </button>
+      )}
     </Section>
   );
 }

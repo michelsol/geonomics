@@ -51,7 +51,7 @@ export function Chart({
         },
         axes: [
           height < 160 ? { ...axis, size: 28 } : { ...axis, label: "day" },
-          { ...axis, size: 52, values: (_: uPlot, splits: number[]) => splits.map((v) => fmt(v, 2)) },
+          { ...axis, size: 52, values: (_: uPlot, splits: number[]) => splits.map((v) => fmt(v)) },
         ],
         series: [{ label: "day" }, ...series.map((s) => ({ label: s.label, stroke: s.color, width: 2, dash: s.dash }))],
       },

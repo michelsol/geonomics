@@ -55,17 +55,14 @@ export class Series {
 export class History {
   readonly goodPrices: Series[]; // per good: lowest, median and highest price in the world
   readonly areaPrices = new Map<number, Series>(); // per tracked area: the price of every good
-  readonly areaStats = new Map<number, Series>(); // per tracked area: population and average wage
   readonly realm = new Series(2); // population and treasury of the player's realm
 
   constructor(readonly goodCount: number) {
     this.goodPrices = Array.from({ length: goodCount }, () => new Series(3));
   }
 
-  /** Starts recording an area's prices, population and wage, if it is not already tracked. */
+  /** Starts recording an area's prices, if it is not already tracked. */
   track(area: number): void {
-    if (this.areaPrices.has(area)) return;
-    this.areaPrices.set(area, new Series(this.goodCount));
-    this.areaStats.set(area, new Series(2));
+    if (!this.areaPrices.has(area)) this.areaPrices.set(area, new Series(this.goodCount));
   }
 }

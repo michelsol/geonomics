@@ -427,6 +427,19 @@ td {
   color: var(--muted);
   font-size: 12px;
 }
+/* Column header that sorts its table. */
+th button.sort {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+th button.sort:hover {
+  color: var(--text);
+}
 
 /* Phone: the panels move into a bottom sheet over the map. */
 @media (max-width: 899px) {
@@ -459,6 +472,9 @@ td {
   }
   .topbar select {
     max-width: 112px;
+  }
+  th button.sort {
+    min-height: 44px;
   }
   .side {
     position: fixed;

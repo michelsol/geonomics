@@ -3,7 +3,7 @@ import type { GovernmentJob } from "@geonomics/sim";
 import { useState } from "react";
 import { employmentOf } from "../../state/selectors";
 import { useGame } from "../../state/store";
-import { fmt, NumberField, pct, Section, Select } from "../components";
+import { count, fmt, NumberField, pct, Section, Select } from "../components";
 import { areaName, ownedOptions, useSend, useView } from "./common";
 
 // Categorical slots 1 and 2 of the chart palette (dark steps), validated against the panel surface; the unemployed
@@ -92,7 +92,7 @@ export function JobsPanel() {
             <div className="row" style={{ justifyContent: "space-between" }}>
               <span>{describeJob(assignment.job)}</span>
               <span className="muted">
-                {fmt(assignment.workers)} / {fmt(assignment.targetWorkers)} workers
+                {count(assignment.workers)} / {count(assignment.targetWorkers)} workers
               </span>
             </div>
             <div className="row">
@@ -199,7 +199,7 @@ function EmploymentSection({ area }: { area: number }) {
             <span
               key={part.label}
               style={{ flexGrow: part.value, background: part.color }}
-              title={`${part.label}: ${fmt(part.value)} (${pct(part.value / total)})`}
+              title={`${part.label}: ${count(part.value)} (${pct(part.value / total)})`}
             />
           ))}
       </div>
@@ -207,7 +207,7 @@ function EmploymentSection({ area }: { area: number }) {
         {parts.map((part) => (
           <span key={part.label}>
             <span className="swatch" style={{ background: part.color }} />
-            {part.label} {fmt(part.value)} · {total > 0 ? pct(part.value / total) : "—"}
+            {part.label} {count(part.value)} · {total > 0 ? pct(part.value / total) : "—"}
           </span>
         ))}
       </div>
@@ -227,7 +227,7 @@ function EmploymentSection({ area }: { area: number }) {
           {rows.map(({ good, workers, output }) => (
             <tr key={good.id}>
               <td title={good.unit}>{good.name}</td>
-              <td className="num">{fmt(workers)}</td>
+              <td className="num">{count(workers)}</td>
               <td style={{ width: "22%" }}>
                 <div className="inline-bar" style={{ width: `${(100 * workers) / most}%` }} />
               </td>

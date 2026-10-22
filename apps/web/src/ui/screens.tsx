@@ -2,7 +2,7 @@
 import { useState } from "react";
 import type { CatalogName } from "../host/protocol";
 import { useGame } from "../state/store";
-import { fmt, Select, Swatch } from "./components";
+import { count, fmt, Select, Swatch } from "./components";
 
 const SIZES = [
   { value: 300, label: "Small — 300 areas" },
@@ -96,7 +96,7 @@ export function ChooseRealm() {
                 {government.capital === null ? government.name : data?.areas[government.capital]?.name}
               </span>
               <span className="muted">
-                {government.areaCount} areas · {fmt(government.population)} people
+                {government.areaCount} areas · {count(government.population)} people
               </span>
             </button>
           ))}
@@ -121,15 +121,15 @@ export function EndOfSession() {
           <tbody>
             <tr>
               <td>Days played</td>
-              <td className="num">{fmt(summary.days)}</td>
+              <td className="num">{count(summary.days)}</td>
             </tr>
             <tr>
               <td>Peak population</td>
-              <td className="num">{fmt(summary.peakPopulation)}</td>
+              <td className="num">{count(summary.peakPopulation)}</td>
             </tr>
             <tr>
               <td>Final population</td>
-              <td className="num">{fmt(summary.finalPopulation)}</td>
+              <td className="num">{count(summary.finalPopulation)}</td>
             </tr>
             <tr>
               <td>Areas held</td>
