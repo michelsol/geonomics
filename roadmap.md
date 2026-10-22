@@ -55,7 +55,7 @@ Internal packages are consumed as TypeScript source (their `exports` point at `s
 
 **Exit:** `pnpm typecheck`, `pnpm lint`, `pnpm test` and `pnpm build` pass locally and in CI.
 
-## Stage 1: Simulation kernel
+## Stage 1: Simulation kernel ✅
 
 **Goal:** the static parts of the world, fully typed and tested.
 

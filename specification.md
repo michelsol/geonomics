@@ -552,7 +552,7 @@ interface WorldConfig {
   military: {
     foodGood: GoodId;                   // good soldiers eat; taken from the goods catalog
     weaponsGood: GoodId;                // good soldiers are equipped with; taken from the goods catalog
-    foodPerSoldierPerDay: number;       // units of food eaten per soldier per game day
+    foodPerSoldierPerDay: number;       // units of food eaten per soldier per game day (default: one inhabitant's food need, in units of foodGood)
     weaponWearRatePerDay: number;       // share of carried weapons worn out per day (default 0.005)
     desertionRatePerDay: number;        // share of soldiers leaving per day without food (default 0.05)
     soldierWage: number;                // wage per soldier-hour, in man-hours (default 1)
