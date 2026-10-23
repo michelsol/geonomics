@@ -5,6 +5,7 @@ export * from "./catalog";
 export * from "./commands";
 export * from "./config";
 export * from "./government";
+export { neutralPolicies, resolveSettings } from "./government";
 export * from "./graph";
 export * from "./hash";
 export * from "./init";

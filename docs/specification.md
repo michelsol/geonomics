@@ -1179,22 +1179,43 @@ Only the host simulates. The signaling broker is used only to set up connections
 
 ### Host loop
 
-The worker runs a timer loop targeting `1000 / maxTicksPerSecond` milliseconds per tick. Each iteration drains the command queue, runs one tick and, at the snapshot rate, posts a snapshot to the main thread using transferable buffers. When a tick takes longer than its budget, the loop runs as fast as it can and still yields between ticks.
+The worker runs a timer loop targeting `1000 / maxTicksPerSecond` milliseconds per tick. Each iteration drains the command queue, runs one tick and, at the snapshot rate, builds one snapshot per viewer: the local player's goes to the main thread using transferable buffers, and each joined player's or spectator's is packed (see Encoding) for the main thread to forward. When a tick takes longer than its budget, the loop runs as fast as it can and still yields between ticks. The loop exists from map creation, paused, so players can join while the host chooses its realm.
 
-The main thread forwards local and remote commands to the worker, updates its own store from snapshots, and broadcasts them to clients. Pause and speed changes are messages to the worker, never simulation commands.
+The main thread forwards local and remote commands to the worker, updates its own store from the local snapshots, and forwards the packed ones to their players. Pause and speed changes are messages to the worker, never simulation commands.
 
 ### Messages
 
-| Message | Direction | Content |
-| --- | --- | --- |
-| `hello` | Client to host | Player name, protocol version |
-| `welcome` | Host to client | Player id, static data: needs, goods, area names and positions, edges, config |
-| `lobby` | Host to client | Players and their government assignments |
-| `command` | Client to host | One `CommandEnvelope` |
-| `commandRejected` | Host to client | The rejected command and the reason |
-| `snapshot` | Host to client | Dynamic state at one tick (below) |
-| `priceTable` | Host to client | Prices of every good in every area (below) |
-| `hostStatus` | Host to client | Running, paused or hidden; current speed |
+From a joining player to the host:
+
+| Message | Content |
+| --- | --- |
+| `hello` | Protocol version, player name, player token |
+| `choose` | A government to take, or none to watch as a spectator |
+| `command` | One command; the host acts for the government the player holds |
+| `setFlowGood` | The good whose trade flows the player's snapshots carry, or none |
+| `focus` | The area the player looks at: its detail comes in every snapshot |
+| `leave` | The player leaves for good, freeing its realm |
+
+From the host to a joining player:
+
+| Message | Content |
+| --- | --- |
+| `welcome` | The player's lobby entry, the static data and the government summaries |
+| `refused` | Why the host turned the player away (another protocol version, an invalid token, no game yet) |
+| `lobby` | Every player: name, role (choosing, player or spectator), government held, online, host; whether the game started |
+| `you` | The player's own entry, when its role changes |
+| `notice` | A refused choice, or news from the host |
+| `snapshot` | Dynamic state for the player's government (below) |
+| `priceTable` | Prices of every good in every area (below) |
+| `commandRejected` | The rejected command and the reason |
+| `hostStatus` | Paused, the host's tab hidden, speed, ticks per second, milliseconds per tick, tick |
+
+### Encoding
+
+- Messages are msgpack. Typed arrays travel as msgpack extensions holding their little-endian bytes; a `Float32Array` with fewer than a quarter of its entries nonzero travels sparse, as index and value pairs.
+- Each message is then compressed with raw deflate and cut into frames of at most 64 KiB, each with a 9-byte header (frame format version, message id, frame index, frame count). Data channels are reliable and ordered, so frames are joined in order.
+- Snapshots for joined players are built and packed in the simulation worker; the price table is packed once for all of them.
+- **Flow control:** when a player's channel holds more than 1 MiB not yet sent, its snapshots and price tables are skipped until it drains.
 
 ### Snapshots
 
@@ -1202,12 +1223,13 @@ The host broadcasts snapshots at `snapshotRate` (default 3 per second), independ
 
 - `tick` and `gameDay`.
 - Per area, for every area: owner, population, wage level, satisfaction, port, airport and fortification levels, siege progress and besieger, and militia.
-- Per area, for the receiving player's owned areas and their direct neighbors: savings, unemployed workers, and the price, stock, produced, consumed, imported, exported, private worker and natural capacity arrays. Other areas' stocks and flows are not sent.
+- The receiving player's **visible areas**, its owned areas and their direct neighbors, and for them savings, unemployed workers, and the price, stock, produced, consumed, imported, exported, private worker and natural capacity arrays. Other areas' stocks and flows are not sent. A joined player receives this detail in turns: each snapshot carries its focused area and the next 48 visible areas, and its interface keeps the last detail of each visible area. The local player receives all of it every time.
 - The static data sent once at the start also carries every area's maximum natural capacity per good.
 - Per edge: transport cost, capacity, active and blocked state, plus the full data of any route edge created since the last snapshot.
 - Per edge, the flows of the last tick, in units per game day: net migrants (positive from area A to area B) and tonnes carried in each direction. When the receiver watches one good, also that good's units carried in each direction. Flows are public, like prices.
 - All armies, relations and pending peace proposals.
-- The receiving player's full government state (treasury, depots, jobs, orders); other governments as a public summary.
+- The receiving player's full government state (treasury, depots, jobs, orders, policy settings); other governments as a public summary. Policies in force are not sent: the receiver resolves them from the realm settings and the area overrides, as the host does.
+- A spectator's snapshot has no visible areas and no government.
 
 Typed arrays are sent as `Float32Array`.
 
@@ -1231,16 +1253,20 @@ The interface uses the table in two places:
 
 ### Joining
 
-1. The host creates a PeerJS peer with a random id and shows the link `https://<site>/#join=<peer id>`.
-2. The joining player opens the link; their browser creates its own peer and opens a reliable data channel to the host.
-3. The client sends `hello`; the host answers `welcome` and assigns a government or spectator role in the lobby.
+1. The host clicks Invite players. Its browser creates a PeerJS peer with a random id and shows the link `https://<site>/<query>#join=<peer id>`. The query keeps the broker setting (below).
+2. The joining player opens the link and gives a name; its browser opens a reliable data channel to the host and sends `hello`.
+3. The host answers `welcome`, and the player appears in the lobby. Players can join before the host starts and during the game.
 
-The free PeerJS cloud broker is enough to start; a self-hosted PeerServer can replace it later. STUN uses public servers by default, and a TURN relay can be added to the connection settings for players on strict networks.
+**Players.** A joining player is identified by a random token its tab keeps in `sessionStorage`. The host sets the controller of the government it takes to `{ kind: "human", player: token }`. Commands act for the government their connection's player holds; the host never takes the player from the message. A player chooses a realm no one else holds and that is not eliminated, or watches as a spectator. Taking another realm gives the previous one back to the idle AI. Only the host controls time.
+
+**Dropped connections.** A joining player whose connection drops retries after 1, 2, 4 and 8 seconds, then every 8 seconds, and gives up 2 minutes after the drop. A `hello` with the same token, from a reconnection or a reload of the same tab, restores the player's role and realm, and the host sends `welcome` again. While a player is offline, its realm stays reserved for it and idle; the host can release it, and another player can then take it.
+
+**Broker.** The free PeerJS cloud broker is the default. A `?peer=host:port[/path]` query setting points the game at a self-hosted PeerServer, which the end-to-end tests and local network play use (`pnpm peer`). STUN uses public servers by default, and a TURN relay can be added to the connection settings for players on strict networks.
 
 ### Hosting on mobile
 
-- Browsers slow down or suspend hidden tabs. The host listens to the Page Visibility API, pauses when hidden and tells clients through `hostStatus`.
-- The host requests a Screen Wake Lock while a game runs.
+- Browsers slow down or suspend hidden tabs. The host pauses when its tab is hidden and tells players through `hostStatus`, which says whether the tab is hidden.
+- The host requests a Screen Wake Lock while its game runs and its tab is visible, and releases it when paused or hidden.
 - The default `maxTicksPerSecond` is lower on mobile devices.
 
 ### Save and load
@@ -1259,17 +1285,20 @@ A solo game uses the same data flow as a hosted one, without the network. The wo
 | `priceTable` | At `priceTableRate` | As in Price table |
 | `status` | With every snapshot, and on rejections | Running or paused, target and actual ticks per second, milliseconds per tick, and rejected commands with their reasons |
 
-The main thread sends `create`, `command`, `setSpeed`, `pause`, `resume`, `endGame`, and `setFlowGood` to choose the good whose trade flows snapshots carry (none by default). While paused, `setFlowGood` is answered with a snapshot at once. The local player sends commands under the player id `local`.
+The main thread sends `create`, `start` (with the local player's government, or none to watch), `command`, `setSpeed`, `pause`, `resume`, `endGame`, and `setFlowGood` to choose the good whose trade flows snapshots carry (none by default). While paused, `setFlowGood` is answered with a snapshot at once. The local player sends commands under the player id `local`.
+
+When hosting, `command` and `setFlowGood` may name a joined player, `player` sets a joined player's government and whether it receives snapshots, and `focus` names the area it looks at. The worker then also posts `remote` messages, packed for one player or for all of them, and rejections name the player they are for.
 
 ## 10. Interface
 
-The interface is map-first: the map fills the screen and panels sit beside it on desktop, or below it on a phone. It reads only what a snapshot and the price table carry, so a joined player in stage 9 sees exactly what a solo player sees.
+The interface is map-first: the map fills the screen and panels sit beside it on desktop, or below it on a phone. It reads only what a snapshot and the price table carry, so a joined player sees exactly what a solo player sees.
 
 ### Screens
 
-1. **New game.** The player picks a catalog (small, medium or large), a map size (300, 1,000 or 3,000 areas), the number of realms (4, 6, 8, 12, 16, 24 or 32, at most one per 8 areas; default 8) and a seed. The map is then generated and warmed up in the worker, behind a progress bar. Finally the player chooses a realm, from a list of the founded governments with capital, population and area count, or takes a random one.
-2. **Game.** The map, the top bar and the panels.
-3. **End of session.** Shown when the player's government is eliminated, or when the player ends the game. It lists days played, peak and final population, areas held and treasury, and offers a new game. There is no score.
+1. **Join.** Opening a join link asks for the player's name, then connects; a reload of the same tab rejoins without asking. The host's refusal or an unreachable host is shown.
+2. **New game.** The player picks a catalog (small, medium or large), a map size (300, 1,000 or 3,000 areas), the number of realms (4, 6, 8, 12, 16, 24 or 32, at most one per 8 areas; default 8) and a seed. The map is then generated and warmed up in the worker, behind a progress bar. Finally comes the **lobby**: the founded governments with capital, population, area count and the player holding each. Each player picks a free realm, takes a random one or watches. The host can invite players there (a join link with a Copy button), see who is online, and release the realm of a player who went offline. The host's pick starts the game; a joined player enters once the host accepts its pick.
+3. **Game.** The map, the top bar and the panels.
+4. **End of session.** Shown when the player's government is eliminated, or when the player ends the game. It lists days played, peak and final population, areas held and treasury, and offers a new game. There is no score.
 
 ### Map
 
@@ -1311,7 +1340,7 @@ Mouse or one finger pans and the wheel or a pinch zooms around the pointer. A cl
 | --- | --- | --- |
 | Area | Owner, terrain, population, average wage, satisfaction, port, airport and fortification levels, siege; for own areas and their neighbors, savings per person and unemployed; natural resources (maximum capacity, and current capacity and extraction where detail is sent). Defense of every area: militia, the owner's army power, fortification and defense power; for areas not the player's, also the soldiers needed to win and the siege time. For own areas and their neighbors: price, stock, production, consumption and trade per good. For other areas: prices only | Sort the market table by any column |
 | Good | Lowest, median and highest price with their areas; a chart over time of the world's lowest, median and highest price and the selected area's price | Show the good on the price map |
-| Realm | Treasury and its change per day, realm population and areas, research level, charts of treasury and population | End the game |
+| Realm | Treasury and its change per day, realm population and areas, research level, charts of treasury and population; the players and their realms | Invite players and release offline players' realms (host); end the game, or leave it (joined player) |
 | Policies | Every tax and price control, realm-wide and per area; the setting in force for the chosen area, policy and good | Set or remove a policy for all areas or one area, and for one good or all goods. The production tax is chosen first. Taxes and tariffs have a slider from −100% to +100% (the number field takes up to 500%), head tax one from 0 to 2 mh per person per day; ceilings and floors take a number. The value starts at the setting in force, and Set applies it |
 | Orders | Depot contents per area, open market orders, standing orders, depot transfers in transit | Place and cancel market orders in any own area; add and remove standing orders; transfer goods between depots |
 | Jobs | For one own area or the whole realm: the workforce split between private jobs, government jobs and unemployment, and private workers, output per day and output per worker by good. Per own area: each job's target and workers, and the wage offer | Set job targets and wage offers |
@@ -1319,6 +1348,8 @@ Mouse or one finger pans and the wheel or a pinch zooms around the pointer. A cl
 | Diplomacy | Relations with every government, pending proposals | Declare war; propose peace (payment and areas picked on the map); accept or refuse proposals |
 
 A rejected command is shown as a short message with its reason.
+
+**Joined players** see the host's time state (running at a speed, or paused) instead of the time controls, and a banner while the connection is down or the host has paused, saying when its tab is hidden. **Spectators** get the Area and Goods panels only.
 
 Numbers show at most two decimals, and none from 100 up; from 10,000 they are compact (24.3k, 1.23M). A nonzero value too small to show reads "<0.01". Quantities that are whole by nature, such as people, workers, soldiers and days, show as whole numbers (24,312), compact only from a million.
 

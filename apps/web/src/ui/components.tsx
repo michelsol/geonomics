@@ -2,7 +2,10 @@
 import { type ReactNode, useEffect, useState } from "react";
 
 /** Up to `decimals` decimals, without trailing zeros: 3.10 → "3.1", 3.00 → "3". */
-const trim = (value: number, decimals: number) => value.toFixed(decimals).replace(/\.?0+$/, "");
+const trim = (value: number, decimals: number) => {
+  const fixed = value.toFixed(decimals);
+  return decimals > 0 ? fixed.replace(/\.?0+$/, "") : fixed; // only zeros after the point go
+};
 
 /** Compact form of a large number, three significant digits at most: 24,312 → 24.3k, 5,600,000 → 5.6M. */
 function compact(value: number): string {

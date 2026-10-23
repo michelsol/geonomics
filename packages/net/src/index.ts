@@ -1,3 +1,9 @@
-// Networking: PeerJS host and client, message types, snapshot and price table encoding.
-// Implementation starts at roadmap stage 9.
-export {};
+// Networking: PeerJS host and client, message types, snapshot and price table encoding (specification §9).
+export { type ClientOptions, ClientSession, type ConnectionState } from "./client";
+export { decode, encode } from "./codec";
+export { DETAIL_BATCH, DetailRotation } from "./detail";
+export { MAX_FRAME, pack, Reassembler, toFrames, unpack } from "./frames";
+export { BACKPRESSURE_BYTES, type HostGame, HostSession } from "./host";
+export { type Link, MessageLink, memoryLinks } from "./link";
+export * from "./messages";
+export { type BrokerOptions, connector, type HostPeer, openHost } from "./peer";

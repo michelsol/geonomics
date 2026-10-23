@@ -1,15 +1,15 @@
 // The selected area: public figures, resources, defense, and a sortable market table.
 import { useState } from "react";
 import { mapControls } from "../../map/MapView";
-import { capacityMaximum, conquestEstimate, detailOf, priceOf } from "../../state/selectors";
+import { capacityMaximum, conquestEstimate, detailOf, policiesInForce, priceOf } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { count, fmt, pct, Section, Stat, Swatch } from "../components";
-import { type PanelName, type PanelProps, useView } from "./common";
+import { type PanelName, type PanelProps, usePublicView } from "./common";
 
 const WAGE_HINT = "Mean value added per private worker-hour, weighted by workers, in man-hours (not a median).";
 
 export function AreaPanel({ onOpen }: PanelProps) {
-  const view = useView();
+  const view = usePublicView();
   const area = useGame((state) => state.selectedArea);
   if (!view) return <p className="muted">Waiting for the first snapshot…</p>;
   if (area === null) return <p className="muted">Click an area on the map.</p>;
@@ -18,12 +18,12 @@ export function AreaPanel({ onOpen }: PanelProps) {
   if (!static_) return null;
   const owner = snapshot.areas.owner[area] as number;
   const ownerSummary = owner >= 0 ? snapshot.governments[owner] : undefined;
-  const own = owner === government.id;
+  const own = government !== null && owner === government.id;
   const detail = detailOf(snapshot, area);
   const siege = snapshot.areas.siegeProgress[area] as number;
   const days = data.config.pace.gameDaysPerTick;
   const resources = data.goods.filter((good) => good.isPrimary && capacityMaximum(data, area, good.id) > 0);
-  const headTax = government.areaStates.find((s) => s.area === area)?.resolved.headTaxPerPersonPerDay;
+  const headTax = government ? policiesInForce(government, area, data.goods.length)?.headTaxPerPersonPerDay : undefined;
 
   return (
     <>
@@ -136,7 +136,7 @@ export function AreaPanel({ onOpen }: PanelProps) {
 /** Defenders of an area that is not the player's, and the force it takes to win. */
 /** Who defends an area: militia, the owner's armies and fortifications, and for others' areas what it takes to win. */
 function Defense({ area, own }: { area: number; own: boolean }) {
-  const view = useView();
+  const view = usePublicView();
   if (!view) return null;
   const estimate = conquestEstimate(view.data, view.snapshot, area);
   const militiaHint = `The militia is ${pct(view.data.config.military.militiaShare)} of the population, unequipped; it refills while no attacker is present.`;
@@ -210,7 +210,7 @@ function saveSort(sort: Sort): void {
 
 /** Prices of every good, plus stocks and flows where the snapshot carries them; columns sort on click. */
 function MarketTable({ area, onOpen }: { area: number; onOpen: (panel: PanelName) => void }) {
-  const view = useView();
+  const view = usePublicView();
   const table = useGame((state) => state.priceTable);
   const selectGood = useGame((state) => state.selectGood);
   const [sort, setSort] = useState(storedSort);

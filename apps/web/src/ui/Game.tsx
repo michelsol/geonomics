@@ -57,6 +57,52 @@ const FLOWS: { value: Flows; label: string }[] = [
 
 type SheetHeight = "peek" | "half" | "full";
 
+const SPECTATOR_PANELS: readonly PanelName[] = ["area", "good"];
+
+/** Keeps the host's screen on while its game runs and the tab is visible (specification §9, Hosting on mobile). */
+function useWakeLock(): void {
+  const running = useGame((state) => !state.status.paused && state.session.role !== "client");
+  useEffect(() => {
+    if (!running || !("wakeLock" in navigator)) return;
+    let lock: WakeLockSentinel | null = null;
+    let released = false;
+    navigator.wakeLock.request("screen").then(
+      (sentinel) => {
+        if (released) void sentinel.release();
+        else lock = sentinel;
+      },
+      () => {}, // refused (battery saver, no user gesture): the game runs anyway
+    );
+    return () => {
+      released = true;
+      void lock?.release();
+    };
+  }, [running]);
+}
+
+/** A joined player's connection and the host's state, when either keeps the game from running for them. */
+function StatusBanner() {
+  const session = useGame((state) => state.session);
+  const paused = useGame((state) => state.status.paused);
+  if (session.role !== "client") return null;
+  const text =
+    session.connection === "reconnecting" || session.connection === "connecting"
+      ? "Connection lost — reconnecting…"
+      : session.connection === "lost"
+        ? "The host is unreachable."
+        : session.hostHidden
+          ? "Host paused: its tab is hidden"
+          : paused
+            ? "Host paused"
+            : null;
+  if (!text) return null;
+  return (
+    <div className="status-banner" role="status" data-testid="status-banner">
+      {text}
+    </div>
+  );
+}
+
 const SIDE_WIDTH_DEFAULT = 380;
 const SIDE_WIDTH_MIN = 280;
 const SIDE_WIDTH_KEY = "geonomics.sideWidth";
@@ -81,10 +127,15 @@ function saveSideWidth(width: number): void {
 }
 
 export function Game() {
-  const [panel, setPanel] = useState<PanelName>("area");
+  const [chosenPanel, setPanel] = useState<PanelName>("area");
   const [sheet, setSheet] = useState<SheetHeight>("peek");
   const [sideWidth, setSideWidth] = useState(storedSideWidth);
+  // Spectators hold no realm: they see the map, areas and goods.
+  const spectator = useGame((state) => state.viewer === null);
+  const tabs = (Object.keys(PANELS) as PanelName[]).filter((name) => !spectator || SPECTATOR_PANELS.includes(name));
+  const panel = tabs.includes(chosenPanel) ? chosenPanel : "area";
   const View = PANELS[panel].view as (props: PanelProps) => ReactNode;
+  useWakeLock();
 
   useEffect(() => {
     // Space toggles pause; the game pauses while the tab is hidden.
@@ -117,6 +168,7 @@ export function Game() {
         <MapView />
         <Legends />
         <ModeBanner />
+        <StatusBanner />
         <Toasts />
       </div>
       <Divider
@@ -134,7 +186,7 @@ export function Game() {
           onClick={() => setSheet(sheet === "peek" ? "half" : sheet === "half" ? "full" : "peek")}
         />
         <nav className="tabs">
-          {(Object.keys(PANELS) as PanelName[]).map((name) => (
+          {tabs.map((name) => (
             <button type="button" key={name} className={name === panel ? "active" : ""} onClick={() => openPanel(name)}>
               {PANELS[name].label}
             </button>
@@ -198,23 +250,31 @@ function TopBar() {
   const layer = useGame((state) => state.layer);
   const flows = useGame((state) => state.flows);
   const { setSpeed, togglePause, setLayer, setFlows } = gameStore.getState();
+  const client = useGame((state) => state.session.role === "client");
+  const speedLabel = SPEEDS.find((s) => s.speed === status.speed)?.label ?? String(status.speed);
   return (
     <header className="topbar">
-      <div className="group">
-        <button type="button" onClick={togglePause} aria-label={status.paused ? "Resume" : "Pause"}>
-          {status.paused ? "▶" : "❚❚"}
-        </button>
-        {SPEEDS.map(({ speed, label }) => (
-          <button
-            type="button"
-            key={label}
-            className={!status.paused && status.speed === speed ? "active" : ""}
-            onClick={() => setSpeed(speed)}
-          >
-            {label}
+      {client ? (
+        <span className="stat" data-testid="host-status" title="Only the host controls time">
+          {status.paused ? "Paused" : `Running ${speedLabel}`}
+        </span>
+      ) : (
+        <div className="group">
+          <button type="button" onClick={togglePause} aria-label={status.paused ? "Resume" : "Pause"}>
+            {status.paused ? "▶" : "❚❚"}
           </button>
-        ))}
-      </div>
+          {SPEEDS.map(({ speed, label }) => (
+            <button
+              type="button"
+              key={label}
+              className={!status.paused && status.speed === speed ? "active" : ""}
+              onClick={() => setSpeed(speed)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       <span className="stat" data-testid="game-day">
         Day {Math.floor(day)}
       </span>

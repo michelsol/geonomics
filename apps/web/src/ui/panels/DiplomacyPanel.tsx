@@ -10,6 +10,7 @@ export function DiplomacyPanel() {
   const send = useSend();
   const peaceAreas = useGame((state) => state.peaceAreas);
   const setMode = useGame((state) => state.setMode);
+  const players = useGame((state) => state.session.players);
   const [target, setTarget] = useState(-1);
   const [payment, setPayment] = useState(0);
   const [days, setDays] = useState(30);
@@ -52,7 +53,10 @@ export function DiplomacyPanel() {
             >
               <span>
                 <Swatch color={g.color} />
-                {g.name} <span className="muted">· {g.areaCount} areas</span>
+                {g.name}{" "}
+                <span className="muted">
+                  {players.find((p) => p.government === g.id)?.name ?? "AI"} · {g.areaCount} areas
+                </span>
               </span>
               {relation === "war" ? (
                 <strong style={{ color: "var(--danger)" }}>at war</strong>

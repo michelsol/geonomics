@@ -3,10 +3,10 @@ import { priceExtremes, priceOf } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { Chart } from "../Chart";
 import { fmt, Section, Select } from "../components";
-import { AreaLink, areaName, goodOptions, useView } from "./common";
+import { AreaLink, areaName, goodOptions, usePublicView } from "./common";
 
 export function GoodPanel() {
-  const view = useView();
+  const view = usePublicView();
   const good = useGame((state) => state.selectedGood);
   const table = useGame((state) => state.priceTable);
   const history = useGame((state) => state.history);

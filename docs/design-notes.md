@@ -213,3 +213,31 @@ Every area starts in a realm: the realms split the map by distance to the neares
 Capital placement scored an area no capital reached (an island) as infinitely far, so every island tied for the next capital and the first one in id order won. Such areas now count one hop beyond the farthest reachable area: islands still come early, ranked by population.
 
 The flows moved to their own dropdown so they can be read against any area layer, such as migration over population or trade over prices. Arrows keep their dark outline, so the dimmed realm colors under them were dropped.
+
+## Multiplayer (roadmap stage 9)
+
+### Snapshot sizes
+
+Measured on the default 1,000-area map with the large catalog and 8 realms (seed 1), for the largest realm (193 areas, 233 visible):
+
+| Step | Snapshot | Price table |
+| --- | --- | --- |
+| msgpack with typed arrays, sparse floats included | 856 KB | 106 KB |
+| without the resolved policies (7 per-good arrays per owned area, 270 KB) | 584 KB | |
+| deflated | 256 KB | 89 KB |
+| detail in turns: the focused area and 48 visible areas per snapshot | 103 KB | 89 KB |
+
+The budget is a snapshot plus the price table under 300 KB: 192 KB with the last step, against 345 KB without it. A spectator's snapshot is 57 KB. Area detail (prices, stocks and flows of 54 goods in each visible area) is most of a large realm's snapshot and compresses poorly, since its floats change every tick. Sent in turns at 3 snapshots per second, every visible area is refreshed within about 1.6 seconds, and the area the player looks at in every snapshot. The `net` size test checks the budget.
+
+### Ordering and flow control
+
+Packing is asynchronous (the deflate streams), so each link sends through a promise chain, and the worker chains each viewer's snapshots, so messages leave in the order they were made. Data channels are reliable and ordered, and frames of one message never interleave with another's. A player whose channel backs up beyond 1 MiB loses snapshots rather than piling them up: the next one carries the whole state anyway.
+
+### Who commands
+
+The host builds every command's envelope from the connection the command arrived on: the player token identifies the government, and a message cannot claim to act for someone else. The sim's validation then applies as for any player, so a joined player commanding another realm's area is rejected with the usual reason, routed back to that player only.
+
+### Testing the network
+
+The tests never touch the PeerJS cloud. The session logic runs in Node over in-memory link pairs. The two-browser Playwright test uses a PeerServer that Playwright starts on port 9000, with `?peer=localhost:9000` in the URL; browser contexts on one machine connect over host candidates, without STUN.
+

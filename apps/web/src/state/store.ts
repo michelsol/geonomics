@@ -1,12 +1,14 @@
-// Interface state (specification §10): fed by worker messages, read by React panels and the map renderer.
-import type { Command, GovernmentSummary, Snapshot, StaticData, StaticEdge } from "@geonomics/sim";
+// Interface state (specification §10): fed by worker messages, or by the host's messages when joined, and read by
+// React panels and the map renderer.
+import type { ConnectionState, LobbyPlayer } from "@geonomics/net";
+import type { AreaDetail, Command, GovernmentSummary, Snapshot, StaticData, StaticEdge } from "@geonomics/sim";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { FromWorker, GameOptions, HostStatus, Speed, ToWorker } from "../host/protocol";
 import { History } from "./history";
 import { priceExtremes, priceOf, realmPopulation } from "./selectors";
 
-export type Screen = "newGame" | "chooseRealm" | "game" | "ended";
+export type Screen = "newGame" | "join" | "chooseRealm" | "game" | "ended";
 export type Layer = "realms" | "population" | "prices" | "resources" | "satisfaction" | "wage" | "terrain";
 export type Flows = "none" | "migration" | "transport"; // arrows drawn over the area layer
 export type Mode = { kind: "select" } | { kind: "moveArmy"; army: number } | { kind: "pickPeaceAreas" };
@@ -28,6 +30,29 @@ export interface Summary {
 export interface Port {
   postMessage(message: ToWorker): void;
 }
+
+/** Solo, hosting or joined: who runs the game and who else is in it (specification §9, Joining). */
+export interface Session {
+  role: "solo" | "host" | "client";
+  link: string | null; // the join link, once hosting
+  players: LobbyPlayer[];
+  me: LobbyPlayer | null; // a joined player's own entry
+  started: boolean; // the host has chosen its realm and the game runs
+  connection: ConnectionState | null; // a joined player's link to the host
+  hostHidden: boolean; // the host's tab is hidden, which pauses the game
+  refused: string | null; // why the host refused a joined player
+}
+
+const SOLO: Session = {
+  role: "solo",
+  link: null,
+  players: [],
+  me: null,
+  started: false,
+  connection: null,
+  hostHidden: false,
+  refused: null,
+};
 
 export interface GameState {
   screen: Screen;
@@ -52,9 +77,13 @@ export interface GameState {
   toasts: Toast[];
   peakPopulation: number;
   summary: Summary | null;
+  session: Session;
 
   newGame(options: GameOptions): void;
-  chooseRealm(government: number): void;
+  chooseRealm(government: number | null): void; // null: watch as a spectator
+  setSession(session: Partial<Session>): void;
+  /** A joined player's role, from the host: in the game once it holds a realm or watches. */
+  enterAs(you: LobbyPlayer): void;
   send(command: Command): void;
   setSpeed(speed: Speed): void;
   togglePause(): void;
@@ -103,15 +132,31 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     toasts: [],
     peakPopulation: 0,
     summary: null,
+    session: SOLO,
 
     newGame(options) {
       set({ screen: "newGame", progress: { stage: "Starting", done: 0 }, data: null, snapshot: null, summary: null });
       port.postMessage({ type: "create", options });
     },
     chooseRealm(government) {
-      const capital = get().governments[government]?.capital ?? null;
-      set({ viewer: government, screen: "game", selectedArea: capital, peakPopulation: 0 });
       port.postMessage({ type: "start", government });
+      // A joined player enters once the host accepts the choice (enterAs); the host enters at once.
+      if (get().session.role === "client") return;
+      const capital = government === null ? null : (get().governments[government]?.capital ?? null);
+      set({ viewer: government, screen: "game", selectedArea: capital, peakPopulation: 0 });
+    },
+    setSession(session) {
+      set({ session: { ...get().session, ...session } });
+    },
+    enterAs(you) {
+      set({ session: { ...get().session, me: you } });
+      if (you.role === "choosing") {
+        if (get().screen === "game") set({ screen: "chooseRealm", snapshot: null });
+        return;
+      }
+      if (get().screen === "game" && get().viewer === you.government) return;
+      const capital = you.government === null ? null : (get().governments[you.government]?.capital ?? null);
+      set({ viewer: you.government, screen: "game", selectedArea: capital, peakPopulation: 0 });
     },
     send(command) {
       port.postMessage({ type: "command", command });
@@ -132,6 +177,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     },
     backToMenu() {
       set({ screen: "newGame", progress: null, snapshot: null, data: null, summary: null, status: IDLE_STATUS });
+      port.postMessage({ type: "pause" }); // nothing runs behind the menu
     },
     clickArea(area) {
       const { mode } = get();
@@ -145,6 +191,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     selectArea(area) {
       if (area !== null) get().history?.track(area);
       set({ selectedArea: area });
+      port.postMessage({ type: "focus", player: "local", area });
     },
     selectGood(good) {
       set({ selectedGood: good });
@@ -205,7 +252,8 @@ export function createGameStore(port: Port): StoreApi<GameState> {
           return;
         case "snapshot": {
           if (state.screen !== "game") return;
-          const { snapshot } = message;
+          // Joined players receive area detail in turns: keep the last detail of each area still visible.
+          const snapshot = withDetailOf(message.snapshot, state.snapshot);
           const history = state.history;
           const population = realmPopulation(snapshot);
           if (history && snapshot.government) {
@@ -273,6 +321,16 @@ function firstNecessityGood(data: StaticData): number {
   return good?.id ?? 0;
 }
 
+/** The snapshot with the detail of every visible area, taking what it lacks from the previous snapshot. */
+function withDetailOf(snapshot: Snapshot, previous: Snapshot | null): Snapshot {
+  if (snapshot.detail.length === snapshot.visibleAreas.length) return snapshot;
+  const known = new Map<number, AreaDetail>();
+  for (const detail of previous?.detail ?? []) known.set(detail.area, detail);
+  for (const detail of snapshot.detail) known.set(detail.area, detail);
+  const detail = snapshot.visibleAreas.flatMap((area) => known.get(area) ?? []);
+  return { ...snapshot, detail };
+}
+
 function summarize(state: GameState, eliminated: boolean): Summary {
   const snapshot = state.snapshot;
   return {
@@ -285,18 +343,31 @@ function summarize(state: GameState, eliminated: boolean): Summary {
   };
 }
 
-/** The app's store, connected to the simulation worker by `connectWorker`. */
-const workerPort: Port & { target: Port | null } = {
+/** The app's store, connected to the simulation worker by `connectWorker`, or to a host by the client module. */
+const appPort: Port & { target: Port | null } = {
   target: null,
   postMessage(message) {
     this.target?.postMessage(message);
   },
 };
-export const gameStore = createGameStore(workerPort);
+export const gameStore = createGameStore(appPort);
 
-export function connectWorker(worker: Worker): void {
-  workerPort.target = worker;
-  worker.onmessage = (event: MessageEvent<FromWorker>) => gameStore.getState().receive(event.data);
+/** Where the store's messages go: the worker, or a host's connection for a joined player. */
+export function setPortTarget(target: Port): void {
+  appPort.target = target;
+}
+
+/** Sends a message to the worker directly, as the host does for its joined players. */
+export function postToWorker(message: ToWorker): void {
+  appPort.target?.postMessage(message);
+}
+
+/** Feeds the store from the worker; `route` takes the messages meant for joined players first. */
+export function connectWorker(worker: Worker, route: (message: FromWorker) => boolean = () => false): void {
+  appPort.target = worker;
+  worker.onmessage = (event: MessageEvent<FromWorker>) => {
+    if (!route(event.data)) gameStore.getState().receive(event.data);
+  };
 }
 
 export function useGame<T>(selector: (state: GameState) => T): T {

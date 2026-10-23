@@ -25,35 +25,38 @@ function handle(message: ToWorker): void {
   switch (message.type) {
     case "create": {
       loop?.stop();
-      loop = null;
       world = createGame(message.options, (stage, done) => post({ type: "progress", stage, done }));
-      post({ type: "static", data: buildStaticData(world), governments: buildSnapshot(world, null).governments });
-      return;
-    }
-    case "start": {
-      if (!world) return;
-      const government = world.governments[message.government];
-      if (!government) return;
-      government.controller = { kind: "human", player: LOCAL_PLAYER };
+      // The loop exists from the start, paused, so players can join while the host chooses its realm.
       loop = new HostLoop({
         world,
-        viewer: government.id,
         post,
         now: () => performance.now(),
         schedule: (callback, delay) => setTimeout(callback, delay),
       });
+      post({ type: "static", data: buildStaticData(world), governments: buildSnapshot(world, null).governments });
+      return;
+    }
+    case "start":
+      if (!world || !loop) return;
+      if (message.government !== null && !world.governments[message.government]) return;
+      loop.setPlayer(LOCAL_PLAYER, message.government, true);
       loop.publish();
       loop.resume();
       return;
-    }
+    case "player":
+      loop?.setPlayer(message.player, message.government, message.watching);
+      return;
     case "command":
-      loop?.enqueue(message.command);
+      loop?.enqueue(message.command, message.player);
       return;
     case "setSpeed":
       loop?.setSpeed(message.speed);
       return;
     case "setFlowGood":
-      loop?.setFlowGood(message.good);
+      loop?.setFlowGood(message.good, message.player);
+      return;
+    case "focus":
+      loop?.focus(message.player, message.area);
       return;
     case "pause":
       loop?.pause();

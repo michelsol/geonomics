@@ -1,6 +1,9 @@
 // Host loop (specification §9, Host loop): drains the command queue, runs ticks at the target speed and posts
-// snapshots and price tables at their wall-clock rates. Clock and scheduler are injected so it runs in tests.
+// snapshots and price tables at their wall-clock rates, one snapshot per viewer: the local player, and every joined
+// player or spectator. Clock and scheduler are injected so it runs in tests.
+import { DetailRotation, pack } from "@geonomics/net/worker";
 import {
+  type AreaId,
   applyCommands,
   buildSnapshot,
   type Command,
@@ -8,6 +11,7 @@ import {
   encodePriceTable,
   type GoodId,
   type GovernmentId,
+  type PlayerId,
   runTick,
   snapshotTransferables,
   type World,
@@ -16,50 +20,87 @@ import { type FromWorker, type HostStatus, LOCAL_PLAYER, type Speed } from "./pr
 
 export interface HostLoopOptions {
   world: World;
-  viewer: GovernmentId;
   post: (message: FromWorker, transfer?: Transferable[]) => void;
   now: () => number; // milliseconds
   schedule: (callback: () => void, delayMs: number) => void;
   speed?: Speed;
 }
 
+interface Viewer {
+  government: GovernmentId | null; // null: a spectator
+  flowGood: GoodId | null;
+  knownEdges: number; // edges the viewer already has, from static data or earlier snapshots
+  rotation: DetailRotation | null; // remote viewers get area detail in turns; the local one gets all of it
+  sending: Promise<void>; // packing is asynchronous: this chain keeps a remote viewer's snapshots in order
+}
+
 const MS_PER_TICK_SMOOTHING = 0.1;
 
 export class HostLoop {
   readonly world: World;
-  private readonly viewer: GovernmentId;
   private readonly post: HostLoopOptions["post"];
   private readonly now: () => number;
   private readonly schedule: HostLoopOptions["schedule"];
-  private queue: Command[] = [];
+  private readonly viewers = new Map<PlayerId, Viewer>();
+  private readonly staticEdges: number; // edges in the static data newcomers receive
+  private queue: { player: PlayerId; command: Command }[] = [];
   private paused = true;
   private stopped = false;
   private scheduled = false;
   private speed: Speed;
-  private knownEdges: number;
   private lastSnapshot = Number.NEGATIVE_INFINITY;
   private lastPriceTable = Number.NEGATIVE_INFINITY;
   private recentTicks: number[] = []; // wall times of the ticks in the last second
   private msPerTick = 0;
-  private flowGood: GoodId | null = null;
 
   constructor(options: HostLoopOptions) {
     this.world = options.world;
-    this.viewer = options.viewer;
     this.post = options.post;
     this.now = options.now;
     this.schedule = options.schedule;
     this.speed = options.speed ?? 5;
-    this.knownEdges = options.world.edges.length;
+    this.staticEdges = options.world.edges.length;
   }
 
-  /** Queues a command from the local player; while paused it is applied at once, as no tick runs in between. */
-  enqueue(command: Command): void {
+  /**
+   * Gives `player` the government (null: none) and, while `watching`, snapshots for it. Any government the player
+   * held before goes back to the idle AI. A new remote viewer gets a snapshot at once.
+   */
+  setPlayer(player: PlayerId, government: GovernmentId | null, watching: boolean): void {
+    for (const g of this.world.governments) {
+      if (g.controller.kind === "human" && g.controller.player === player && g.id !== government)
+        g.controller = { kind: "ai", personality: "idle" };
+    }
+    const held = government === null ? undefined : this.world.governments[government];
+    if (held) held.controller = { kind: "human", player };
+    if (!watching) {
+      this.viewers.delete(player);
+      return;
+    }
+    const viewer = this.viewers.get(player);
+    if (viewer) viewer.government = government;
+    else {
+      this.viewers.set(player, {
+        government,
+        flowGood: null,
+        knownEdges: this.staticEdges,
+        rotation: player === LOCAL_PLAYER ? null : new DetailRotation(),
+        sending: Promise.resolve(),
+      });
+      if (player !== LOCAL_PLAYER) {
+        this.emitSnapshot(player);
+        this.emitPriceTable(true);
+      }
+    }
+  }
+
+  /** Queues a command from a player; while paused it is applied at once, as no tick runs in between. */
+  enqueue(command: Command, player: PlayerId = LOCAL_PLAYER): void {
     if (this.stopped) return;
     if (this.paused) {
-      this.reportRejections(applyCommands(this.world, [this.envelope(command)]));
+      this.reportRejections(applyCommands(this.world, [this.envelope(player, command)]));
       this.emitSnapshot();
-    } else this.queue.push(command);
+    } else this.queue.push({ player, command });
   }
 
   pause(): void {
@@ -74,11 +115,18 @@ export class HostLoop {
     this.wake(0);
   }
 
-  /** Chooses the good whose trade flows snapshots carry; while paused the next snapshot goes out at once. */
-  setFlowGood(good: GoodId | null): void {
-    if (this.stopped || good === this.flowGood) return;
-    this.flowGood = good;
-    if (this.paused) this.emitSnapshot();
+  /** Chooses the good whose trade flows a viewer's snapshots carry; while paused its next snapshot goes out at once. */
+  setFlowGood(good: GoodId | null, player: PlayerId = LOCAL_PLAYER): void {
+    const viewer = this.viewers.get(player);
+    if (this.stopped || !viewer || good === viewer.flowGood) return;
+    viewer.flowGood = good;
+    if (this.paused) this.emitSnapshot(player);
+  }
+
+  /** The area a remote player looks at: its detail comes in every snapshot. */
+  focus(player: PlayerId, area: AreaId | null): void {
+    const rotation = this.viewers.get(player)?.rotation;
+    if (rotation) rotation.focus = area;
   }
 
   setSpeed(speed: Speed): void {
@@ -91,15 +139,19 @@ export class HostLoop {
     this.paused = true;
   }
 
-  /** Posts the current state at once: a snapshot, the price table and the status. */
+  /** Posts the current state at once: snapshots, the price table and the status. */
   publish(): void {
     this.emitSnapshot();
     this.emitPriceTable();
     this.emitStatus();
   }
 
-  private envelope(command: Command): CommandEnvelope {
-    return { player: LOCAL_PLAYER, government: this.viewer, command };
+  /** A command acts for the government its player controls; the validation rejects it if there is none. */
+  private envelope(player: PlayerId, command: Command): CommandEnvelope {
+    const government = this.world.governments.findIndex(
+      (g) => g.controller.kind === "human" && g.controller.player === player,
+    );
+    return { player, government, command };
   }
 
   private wake(delayMs: number): void {
@@ -119,7 +171,7 @@ export class HostLoop {
     this.reportRejections(
       runTick(
         this.world,
-        commands.map((command) => this.envelope(command)),
+        commands.map(({ player, command }) => this.envelope(player, command)),
       ),
     );
     const finished = this.now();
@@ -142,20 +194,45 @@ export class HostLoop {
   }
 
   private reportRejections(rejections: ReturnType<typeof runTick>): void {
-    for (const { envelope, reason } of rejections) this.post({ type: "rejected", command: envelope.command, reason });
+    for (const { envelope, reason } of rejections)
+      this.post({ type: "rejected", to: envelope.player, command: envelope.command, reason });
   }
 
-  private emitSnapshot(): void {
-    const snapshot = buildSnapshot(this.world, this.viewer, this.knownEdges, { flowGood: this.flowGood });
-    this.knownEdges = this.world.edges.length;
+  /** A snapshot for every viewer, or only `only`. */
+  private emitSnapshot(only?: PlayerId): void {
     this.lastSnapshot = this.now();
-    this.post({ type: "snapshot", snapshot }, snapshotTransferables(snapshot));
+    for (const [player, viewer] of this.viewers) {
+      if (only !== undefined && player !== only) continue;
+      const snapshot = buildSnapshot(this.world, viewer.government, viewer.knownEdges, {
+        flowGood: viewer.flowGood,
+        detailAreas: viewer.rotation?.pick,
+      });
+      viewer.knownEdges = this.world.edges.length;
+      if (!viewer.rotation) {
+        this.post({ type: "snapshot", snapshot }, snapshotTransferables(snapshot));
+        continue;
+      }
+      viewer.sending = viewer.sending.then(async () => {
+        const bytes = await pack({ type: "snapshot", snapshot });
+        this.post({ type: "remote", to: player, bytes }, [bytes.buffer as ArrayBuffer]);
+      });
+    }
   }
 
-  private emitPriceTable(): void {
-    const table = encodePriceTable(this.world);
-    this.lastPriceTable = this.now();
-    this.post({ type: "priceTable", tick: this.world.tick, gameDay: this.world.gameDay, table }, [table.buffer]);
+  /** The price table for the local viewer and, packed once, for every remote one. */
+  private emitPriceTable(remoteOnly = false): void {
+    const { tick, gameDay } = this.world;
+    if (!remoteOnly) this.lastPriceTable = this.now();
+    if (!remoteOnly && this.viewers.has(LOCAL_PLAYER)) {
+      const table = encodePriceTable(this.world);
+      this.post({ type: "priceTable", tick, gameDay, table }, [table.buffer]);
+    }
+    if ([...this.viewers.values()].some((viewer) => viewer.rotation)) {
+      const table = encodePriceTable(this.world);
+      void pack({ type: "priceTable", tick, gameDay, table }).then((bytes) =>
+        this.post({ type: "remote", to: null, bytes }, [bytes.buffer as ArrayBuffer]),
+      );
+    }
   }
 
   private emitStatus(): void {

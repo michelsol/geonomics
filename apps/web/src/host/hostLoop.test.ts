@@ -1,3 +1,5 @@
+import { unpack } from "@geonomics/net";
+import type { Snapshot } from "@geonomics/sim";
 import { describe, expect, it } from "vitest";
 import { createGame } from "./createGame";
 import { HostLoop } from "./hostLoop";
@@ -30,7 +32,8 @@ function setup(speed: number | "max" = 5) {
   (world.governments[0] as (typeof world.governments)[number]).controller = { kind: "human", player: LOCAL_PLAYER };
   const time = fakeTime();
   const messages: FromWorker[] = [];
-  const loop = new HostLoop({ world, viewer: 0, post: (m) => messages.push(m), ...time, speed });
+  const loop = new HostLoop({ world, post: (m) => messages.push(m), ...time, speed });
+  loop.setPlayer(LOCAL_PLAYER, 0, true);
   const count = (type: FromWorker["type"]) => messages.filter((m) => m.type === type).length;
   return { world, time, messages, loop, count };
 }
@@ -104,6 +107,45 @@ describe("HostLoop", () => {
         .slice(2)
         .every((s) => s.edges.goodFlow !== null),
     ).toBe(true);
+  });
+
+  it("sends each joined player its own snapshot, packed, and spectators public data only", async () => {
+    const { world, messages, loop } = setup(5);
+    (world.governments[1] as (typeof world.governments)[number]).controller = { kind: "ai", personality: "idle" };
+    loop.setPlayer("bob", 1, true);
+    loop.setPlayer("eve", null, true);
+    expect(world.governments[1]?.controller).toEqual({ kind: "human", player: "bob" });
+    await new Promise((resolve) => setTimeout(resolve, 50)); // packing is asynchronous
+    const remote = messages.flatMap((m) => (m.type === "remote" ? [m] : []));
+    const unpacked = await Promise.all(remote.map(async (m) => ({ to: m.to, message: await unpack(m.bytes) })));
+    const snapshotFor = (player: string) =>
+      unpacked.find((u) => u.to === player && (u.message as { type: string }).type === "snapshot")?.message as
+        | { snapshot: Snapshot }
+        | undefined;
+    expect(snapshotFor("bob")?.snapshot.government?.id).toBe(1);
+    expect(snapshotFor("bob")?.snapshot.detail.length).toBeGreaterThan(0);
+    expect(snapshotFor("eve")?.snapshot.government).toBeNull();
+    expect(snapshotFor("eve")?.snapshot.detail).toEqual([]);
+    expect(unpacked.some((u) => u.to === null && (u.message as { type: string }).type === "priceTable")).toBe(true);
+
+    // Taking another realm gives the first back to the idle AI; stopping to watch keeps the realm.
+    loop.setPlayer("bob", 2, false);
+    expect(world.governments[1]?.controller.kind).toBe("ai");
+    expect(world.governments[2]?.controller).toEqual({ kind: "human", player: "bob" });
+  });
+
+  it("applies a joined player's commands for its own realm only, and routes rejections back", () => {
+    const { world, messages, loop } = setup(5);
+    loop.setPlayer("bob", 1, true);
+    const own = world.governments[1]?.capital as number;
+    const other = world.governments[0]?.capital as number;
+    loop.enqueue({ type: "setWageOffer", area: own, wageOffer: 2 }, "bob");
+    expect(world.governments[1]?.areaStates.get(own)?.wageOffer).toBe(2);
+    loop.enqueue({ type: "setWageOffer", area: other, wageOffer: 2 }, "bob");
+    expect(world.governments[0]?.areaStates.get(other)?.wageOffer).toBe(1);
+    expect(messages.find((m) => m.type === "rejected")).toMatchObject({ to: "bob" });
+    loop.enqueue({ type: "setWageOffer", area: own, wageOffer: 2 }, "nobody");
+    expect(messages.filter((m) => m.type === "rejected").at(-1)).toMatchObject({ to: "nobody" });
   });
 
   it("runs back to back at max speed, yielding through the scheduler", () => {

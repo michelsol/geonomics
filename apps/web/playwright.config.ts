@@ -14,9 +14,17 @@ export default defineConfig({
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
     { name: "phone", use: { ...devices["Pixel 7"] } },
   ],
-  webServer: {
-    command: `pnpm build && pnpm preview --port ${port} --strictPort`,
-    url: `http://localhost:${port}`,
-    reuseExistingServer: !process.env.CI,
-  },
+  webServer: [
+    {
+      command: `pnpm build && pnpm preview --port ${port} --strictPort`,
+      url: `http://localhost:${port}`,
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      // The multiplayer tests sign their connections through a local PeerServer, not the PeerJS cloud.
+      command: "node scripts/peer-server.mjs",
+      url: "http://localhost:9000",
+      reuseExistingServer: !process.env.CI,
+    },
+  ],
 });

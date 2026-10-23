@@ -13,6 +13,14 @@ export interface View {
   government: GovernmentView;
 }
 
+/** Static data and the latest snapshot, with the player's government if it holds one (spectators do not). */
+export function usePublicView(): (Omit<View, "government"> & { government: GovernmentView | null }) | null {
+  const data = useGame((state) => state.data);
+  const snapshot = useGame((state) => state.snapshot);
+  if (!data || !snapshot) return null;
+  return { data, snapshot, government: snapshot.government };
+}
+
 /** Static data, the latest snapshot and the player's government, once the first snapshot arrived. */
 export function useView(): View | null {
   const data = useGame((state) => state.data);

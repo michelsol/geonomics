@@ -3,6 +3,7 @@ import { realmPopulation } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { Chart } from "../Chart";
 import { count, fmt, Section, Stat, Swatch } from "../components";
+import { Invite, Players } from "../Players";
 import { AreaLink, useView } from "./common";
 
 export function GovernmentPanel() {
@@ -10,6 +11,7 @@ export function GovernmentPanel() {
   const history = useGame((state) => state.history);
   useGame((state) => state.historyVersion);
   const endGame = useGame((state) => state.endGame);
+  const client = useGame((state) => state.session.role === "client");
   if (!view) return null;
   const { data, snapshot, government } = view;
   const summary = snapshot.governments[government.id];
@@ -58,9 +60,14 @@ export function GovernmentPanel() {
         </Section>
       )}
 
+      <Section title="Players">
+        <Players />
+        <Invite />
+      </Section>
+
       <Section title="Session">
         <button type="button" className="danger" onClick={endGame}>
-          End game
+          {client ? "Leave game" : "End game"}
         </button>
       </Section>
     </>

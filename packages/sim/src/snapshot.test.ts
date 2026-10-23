@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { neutralPolicies, resolveSettings } from "./government";
 import {
   buildSnapshot,
   buildStaticData,
@@ -30,7 +31,12 @@ describe("snapshots", () => {
     const snapshot = buildSnapshot(world, 0);
     expect(snapshot.government?.id).toBe(0);
     expect(snapshot.government?.areaStates.map((s) => s.area)).toEqual([0, 1, 2]);
-    expect(snapshot.government?.areaStates[0]?.resolved.headTaxPerPersonPerDay).toBe(0.2);
+    // The settings travel, not their resolution: the receiver resolves them as the host does.
+    const state = snapshot.government?.areaStates[0];
+    const resolved = neutralPolicies(world.goods.length);
+    resolveSettings(resolved, snapshot.government?.realmPolicies ?? [], state?.policyOverrides ?? []);
+    expect(resolved.headTaxPerPersonPerDay).toBe(0.2);
+    expect(state).not.toHaveProperty("resolved");
     expect(snapshot.governments[1]).toMatchObject({ id: 1, areaCount: 1, capital: 3, isEliminated: false });
     expect(snapshot.governments[1]).not.toHaveProperty("treasury");
     expect(Array.from(snapshot.areas.owner)).toEqual([0, 0, 0, 1]);
@@ -72,10 +78,22 @@ describe("snapshots", () => {
     const buffers = snapshotTransferables(snapshot);
     expect(new Set(buffers).size).toBe(buffers.length);
     // Areas, edges (transport cost, capacity, flags, tonnage, migration), area details, area states.
-    expect(buffers.length).toBe(11 + 5 + 4 * 8 + 3 * 7);
+    // Areas, edges (transport cost, capacity, flags, tonnage, migration), area details, depots.
+    expect(buffers.length).toBe(11 + 5 + 4 * 8 + 3);
     expect(snapshotTransferables(buildSnapshot(realmWorld(), 0, undefined, { flowGood: 0 })).length).toBe(
       buffers.length + 1,
     );
+  });
+
+  it("list the visible areas, and send the detail of those the options pick", () => {
+    const world = realmWorld();
+    const full = buildSnapshot(world, 0);
+    expect(full.visibleAreas).toEqual([0, 1, 2, 3]);
+    expect(full.detail.map((d) => d.area)).toEqual([0, 1, 2, 3]);
+    const some = buildSnapshot(world, 0, undefined, { detailAreas: (visible) => visible.slice(1, 3) });
+    expect(some.visibleAreas).toEqual([0, 1, 2, 3]);
+    expect(some.detail.map((d) => d.area)).toEqual([1, 2]);
+    expect(buildSnapshot(world, null).visibleAreas).toEqual([]);
   });
 
   it("carry the last tick's migration and trade per edge and day", () => {

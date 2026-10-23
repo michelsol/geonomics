@@ -221,8 +221,18 @@ export function neutralPolicies(goodCount: number): ResolvedPolicies {
  */
 export function resolvePolicies(government: Government, area: AreaId): void {
   const state = government.areaStates.get(area);
-  if (!state) return;
-  const resolved = state.resolvedPolicies;
+  if (state) resolveSettings(state.resolvedPolicies, government.realmPolicies, state.policyOverrides);
+}
+
+/**
+ * Writes into `resolved` the policies in force from realm settings and area overrides, as resolvePolicies does. Also
+ * used by clients, which receive the settings but not their resolution.
+ */
+export function resolveSettings(
+  resolved: ResolvedPolicies,
+  realmPolicies: readonly PolicySetting[],
+  overrides: readonly PolicySetting[],
+): void {
   resolved.productionTaxRate.fill(0);
   resolved.consumptionTaxRate.fill(0);
   resolved.importTariffRate.fill(0);
@@ -230,7 +240,7 @@ export function resolvePolicies(government: Government, area: AreaId): void {
   resolved.headTaxPerPersonPerDay = 0;
   resolved.priceCeiling.fill(Number.POSITIVE_INFINITY);
   resolved.priceFloor.fill(0);
-  for (const settings of [government.realmPolicies, state.policyOverrides]) {
+  for (const settings of [realmPolicies, overrides]) {
     for (const setting of settings) if (setting.good === null) applySetting(resolved, setting);
     for (const setting of settings) if (setting.good !== null) applySetting(resolved, setting);
   }

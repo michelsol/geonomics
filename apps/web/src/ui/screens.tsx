@@ -1,8 +1,11 @@
 // New game, realm choice and end-of-session screens (specification §10, Screens).
 import { useState } from "react";
 import type { CatalogName } from "../host/protocol";
+import { hostEntered, stopHosting } from "../net/host";
+import { joinTarget, savedName } from "../net/options";
 import { useGame } from "../state/store";
 import { count, fmt, Select, Swatch } from "./components";
+import { Invite, Players } from "./Players";
 
 const SIZES = [
   { value: 300, label: "Small — 300 areas" },
@@ -58,6 +61,7 @@ export function NewGame() {
             className="section"
             onSubmit={(event) => {
               event.preventDefault();
+              stopHosting();
               newGame({ catalog, areas, seed, realms, warmupDays: warmupOverride() });
             }}
           >
@@ -92,30 +96,109 @@ export function NewGame() {
   );
 }
 
+/** The lobby: every realm and who holds it; the host invites, and everyone picks a free realm or watches. */
 export function ChooseRealm() {
   const governments = useGame((state) => state.governments);
   const data = useGame((state) => state.data);
+  const session = useGame((state) => state.session);
   const chooseRealm = useGame((state) => state.chooseRealm);
+  // Someone else holding the realm: for the host, every joined player; for a joined player, the host too.
+  const me = session.me?.id ?? "local";
+  const holder = (government: number) => session.players.find((p) => p.government === government && p.id !== me);
+  const free = governments.filter((g) => !g.isEliminated && !holder(g.id));
+  const client = session.role === "client";
+  const pick = (government: number | null) => {
+    chooseRealm(government);
+    if (!client) hostEntered(government);
+  };
   return (
     <main className="screen">
       <div className="card">
         <h2>Choose your realm</h2>
+        {client && (
+          <p className="muted">
+            {session.started ? "The game is running." : "The host has not started yet."} Pick a free realm or watch.
+          </p>
+        )}
         <div className="realm-list">
-          {governments.map((government) => (
-            <button type="button" key={government.id} onClick={() => chooseRealm(government.id)}>
-              <span>
-                <Swatch color={government.color} />
-                {government.capital === null ? government.name : data?.areas[government.capital]?.name}
-              </span>
-              <span className="muted">
-                {government.areaCount} areas · {count(government.population)} people
-              </span>
-            </button>
-          ))}
+          {governments.map((government) => {
+            const held = holder(government.id);
+            return (
+              <button
+                type="button"
+                key={government.id}
+                disabled={held !== undefined || government.isEliminated}
+                onClick={() => pick(government.id)}
+              >
+                <span>
+                  <Swatch color={government.color} />
+                  {government.capital === null ? government.name : data?.areas[government.capital]?.name}
+                </span>
+                <span className="muted">
+                  {held ? `${held.name} · ` : ""}
+                  {government.areaCount} areas · {count(government.population)} people
+                </span>
+              </button>
+            );
+          })}
         </div>
-        <button type="button" onClick={() => chooseRealm(Math.floor(Math.random() * governments.length))}>
-          Random realm
-        </button>
+        <div className="row">
+          <button
+            type="button"
+            disabled={free.length === 0}
+            onClick={() => pick((free[Math.floor(Math.random() * free.length)] as (typeof free)[number]).id)}
+          >
+            Random realm
+          </button>
+          <button type="button" onClick={() => pick(null)}>
+            Watch
+          </button>
+        </div>
+        {!client && (
+          <div className="section">
+            <h3>Players</h3>
+            <Invite />
+          </div>
+        )}
+        <Players />
+      </div>
+    </main>
+  );
+}
+
+/** Joining from a link: a name, then the connection's progress. */
+export function Join() {
+  const session = useGame((state) => state.session);
+  const [name, setName] = useState(savedName);
+  const host = joinTarget();
+  const connecting = session.connection === "connecting" || session.connection === "reconnecting";
+  return (
+    <main className="screen">
+      <div className="card">
+        <h1>Join a game</h1>
+        <form
+          className="section"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (host && name.trim()) void import("../net/client").then((client) => client.join(host, name.trim()));
+          }}
+        >
+          <div className="form-grid">
+            <label htmlFor="player-name">Your name</label>
+            <input
+              id="player-name"
+              aria-label="Your name"
+              value={name}
+              maxLength={32}
+              onChange={(event) => setName(event.target.value)}
+            />
+          </div>
+          <button type="submit" className="primary" disabled={connecting || !name.trim()}>
+            {connecting ? "Connecting…" : "Join"}
+          </button>
+        </form>
+        {session.refused && <p data-testid="join-status">The host refused: {session.refused}</p>}
+        {session.connection === "lost" && <p data-testid="join-status">Could not reach the host. Is its tab open?</p>}
       </div>
     </main>
   );
@@ -124,6 +207,15 @@ export function ChooseRealm() {
 export function EndOfSession() {
   const summary = useGame((state) => state.summary);
   const backToMenu = useGame((state) => state.backToMenu);
+  const role = useGame((state) => state.session.role);
+  // A joined player leaves the host's page behind: the menu is a solo game of its own.
+  const leave = () => {
+    if (role === "client") location.assign(location.pathname + location.search);
+    else {
+      stopHosting();
+      backToMenu();
+    }
+  };
   if (!summary) return null;
   return (
     <main className="screen">
@@ -153,7 +245,7 @@ export function EndOfSession() {
             </tr>
           </tbody>
         </table>
-        <button type="button" className="primary" onClick={backToMenu}>
+        <button type="button" className="primary" onClick={leave}>
           New game
         </button>
       </div>

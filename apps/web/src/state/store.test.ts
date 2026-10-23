@@ -154,12 +154,45 @@ describe("game store", () => {
   it("shows rejections as toasts and ends the session when the realm is eliminated", () => {
     const { world, state, sent } = setup();
     state().chooseRealm(0);
-    state().receive({ type: "rejected", command: { type: "declareWar", target: 0 }, reason: "nope" });
+    state().receive({ type: "rejected", to: "local", command: { type: "declareWar", target: 0 }, reason: "nope" });
     expect(state().toasts.at(-1)?.text).toBe("declareWar: nope");
     (world.governments[0] as World["governments"][number]).isEliminated = true;
     state().receive({ type: "snapshot", snapshot: buildSnapshot(world, 0) });
     expect(state().screen).toBe("ended");
     expect(state().summary?.eliminated).toBe(true);
     expect(sent.at(-1)).toEqual({ type: "endGame" });
+  });
+
+  it("keeps the last detail of visible areas when a joined player receives them in turns", () => {
+    const { world, state } = setup();
+    state().chooseRealm(0);
+    const full = buildSnapshot(world, 0);
+    expect(full.visibleAreas.length).toBeGreaterThan(2);
+    const [first, second, ...rest] = full.visibleAreas as [number, number, ...number[]];
+    state().receive({ type: "snapshot", snapshot: buildSnapshot(world, 0, undefined, { detailAreas: () => [first] }) });
+    expect(state().snapshot?.detail.map((d) => d.area)).toEqual([first]);
+    state().receive({
+      type: "snapshot",
+      snapshot: buildSnapshot(world, 0, undefined, { detailAreas: () => [second] }),
+    });
+    expect(state().snapshot?.detail.map((d) => d.area)).toEqual([first, second]);
+    state().receive({ type: "snapshot", snapshot: buildSnapshot(world, 0, undefined, { detailAreas: () => rest }) });
+    expect(state().snapshot?.detail.map((d) => d.area)).toEqual(full.visibleAreas);
+  });
+
+  it("lets a joined player enter only once the host accepts its choice", () => {
+    const { state, sent } = setup();
+    state().setSession({ role: "client" });
+    state().chooseRealm(2);
+    expect(sent.at(-1)).toEqual({ type: "start", government: 2 });
+    expect(state().screen).toBe("chooseRealm"); // waiting for the host
+    const you = { id: "bob", name: "Bob", role: "player" as const, government: 2, online: true, isHost: false };
+    state().enterAs(you);
+    expect(state().screen).toBe("game");
+    expect(state().viewer).toBe(2);
+    state().enterAs({ ...you, role: "choosing", government: null }); // the host released the realm
+    expect(state().screen).toBe("chooseRealm");
+    state().enterAs({ ...you, role: "spectator", government: null });
+    expect(state()).toMatchObject({ screen: "game", viewer: null });
   });
 });

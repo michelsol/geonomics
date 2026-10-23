@@ -1,5 +1,14 @@
 // Values derived from static data, snapshots and the price table.
-import { type AreaDetail, decodePrice, type GovernmentView, type Snapshot, type StaticData } from "@geonomics/sim";
+import {
+  type AreaDetail,
+  decodePrice,
+  type GovernmentView,
+  neutralPolicies,
+  type ResolvedPolicies,
+  resolveSettings,
+  type Snapshot,
+  type StaticData,
+} from "@geonomics/sim";
 
 /** Price of a good in an area from the public price table. */
 export function priceOf(data: StaticData, table: Uint16Array, area: number, good: number): number {
@@ -174,4 +183,13 @@ export function transportFlows(state: {
   if (!edges) return { flows: null, good: null };
   if (state.transportAllGoods) return { flows: edges.tonnage, good: null };
   return { flows: edges.goodFlow, good: state.selectedGood };
+}
+
+/** Policies in force in one of the government's areas, resolved from its settings as the host does. */
+export function policiesInForce(government: GovernmentView, area: number, goodCount: number): ResolvedPolicies | null {
+  const state = government.areaStates.find((s) => s.area === area);
+  if (!state) return null;
+  const resolved = neutralPolicies(goodCount);
+  resolveSettings(resolved, government.realmPolicies, state.policyOverrides);
+  return resolved;
 }

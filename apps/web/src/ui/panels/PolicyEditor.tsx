@@ -1,6 +1,7 @@
 // Taxes and price controls: realm-wide settings and per-area overrides, each for one good or every good.
 import type { PolicyName, PolicySetting } from "@geonomics/sim";
 import { useEffect, useState } from "react";
+import { policiesInForce } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { fmt, NumberField, Select } from "../components";
 import { areaName, useSend, useView } from "./common";
@@ -64,7 +65,7 @@ export function PolicyEditor() {
   const headTax =
     target === ALL
       ? realmHeadTax
-      : (government.areaStates.find((s) => s.area === target)?.resolved.headTaxPerPersonPerDay ?? 0);
+      : (policiesInForce(government, target, data.goods.length)?.headTaxPerPersonPerDay ?? 0);
   const overrides = government.areaStates.filter((s) => s.policyOverrides.length > 0);
 
   const setting = (): PolicySetting => ({ policy, good: settingGood, value: isRate(policy) ? value / 100 : value });

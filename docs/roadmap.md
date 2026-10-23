@@ -225,7 +225,7 @@ Findings: [design-notes.md](design-notes.md#war-and-conquest-roadmap-stage-7).
 
 Findings: [design-notes.md](design-notes.md#web-app-roadmap-stage-8).
 
-## Stage 9: Multiplayer
+## Stage 9: Multiplayer ✅
 
 **Goal:** friends join through a link (§9).
 
@@ -243,6 +243,8 @@ Findings: [design-notes.md](design-notes.md#web-app-roadmap-stage-8).
 **Exit:**
 - A Playwright test runs two browser contexts: one hosts, one joins, both issue commands and see each other's realms.
 - Measured snapshot sizes stay within budget.
+
+Findings: [design-notes.md](design-notes.md#multiplayer-roadmap-stage-9).
 
 ## Stage 10: AI governments
 
@@ -279,6 +281,6 @@ Findings: [design-notes.md](design-notes.md#web-app-roadmap-stage-8).
 | ~~Whether players start with a single area or a small realm, and with how much treasury~~ | Settled in stage 6: the capital and its land neighbors, with 30 days of the realm's income (`WorldConfig.government`) |
 | Meeting the tick budget at 3,000 areas with the large catalog (about 50 ms per tick in Node, 65 ms in the browser worker). The interface stays smooth because the simulation runs in a worker; only the top speed on large maps is limited | After stage 11, if players need faster large maps |
 | ~~Whether there is a soft goal (score, prosperity ranking) despite sandbox-first~~ | Settled in stage 8: none; the end-of-session screen only reports days, population, areas and treasury |
-| Whether a dropped human player's government is handed to the AI | Stage 9 |
+| ~~Whether a dropped human player's government is handed to the AI~~ | Settled in stage 9: it stays reserved for the player, idle, and the host can release it; handing it to the AI can follow in stage 10 |
 | Naval combat and blockades on sea routes (listed as future work in §5) | After stage 11 |
 | Research gating modern recipes from the large catalog | After stage 11 |

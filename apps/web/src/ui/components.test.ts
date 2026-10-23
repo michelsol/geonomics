@@ -29,6 +29,10 @@ describe("fmt", () => {
     expect(fmt(4_500_000_000)).toBe("4.5B");
     expect(fmt(-24_312)).toBe("-24.3k");
     expect(fmt(999_999)).toBe("1M");
+    // Whole numbers keep their zeros: only zeros after the point go.
+    expect(fmt(100_000)).toBe("100k");
+    expect(fmt(500_000)).toBe("500k");
+    expect(fmt(120_000_000)).toBe("120M");
   });
 
   it("names infinite and missing values", () => {

@@ -47,16 +47,7 @@ export interface AreaStateView {
   depot: Float32Array;
   jobs: JobAssignment[];
   wageOffer: number;
-  policyOverrides: PolicySetting[];
-  resolved: {
-    productionTaxRate: Float32Array;
-    consumptionTaxRate: Float32Array;
-    importTariffRate: Float32Array;
-    exportTariffRate: Float32Array;
-    headTaxPerPersonPerDay: number;
-    priceCeiling: Float32Array;
-    priceFloor: Float32Array;
-  };
+  policyOverrides: PolicySetting[]; // with the realm policies, enough to resolve the policies in force (resolveSettings)
 }
 
 /** Everything a government knows about itself. */
@@ -118,7 +109,8 @@ export interface Snapshot {
     besieger: Int16Array; // -1 when not besieged
     militia: Float32Array; // militia defending each area
   };
-  detail: AreaDetail[];
+  visibleAreas: AreaId[]; // the viewer's owned areas and their neighbors, whose detail it may receive
+  detail: AreaDetail[]; // detail of all visible areas, or of some of them when the options ask (see SnapshotOptions)
   edges: {
     transportCost: Float32Array;
     capacityPerDay: Float32Array;
@@ -171,6 +163,8 @@ function capacityTable(world: World): Float32Array {
 
 export interface SnapshotOptions {
   flowGood?: GoodId | null; // the good whose trade flows the receiver watches on the map
+  // which visible areas get their detail this time (default: all); remote players get them in turns
+  detailAreas?: (visible: readonly AreaId[]) => readonly AreaId[];
 }
 
 /**
@@ -245,11 +239,13 @@ export function buildSnapshot(
   for (let id = knownEdges; id < m; id++) newEdges.push(staticEdge(world, id));
 
   const government = viewer === null ? undefined : world.governments[viewer];
+  const visible = government ? visibleAreas(world, government.ownedAreas) : [];
   return {
     tick: world.tick,
     gameDay: world.gameDay,
     areas,
-    detail: government ? detailFor(world, government.ownedAreas) : [],
+    visibleAreas: visible,
+    detail: (options.detailAreas ? options.detailAreas(visible) : visible).map((id) => detailOf(world, id)),
     edges,
     newEdges,
     armies: [...world.armies.values()].map((army) => ({
@@ -273,7 +269,8 @@ export function buildSnapshot(
 }
 
 /** Owned areas and their direct neighbors over every active edge, in area order. */
-function detailFor(world: World, owned: readonly AreaId[]): AreaDetail[] {
+/** Owned areas and their direct neighbors over every active edge, in area order: the areas a government sees. */
+function visibleAreas(world: World, owned: readonly AreaId[]): AreaId[] {
   const visible = new Set<AreaId>(owned);
   for (const id of owned) {
     for (const edgeId of world.areas[id]?.edges ?? []) {
@@ -281,24 +278,24 @@ function detailFor(world: World, owned: readonly AreaId[]): AreaDetail[] {
       if (edge.isActive) visible.add(edge.areaA === id ? edge.areaB : edge.areaA);
     }
   }
-  return [...visible]
-    .sort((a, b) => a - b)
-    .map((id) => {
-      const area = world.areas[id] as World["areas"][number];
-      return {
-        area: id,
-        savings: area.savings,
-        unemployedWorkers: area.unemployedWorkers,
-        price: Float32Array.from(area.price),
-        stock: Float32Array.from(area.stock),
-        produced: Float32Array.from(area.produced),
-        consumed: Float32Array.from(area.consumed),
-        imported: Float32Array.from(area.imported),
-        exported: Float32Array.from(area.exported),
-        privateWorkers: Float32Array.from(area.privateWorkers),
-        naturalCapacity: Float32Array.from(area.naturalCapacity),
-      };
-    });
+  return [...visible].sort((a, b) => a - b);
+}
+
+function detailOf(world: World, id: AreaId): AreaDetail {
+  const area = world.areas[id] as World["areas"][number];
+  return {
+    area: id,
+    savings: area.savings,
+    unemployedWorkers: area.unemployedWorkers,
+    price: Float32Array.from(area.price),
+    stock: Float32Array.from(area.stock),
+    produced: Float32Array.from(area.produced),
+    consumed: Float32Array.from(area.consumed),
+    imported: Float32Array.from(area.imported),
+    exported: Float32Array.from(area.exported),
+    privateWorkers: Float32Array.from(area.privateWorkers),
+    naturalCapacity: Float32Array.from(area.naturalCapacity),
+  };
 }
 
 function governmentView(government: World["governments"][number]): GovernmentView {
@@ -314,15 +311,6 @@ function governmentView(government: World["governments"][number]): GovernmentVie
       jobs: state.jobs.map((job) => ({ ...job, job: { ...job.job } })),
       wageOffer: state.wageOffer,
       policyOverrides: state.policyOverrides.map((s) => ({ ...s })),
-      resolved: {
-        productionTaxRate: Float32Array.from(state.resolvedPolicies.productionTaxRate),
-        consumptionTaxRate: Float32Array.from(state.resolvedPolicies.consumptionTaxRate),
-        importTariffRate: Float32Array.from(state.resolvedPolicies.importTariffRate),
-        exportTariffRate: Float32Array.from(state.resolvedPolicies.exportTariffRate),
-        headTaxPerPersonPerDay: state.resolvedPolicies.headTaxPerPersonPerDay,
-        priceCeiling: Float32Array.from(state.resolvedPolicies.priceCeiling),
-        priceFloor: Float32Array.from(state.resolvedPolicies.priceFloor),
-      },
     })),
     realmPolicies: government.realmPolicies.map((s) => ({ ...s })),
     marketOrders: government.marketOrders.map((o) => ({ ...o })),
@@ -357,10 +345,7 @@ export function snapshotTransferables(snapshot: Snapshot): ArrayBuffer[] {
     ])
       add(view);
   }
-  for (const state of snapshot.government?.areaStates ?? []) {
-    add(state.depot);
-    for (const value of Object.values(state.resolved)) if (ArrayBuffer.isView(value)) add(value);
-  }
+  for (const state of snapshot.government?.areaStates ?? []) add(state.depot);
   return buffers;
 }
 
