@@ -138,7 +138,7 @@ export function Game() {
   useWakeLock();
 
   useEffect(() => {
-    // Space toggles pause. A solo game pauses while its tab is hidden; a hosted one runs on for its players.
+    // Space toggles pause. A solo game pauses while its tab is hidden; a hosted one runs on for its players. Both save.
     const key = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (event.code !== "Space" || target?.closest("input, select, textarea, button")) return;
@@ -147,7 +147,9 @@ export function Game() {
     };
     const visibility = () => {
       const state = gameStore.getState();
-      if (document.hidden && state.session.role === "solo") state.setPaused(true);
+      if (!document.hidden || state.session.role === "client") return;
+      if (state.session.role === "solo") state.setPaused(true);
+      state.autosave(); // phones may discard a hidden tab: keep the game as it is now
     };
     window.addEventListener("keydown", key);
     document.addEventListener("visibilitychange", visibility);

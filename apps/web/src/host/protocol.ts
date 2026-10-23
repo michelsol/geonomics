@@ -7,6 +7,7 @@ import type {
   GovernmentId,
   GovernmentSummary,
   PlayerId,
+  SaveInfo,
   Snapshot,
   StaticData,
 } from "@geonomics/sim";
@@ -35,6 +36,10 @@ export interface HostStatus {
 
 export type ToWorker =
   | { type: "create"; options: GameOptions }
+  | { type: "load"; file: Uint8Array } // a save file, compressed or not
+  | { type: "loadSaved"; gameId: string } // a game saved in this browser
+  | { type: "save" } // autosave now, as when the tab is hidden
+  | { type: "export" } // answered with `exported`
   | { type: "start"; government: GovernmentId | null } // the local player takes this government (or watches) and the game runs
   | { type: "command"; command: Command; player?: PlayerId } // from the local player unless a joined player is named
   | { type: "setSpeed"; speed: Speed }
@@ -53,6 +58,7 @@ export type FromWorker =
   | { type: "status"; status: HostStatus }
   | { type: "rejected"; to: PlayerId; command: Command; reason: string }
   | { type: "remote"; to: PlayerId | null; bytes: Uint8Array } // a packed message for one joined player, or all (null)
+  | { type: "exported"; info: SaveInfo; file: Uint8Array } // the save file, compressed
   | { type: "error"; message: string };
 
 /** The player id of the local player in a solo game. */

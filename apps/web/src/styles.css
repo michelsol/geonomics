@@ -171,6 +171,24 @@ input[type="number"] {
   min-height: 44px;
   text-align: left;
 }
+.save-list {
+  display: grid;
+  gap: 8px;
+}
+.save {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+}
+.error {
+  margin: 0;
+  color: var(--danger);
+}
 
 /* Game layout */
 

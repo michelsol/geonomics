@@ -1,8 +1,9 @@
 // New game, realm choice and end-of-session screens (specification §10, Screens).
 
-import type { AiMix } from "@geonomics/sim";
-import { useState } from "react";
+import type { AiMix, SaveInfo } from "@geonomics/sim";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CatalogName } from "../host/protocol";
+import { deleteSave, listSaves } from "../host/saves";
 import { hostEntered, stopHosting } from "../net/host";
 import { joinTarget, savedName } from "../net/options";
 import { useGame } from "../state/store";
@@ -39,6 +40,7 @@ function warmupOverride(): number | undefined {
 export function NewGame() {
   const progress = useGame((state) => state.progress);
   const newGame = useGame((state) => state.newGame);
+  const menuError = useGame((state) => state.menuError);
   const [catalog, setCatalog] = useState<CatalogName>("medium");
   const [areas, setAreas] = useState<number>(1000);
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e6));
@@ -102,8 +104,80 @@ export function NewGame() {
             </button>
           </form>
         )}
+        {menuError && (
+          <p className="error" role="alert">
+            {menuError}
+          </p>
+        )}
+        {!progress && <SavedGames />}
       </div>
     </main>
+  );
+}
+
+/** Games saved in this browser, and loading a save file (specification §9, Save and load). */
+function SavedGames() {
+  const loadGame = useGame((state) => state.loadGame);
+  const [saves, setSaves] = useState<SaveInfo[]>([]);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const refresh = useCallback(() => {
+    listSaves().then(setSaves, () => setSaves([])); // no storage, as in some private windows: no saved games
+  }, []);
+  useEffect(refresh, [refresh]);
+  const load = (source: Parameters<typeof loadGame>[0]) => {
+    stopHosting();
+    loadGame(source);
+  };
+  return (
+    <div className="section">
+      <h3>Saved games</h3>
+      {saves.length === 0 ? (
+        <p className="muted">None yet: games save themselves as you play.</p>
+      ) : (
+        <div className="save-list">
+          {saves.map((save) => (
+            <div className="save" key={save.gameId} data-testid="saved-game">
+              <div>
+                <div>
+                  {save.title} · day {count(save.gameDay)}
+                </div>
+                <div className="muted">
+                  {count(save.areas)} areas, {save.catalog} catalog · {new Date(save.savedAt).toLocaleString()}
+                </div>
+              </div>
+              <div className="row">
+                <button type="button" className="primary" onClick={() => load({ gameId: save.gameId })}>
+                  Continue
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Delete ${save.title}, day ${Math.floor(save.gameDay)}`}
+                  onClick={() => {
+                    if (confirm(`Delete the save of ${save.title}?`)) deleteSave(save.gameId).then(refresh, refresh);
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <button type="button" onClick={() => fileInput.current?.click()}>
+        Load from file…
+      </button>
+      <input
+        ref={fileInput}
+        type="file"
+        hidden
+        aria-label="Save file"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void file.arrayBuffer().then((bytes) => load({ file: new Uint8Array(bytes) }));
+        }}
+      />
+    </div>
   );
 }
 

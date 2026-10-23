@@ -59,6 +59,7 @@ const SOLO: Session = {
 export interface GameState {
   screen: Screen;
   progress: { stage: string; done: number } | null;
+  menuError: string | null; // why the last new or loaded game failed, shown on the menu
   data: StaticData | null;
   edges: StaticEdge[]; // static edges plus routes created during the game
   governments: GovernmentSummary[];
@@ -82,6 +83,11 @@ export interface GameState {
   session: Session;
 
   newGame(options: GameOptions): void;
+  /** Loads a save file, or a game saved in this browser; the lobby follows, as for a new game. */
+  loadGame(source: { file: Uint8Array } | { gameId: string }): void;
+  /** Saves the game in its autosave slot now, as when the tab is hidden. */
+  autosave(): void;
+  exportSave(): void;
   chooseRealm(government: number | null): void; // null: watch as a spectator
   setSession(session: Partial<Session>): void;
   /** A joined player's role, from the host: in the game once it holds a realm or watches. */
@@ -114,6 +120,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
   const store = createStore<GameState>()((set, get) => ({
     screen: "newGame",
     progress: null,
+    menuError: null,
     data: null,
     edges: [],
     governments: [],
@@ -137,8 +144,32 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     session: SOLO,
 
     newGame(options) {
-      set({ screen: "newGame", progress: { stage: "Starting", done: 0 }, data: null, snapshot: null, summary: null });
+      set({
+        screen: "newGame",
+        progress: { stage: "Starting", done: 0 },
+        menuError: null,
+        data: null,
+        snapshot: null,
+        summary: null,
+      });
       port.postMessage({ type: "create", options });
+    },
+    loadGame(source) {
+      set({
+        screen: "newGame",
+        progress: { stage: "Loading the save", done: 0 },
+        menuError: null,
+        data: null,
+        snapshot: null,
+        summary: null,
+      });
+      port.postMessage("file" in source ? { type: "load", file: source.file } : { type: "loadSaved", ...source });
+    },
+    autosave() {
+      port.postMessage({ type: "save" });
+    },
+    exportSave() {
+      port.postMessage({ type: "export" });
     },
     chooseRealm(government) {
       port.postMessage({ type: "start", government });
@@ -298,8 +329,8 @@ export function createGameStore(port: Port): StoreApi<GameState> {
           state.toast(`${message.command.type}: ${message.reason}`);
           return;
         case "error":
-          state.toast(`Error: ${message.message}`);
-          if (state.screen === "newGame") set({ progress: null });
+          if (state.screen === "newGame") set({ progress: null, menuError: message.message });
+          else state.toast(`Error: ${message.message}`);
           return;
       }
     },

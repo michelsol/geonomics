@@ -24,7 +24,11 @@ export interface HostLoopOptions {
   now: () => number; // milliseconds
   schedule: (callback: () => void, delayMs: number) => void;
   speed?: Speed;
+  autosave?: () => void; // called every AUTOSAVE_INTERVAL_DAYS game days while the game runs
 }
+
+/** Game days between autosaves (specification §9, Save and load). */
+export const AUTOSAVE_INTERVAL_DAYS = 30;
 
 interface Viewer {
   government: GovernmentId | null; // null: a spectator
@@ -41,6 +45,8 @@ export class HostLoop {
   private readonly post: HostLoopOptions["post"];
   private readonly now: () => number;
   private readonly schedule: HostLoopOptions["schedule"];
+  private readonly autosave: (() => void) | undefined;
+  private nextAutosaveDay: number;
   private readonly viewers = new Map<PlayerId, Viewer>();
   private readonly staticEdges: number; // edges in the static data newcomers receive
   private queue: { player: PlayerId; command: Command }[] = [];
@@ -60,6 +66,8 @@ export class HostLoop {
     this.schedule = options.schedule;
     this.speed = options.speed ?? 5;
     this.staticEdges = options.world.edges.length;
+    this.autosave = options.autosave;
+    this.nextAutosaveDay = options.world.gameDay + AUTOSAVE_INTERVAL_DAYS;
   }
 
   /**
@@ -188,6 +196,10 @@ export class HostLoop {
       this.emitStatus();
     }
     if (finished - this.lastPriceTable >= 1000 / network.priceTableRate) this.emitPriceTable();
+    if (this.autosave && this.world.gameDay >= this.nextAutosaveDay) {
+      this.nextAutosaveDay = this.world.gameDay + AUTOSAVE_INTERVAL_DAYS;
+      this.autosave();
+    }
 
     // Late ticks start at once, but always through the scheduler, so messages are handled between ticks.
     const interval = this.speed === "max" ? 0 : 1000 / this.speed;

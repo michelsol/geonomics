@@ -2,7 +2,7 @@ import { unpack } from "@geonomics/net";
 import type { Snapshot } from "@geonomics/sim";
 import { describe, expect, it } from "vitest";
 import { createGame } from "./createGame";
-import { HostLoop } from "./hostLoop";
+import { AUTOSAVE_INTERVAL_DAYS, HostLoop } from "./hostLoop";
 import { type FromWorker, LOCAL_PLAYER } from "./protocol";
 
 /** A fake clock and scheduler: tasks run when the clock passes their time. */
@@ -27,7 +27,7 @@ function fakeTime() {
   };
 }
 
-function setup(speed: number | "max" = 5) {
+function setup(speed: number | "max" = 5, autosave?: () => void) {
   const world = createGame(
     { catalog: "small", areas: 60, seed: 3, realms: 4, aiMix: "balanced", warmupDays: 0 },
     () => {},
@@ -35,7 +35,7 @@ function setup(speed: number | "max" = 5) {
   (world.governments[0] as (typeof world.governments)[number]).controller = { kind: "human", player: LOCAL_PLAYER };
   const time = fakeTime();
   const messages: FromWorker[] = [];
-  const loop = new HostLoop({ world, post: (m) => messages.push(m), ...time, speed });
+  const loop = new HostLoop({ world, post: (m) => messages.push(m), ...time, speed, autosave });
   loop.setPlayer(LOCAL_PLAYER, 0, true);
   const count = (type: FromWorker["type"]) => messages.filter((m) => m.type === type).length;
   return { world, time, messages, loop, count };
@@ -162,5 +162,24 @@ describe("HostLoop", () => {
     time.advance(0, 20);
     expect(world.tick).toBe(20);
     loop.stop();
+  });
+
+  it("autosaves every 30 game days while running", () => {
+    let saves = 0;
+    const { world, time, loop } = setup("max", () => saves++);
+    const start = world.gameDay;
+    time.advance(0, AUTOSAVE_INTERVAL_DAYS - 1);
+    expect(saves).toBe(0); // paused: no tick, no save
+    loop.resume();
+    time.advance(0, AUTOSAVE_INTERVAL_DAYS - 1);
+    expect(world.gameDay - start).toBe(AUTOSAVE_INTERVAL_DAYS - 1);
+    expect(saves).toBe(0);
+    time.advance(0, 1);
+    expect(saves).toBe(1);
+    time.advance(0, 2 * AUTOSAVE_INTERVAL_DAYS);
+    expect(saves).toBe(3);
+    loop.pause();
+    time.advance(10_000);
+    expect(saves).toBe(3);
   });
 });

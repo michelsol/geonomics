@@ -1,4 +1,4 @@
-// The player's realm: treasury, population, realm-wide policies, and ending the session.
+// The player's realm: treasury, population and history, the players, saving, and ending the session.
 import { realmPopulation } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { Chart } from "../Chart";
@@ -11,6 +11,7 @@ export function GovernmentPanel() {
   const history = useGame((state) => state.history);
   useGame((state) => state.historyVersion);
   const endGame = useGame((state) => state.endGame);
+  const exportSave = useGame((state) => state.exportSave);
   const client = useGame((state) => state.session.role === "client");
   if (!view) return null;
   const { snapshot, government } = view;
@@ -61,9 +62,17 @@ export function GovernmentPanel() {
       </Section>
 
       <Section title="Session">
-        <button type="button" className="danger" onClick={endGame}>
-          {client ? "Leave game" : "End game"}
-        </button>
+        {!client && <p className="muted">The game saves itself every 30 days, and when you leave it or switch tabs.</p>}
+        <div className="row">
+          {!client && (
+            <button type="button" onClick={exportSave}>
+              Export save
+            </button>
+          )}
+          <button type="button" className="danger" onClick={endGame}>
+            {client ? "Leave game" : "End game"}
+          </button>
+        </div>
       </Section>
     </>
   );
