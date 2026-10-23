@@ -248,7 +248,7 @@ Findings: [design-notes.md](design-notes.md#multiplayer-roadmap-stage-9).
 
 After the stage, the game got its own broker on Cloudflare, with a TURN relay for players on strict networks: [design-notes.md](design-notes.md#the-broker-and-turn-relay), deployment in [apps/broker/README.md](../apps/broker/README.md).
 
-## Stage 10: AI governments
+## Stage 10: AI governments ✅
 
 **Spec first:** add an AI section to the specification. It covers:
 - the personalities: trader, builder, conqueror
@@ -260,6 +260,8 @@ After the stage, the game got its own broker on Cloudflare, with a TURN relay fo
 **Exit:**
 - In 2,000-day headless runs with only AI realms, every personality survives on an average map, and realms grow and trade.
 - Wars start and end.
+
+Findings: [design-notes.md](design-notes.md#ai-governments-roadmap-stage-10).
 
 ## Stage 11: Persistence, PWA and release
 
@@ -283,6 +285,7 @@ After the stage, the game got its own broker on Cloudflare, with a TURN relay fo
 | ~~Whether players start with a single area or a small realm, and with how much treasury~~ | Settled in stage 6: the capital and its land neighbors, with 30 days of the realm's income (`WorldConfig.government`) |
 | Meeting the tick budget at 3,000 areas with the large catalog (about 50 ms per tick in Node, 65 ms in the browser worker). The interface stays smooth because the simulation runs in a worker; only the top speed on large maps is limited | After stage 11, if players need faster large maps |
 | ~~Whether there is a soft goal (score, prosperity ranking) despite sandbox-first~~ | Settled in stage 8: none; the end-of-session screen only reports days, population, areas and treasury |
-| ~~Whether a dropped human player's government is handed to the AI~~ | Settled in stage 9: it stays reserved for the player, idle, and the host can release it; handing it to the AI can follow in stage 10 |
+| ~~Whether a dropped human player's government is handed to the AI~~ | Settled in stage 10: it stays reserved for the player while the AI runs it, and the host can release it |
+| Research leaves people hungrier past a few levels: higher productivity should never cause hunger (design notes, AI governments). The AI stops at level 5 meanwhile | Before stage 11 |
 | Naval combat and blockades on sea routes (listed as future work in §5) | After stage 11 |
 | Research gating modern recipes from the large catalog | After stage 11 |

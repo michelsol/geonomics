@@ -1,5 +1,6 @@
 // Messages between the main thread and the simulation worker (specification §9, Single player and Host loop).
 import type {
+  AiMix,
   AreaId,
   Command,
   GoodId,
@@ -17,6 +18,7 @@ export interface GameOptions {
   areas: number; // land areas on the generated map
   seed: number;
   realms: number; // governments founded; they split the whole map between them
+  aiMix: AiMix; // personalities of the realms the AI runs
   warmupDays?: number; // defaults to the config's warmupDays; shortened for tests
 }
 

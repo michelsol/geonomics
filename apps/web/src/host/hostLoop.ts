@@ -64,14 +64,15 @@ export class HostLoop {
 
   /**
    * Gives `player` the government (null: none) and, while `watching`, snapshots for it. Any government the player
-   * held before goes back to the idle AI. A new remote viewer gets a snapshot at once.
+   * held before goes back to the AI. A player who is not watching is offline: the AI runs its realm until it returns
+   * (specification §9, Dropped connections). A new remote viewer gets a snapshot at once.
    */
   setPlayer(player: PlayerId, government: GovernmentId | null, watching: boolean): void {
     for (const g of this.world.governments) {
-      if (g.controller.kind === "human" && g.controller.player === player && g.id !== government)
-        g.controller = { kind: "ai", personality: "idle" };
+      if (g.controller.kind === "human" && g.controller.player === player && (g.id !== government || !watching))
+        g.controller = { kind: "ai" };
     }
-    const held = government === null ? undefined : this.world.governments[government];
+    const held = government === null || !watching ? undefined : this.world.governments[government];
     if (held) held.controller = { kind: "human", player };
     if (!watching) {
       this.viewers.delete(player);

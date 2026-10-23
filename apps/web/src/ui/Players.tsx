@@ -1,9 +1,18 @@
 // Who is in the game, the invitation link and, for the host, releasing the realms of players who left
 // (specification §10, Lobby).
+import type { LobbyPlayer } from "@geonomics/net";
+import type { GovernmentSummary } from "@geonomics/sim";
 import { useState } from "react";
 import { releaseRealm, startHosting } from "../net/host";
 import { useGame } from "../state/store";
 import { Swatch } from "./components";
+
+/** Who runs a realm: its player, the AI while that player is offline, or the AI and its personality. */
+export function controllerLabel(government: GovernmentSummary, players: readonly LobbyPlayer[]): string {
+  const player = players.find((p) => p.government === government.id);
+  if (player) return player.online ? player.name : `${player.name} (offline, AI)`;
+  return government.ai ? `AI · ${government.personality}` : "Player";
+}
 
 export function Invite() {
   const session = useGame((state) => state.session);

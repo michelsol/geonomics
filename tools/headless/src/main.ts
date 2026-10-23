@@ -2,8 +2,10 @@
 //   pnpm headless -- --scenario chain10 --catalog medium --days 365 --seed 1 --warmup --csv out/chain.csv
 //   pnpm headless -- --all --days 200
 //   pnpm headless -- --scenario map --catalog large --areas 3000 --days 30 --svg out/map.svg
+//   pnpm headless -- --ai balanced --catalog medium --areas 1000 --realms 8 --days 2000 --seed 1
 import { parseArgs } from "node:util";
-import { hashWorld, runTick, warmUp } from "@geonomics/sim";
+import { type AiMix, hashWorld, runTick, warmUp } from "@geonomics/sim";
+import { formatProgress, runAiGame } from "./aiGame";
 import { CATALOG_NAMES, type CatalogName, readCatalog } from "./catalogs";
 import { CsvWriter } from "./csv";
 import { formatDiagnostics, Recorder } from "./diagnostics";
@@ -23,6 +25,8 @@ const { values } = parseArgs({
     csv: { type: "string" },
     "csv-every": { type: "string", default: "1" },
     all: { type: "boolean", default: false },
+    ai: { type: "string" },
+    realms: { type: "string", default: "8" },
     help: { type: "boolean", short: "h", default: false },
   },
 });
@@ -38,7 +42,9 @@ if (values.help) {
   --warmup            run the Rule 6 warm-up before the measured days
   --csv <file>        write per-day time series to a CSV file
   --csv-every <n>     write one CSV sample every n days (default 1)
-  --all               run every scenario with every catalog and print a summary`);
+  --all               run every scenario with every catalog and print a summary
+  --ai <mix>          an AI-only game on a generated map: balanced, peaceful or aggressive (with --areas, --realms)
+  --realms <n>        realms founded for --ai (default 8)`);
   process.exit(0);
 }
 
@@ -88,7 +94,31 @@ const areas = values.areas === undefined ? undefined : Number(values.areas);
 const seed = Number(values.seed);
 if (!Number.isFinite(days) || days < 0 || !Number.isFinite(seed)) throw new Error("--days and --seed must be numbers");
 
-if (values.all) {
+if (values.ai !== undefined) {
+  const mix = choice(values.ai, ["balanced", "peaceful", "aggressive"] as const, "AI mix") as AiMix;
+  const catalog = choice(values.catalog, CATALOG_NAMES, "catalog");
+  const realms = Number(values.realms);
+  console.log(`AI-only game: ${mix} mix, ${realms} realms, ${areas ?? 1000} areas, ${catalog} catalog, seed ${seed}`);
+  let startPopulation: number | undefined;
+  const report = runAiGame({
+    catalog: readCatalog(catalog),
+    areas: areas ?? 1000,
+    realms,
+    mix,
+    days,
+    seed,
+    onProgress: (p) => console.log(formatProgress(p, startPopulation)),
+  });
+  startPopulation = report.startPopulation;
+  console.log(formatProgress(report, report.startPopulation));
+  for (const r of report.realms)
+    console.log(
+      `  ${r.name.padEnd(18)}${r.personality.padEnd(11)}${(r.alive ? "alive" : "fallen").padEnd(8)}areas ${String(r.startAreas).padStart(4)} → ${String(r.areas).padStart(4)}  population ${Math.round(r.startPopulation).toLocaleString("en").padStart(10)} → ${Math.round(r.population).toLocaleString("en").padStart(10)}`,
+    );
+  console.log(
+    `trade ${Math.round(report.startTonnage).toLocaleString("en")} → ${Math.round(report.tonnage).toLocaleString("en")} t/day; longest war ${report.longestWarDays} days; AI ${report.aiMsPerTick.toFixed(3)} ms per tick (max ${report.aiMsPerTickMax.toFixed(1)}), tick ${report.msPerTick.toFixed(2)} ms; ${report.rejectedCommands} AI commands rejected`,
+  );
+} else if (values.all) {
   console.log(
     `${"scenario".padEnd(14)}${"catalog".padEnd(9)}${"unmet".padStart(8)}${"churn/day".padStart(11)}${"volatility".padStart(12)}${"oscill.".padStart(9)}${"wage".padStart(8)}${"ms/tick".padStart(9)}`,
   );

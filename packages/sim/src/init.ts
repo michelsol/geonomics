@@ -82,7 +82,7 @@ export function warmUp(world: World, days = world.config.warmupDays): void {
   pace.demographyResponsiveness = 0;
   try {
     const ticks = Math.round(days / pace.gameDaysPerTick);
-    for (let i = 0; i < ticks; i++) runTick(world);
+    for (let i = 0; i < ticks; i++) runTick(world, [], { ai: false }); // no players yet, AI included
   } finally {
     Object.assign(pace, saved);
   }

@@ -24,7 +24,7 @@ export function createGame(options: GameOptions, progress: (stage: string, done:
   const { world, capitals } = generateMap(catalog, config, options.seed);
   progress("Settling the population", 0.1);
   initializeWorld(world);
-  foundGovernments(world, capitals);
+  foundGovernments(world, capitals, options.aiMix);
   const days = options.warmupDays ?? config.warmupDays;
   for (let done = 0; done < days; done += WARMUP_CHUNK_DAYS) {
     progress("Warming up the economy", 0.15 + (0.85 * done) / Math.max(days, 1));

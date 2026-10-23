@@ -1,7 +1,9 @@
 // Governments: founding, ownership, captures and policy resolution (specifications §6 and §7).
 import { disbandArmy } from "./army";
 import { MinHeap } from "./heap";
+import { nextRandom } from "./random";
 import type {
+  AiMix,
   Area,
   AreaId,
   Edge,
@@ -9,6 +11,7 @@ import type {
   GovernmentAreaState,
   GovernmentController,
   GovernmentId,
+  Personality,
   PolicySetting,
   ResolvedPolicies,
   World,
@@ -34,7 +37,8 @@ export interface GovernmentInit {
   areas?: AreaId[]; // owned areas; defaults to the capital alone
   name?: string; // defaults to the capital's name
   color?: string;
-  controller?: GovernmentController; // defaults to an idle AI until a player or the AI takes over
+  controller?: GovernmentController; // defaults to the AI
+  personality?: Personality; // defaults to idle, an AI that never acts
   treasury?: number; // defaults to startingTreasuryDays of the realm's income
 }
 
@@ -46,7 +50,9 @@ export function createGovernment(world: World, init: GovernmentInit): Government
     id,
     name: init.name ?? capital.name,
     color: init.color ?? (REALM_COLORS[id % REALM_COLORS.length] as string),
-    controller: init.controller ?? { kind: "ai", personality: "idle" },
+    controller: init.controller ?? { kind: "ai" },
+    personality: init.personality ?? "idle",
+    aiMemory: null,
     capital: capital.id,
     isEliminated: false,
     treasury: 0,
@@ -73,14 +79,37 @@ export function createGovernment(world: World, init: GovernmentInit): Government
  * travel distance over active land and sea edges (ties to the earlier capital), and an area with no such path joins
  * the capital nearest in a straight line. Neighboring realms get different colors where the palette allows.
  */
-export function foundGovernments(world: World, capitals: readonly AreaId[]): Government[] {
+export function foundGovernments(world: World, capitals: readonly AreaId[], mix: AiMix = "balanced"): Government[] {
   const realmOf = nearestCapitals(world, capitals);
   const realms = capitals.map((): AreaId[] => []);
   for (const area of world.areas) realms[realmOf[area.id] as number]?.push(area.id);
   const colors = realmColors(world, realmOf, capitals.length);
+  const personalities = aiPersonalities(world, mix, capitals.length);
   return capitals.map((capital, i) =>
-    createGovernment(world, { capital, areas: realms[i] as AreaId[], color: colors[i] as string }),
+    createGovernment(world, {
+      capital,
+      areas: realms[i] as AreaId[],
+      color: colors[i] as string,
+      personality: personalities[i] as Personality,
+    }),
   );
+}
+
+const MIXES: Record<AiMix, readonly Personality[]> = {
+  balanced: ["trader", "builder", "conqueror"],
+  peaceful: ["trader", "builder"],
+  aggressive: ["conqueror", "trader", "conqueror", "builder"],
+};
+
+/** Personalities for `count` realms in the mix's proportions, in a seeded order (specification §11). */
+export function aiPersonalities(world: World, mix: AiMix, count: number): Personality[] {
+  const pattern = MIXES[mix];
+  const personalities = Array.from({ length: count }, (_, i) => pattern[i % pattern.length] as Personality);
+  for (let i = count - 1; i > 0; i--) {
+    const j = Math.floor(nextRandom(world) * (i + 1));
+    [personalities[i], personalities[j]] = [personalities[j] as Personality, personalities[i] as Personality];
+  }
+  return personalities;
 }
 
 /** For each area, the index in `capitals` of the capital it belongs to (see foundGovernments). */

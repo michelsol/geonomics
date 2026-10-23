@@ -205,13 +205,45 @@ export interface GovernmentAreaState {
   resolvedPolicies: ResolvedPolicies; // realm defaults merged with overrides, ready for the tick
 }
 
-export type GovernmentController = { kind: "human"; player: PlayerId } | { kind: "ai"; personality: string };
+export type GovernmentController = { kind: "human"; player: PlayerId } | { kind: "ai" };
+
+/** How an AI runs the realm (specification §11); "idle" never acts, for test worlds. */
+export type Personality = "trader" | "builder" | "conqueror" | "idle";
+
+/** The personality mix of a new game's realms. */
+export type AiMix = "balanced" | "peaceful" | "aggressive";
+
+/** One war as an AI remembers it. */
+export interface AiWar {
+  enemy: GovernmentId; // the government at war with this one
+  startDay: number; // game day the war began, or the AI first noticed it
+  areasAtStart: number; // areas this government owned then
+  enemyAreasAtStart: number; // areas the enemy owned then
+  lastCaptureDay: number; // game day of this government's last capture in the war
+  declaredByMe: boolean; // this government declared it
+  lastProposalDay: number | null; // game day of this government's last peace proposal
+  target: AreaId | null; // enemy area the main army marches on
+}
+
+/** What an AI keeps between decisions: plain data, saved with the world. */
+export interface AiMemory {
+  nextDecisionTick: number; // tick of the next decision
+  createdDay: number; // game day the AI first took the realm over
+  lastDecisionDay: number | null; // game day of the last decision; null before the first
+  lastTreasury: number; // treasury at the last decision
+  standingOrdersPlaced: boolean; // the personality's standing orders are set
+  wars: AiWar[]; // wars in progress
+  lastPeaceDay: number | null; // game day the last war ended
+  ownedAreaCount: number; // areas owned at the last decision, to notice captures
+}
 
 export interface Government {
   id: GovernmentId; // index of this government in World.governments
   name: string; // display name of the realm
   color: string; // map color of the realm
   controller: GovernmentController; // who issues this government's commands
+  personality: Personality; // how the AI runs the realm whenever it controls it
+  aiMemory: AiMemory | null; // the AI's memory, created at its first decision
   capital: AreaId | null; // capital area; null once the government is eliminated
   isEliminated: boolean; // true once the government owns no area
   treasury: number; // government money for the whole realm, in man-hours

@@ -1,4 +1,5 @@
 // One simulation tick: eleven phases in a fixed order, each over every area (specification §8).
+import { runAi } from "../ai";
 import { applyCommands, type CommandRejection, expireProposals } from "../commands";
 import type { Area, CommandEnvelope, World } from "../types";
 import { runConsumption } from "./consumption";
@@ -15,10 +16,19 @@ import { runProduction } from "./production";
 import { runTaxes } from "./taxes";
 import { runTrade } from "./trade";
 
+export interface TickOptions {
+  ai?: boolean; // AI realms decide (default); the warm-up runs without them
+}
+
 /** Advances the world by one tick, applying the commands first. Returns the rejected commands with the reason. */
-export function runTick(world: World, commands: readonly CommandEnvelope[] = []): CommandRejection[] {
+export function runTick(
+  world: World,
+  commands: readonly CommandEnvelope[] = [],
+  options: TickOptions = {},
+): CommandRejection[] {
   const rejections = applyCommands(world, commands); // 0
   expireProposals(world); // 0
+  if (options.ai ?? true) runAi(world); // 0
   evaluateStandingOrders(world); // 0
   updateBlockedEdges(world); // 0
   runProduction(world); // 1

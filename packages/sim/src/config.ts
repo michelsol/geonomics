@@ -104,6 +104,10 @@ export interface WorldConfig {
     governmentCount: number; // realms founded on the map, which they split between them
     minimumIslandAreas: number; // smaller islands sink
   };
+  ai: {
+    decisionIntervalDays: number; // game days between two decisions of one AI realm
+    maxDecisionsPerTick: number; // AI realms deciding in one tick at most; the others wait for the next tick
+  };
   warmupDays: number; // game days simulated with no players before the game opens
   warmupResponsivenessBoost: number; // responsiveness multiplier during warm-up
 }
@@ -211,6 +215,10 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
     extractionLaborShare: 0.1,
     governmentCount: 6,
     minimumIslandAreas: 2,
+  },
+  ai: {
+    decisionIntervalDays: 10,
+    maxDecisionsPerTick: 4,
   },
   warmupDays: 180,
   warmupResponsivenessBoost: 3,

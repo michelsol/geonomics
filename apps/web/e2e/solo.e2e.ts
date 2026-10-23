@@ -79,8 +79,9 @@ test("a solo game runs, pauses, and takes commands", async ({ page }) => {
   await page.getByRole("button", { name: "Recruit", exact: true }).click();
   await expect(page.getByTestId("army")).toHaveCount(1);
 
-  // War on a neighbor is recorded.
+  // The other realms are run by the AI, each with its personality; war on a neighbor is recorded.
   await openTab(page, "Diplomacy");
+  await expect(page.locator('[data-testid^="relation-"]').first()).toContainText(/AI · (trader|builder|conqueror)/);
   await page.getByRole("button", { name: "Declare war" }).first().click();
   await expect(page.getByText("at war").first()).toBeVisible();
 

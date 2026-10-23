@@ -286,7 +286,9 @@ interface Government {
   color: string;                        // map color of the realm
   controller:                           // who issues this government's commands
     | { kind: "human"; player: PlayerId }
-    | { kind: "ai"; personality: string };
+    | { kind: "ai" };
+  personality: "trader" | "builder" | "conqueror" | "idle"; // how the AI runs the realm whenever it controls it
+  aiMemory: AiMemory | null;            // what the AI keeps between decisions (section 11); null before its first
   capital: AreaId | null;               // capital area; null once the government is eliminated
   isEliminated: boolean;                // true once the government owns no area
   treasury: number;                     // government money for the whole realm, in man-hours
@@ -471,7 +473,7 @@ A game starts from a state that is already almost balanced:
 3. Each area starts with `reserveDaysOf(good)` of total demand in stock.
 4. Each area starts with `targetSavingsDays` of income in savings, so savings neither boost nor dampen demand at first.
 5. Value added and `wageLevel` are computed once from these starting prices and workers, so the first tick has valid purchasing power and labor targets.
-6. The world then runs `warmupDays` with no players, at `warmupResponsivenessBoost` times the normal economy responsiveness and with population frozen (demography responsiveness 0), before the game opens.
+6. The world then runs `warmupDays` with no players and no AI decisions, at `warmupResponsivenessBoost` times the normal economy responsiveness and with population frozen (demography responsiveness 0), before the game opens.
 
 ### Global pace parameters
 
@@ -904,7 +906,8 @@ A government is founded on each capital placed by map generation, in capital ord
 - **Treasury:** starts at `startingTreasuryDays` of the realm's income, `population × workforceShare × hoursPerWorkerDay × wageLevel` summed over its areas.
 - **Owned areas:** each starts with an empty depot, no jobs, a `wageOffer` of 1 and no policies.
 - **Relations:** every pair of governments starts at peace.
-- **Controller:** an idle AI until a player or the AI takes the government over.
+- **Controller:** the AI, until a player takes the government over.
+- **Personality:** from the game's AI mix (section 11).
 
 ### Policies
 
@@ -1257,9 +1260,9 @@ The interface uses the table in two places:
 2. The joining player opens the link and gives a name; its browser opens a reliable data channel to the host and sends `hello`.
 3. The host answers `welcome`, and the player appears in the lobby. Players can join before the host starts and during the game.
 
-**Players.** A joining player is identified by a random token its tab keeps in `sessionStorage`. The host sets the controller of the government it takes to `{ kind: "human", player: token }`. Commands act for the government their connection's player holds; the host never takes the player from the message. A player chooses a realm no one else holds and that is not eliminated, or watches as a spectator. Taking another realm gives the previous one back to the idle AI. Only the host controls time.
+**Players.** A joining player is identified by a random token its tab keeps in `sessionStorage`. The host sets the controller of the government it takes to `{ kind: "human", player: token }`. Commands act for the government their connection's player holds; the host never takes the player from the message. A player chooses a realm no one else holds and that is not eliminated, or watches as a spectator. Taking another realm gives the previous one back to the AI. Only the host controls time.
 
-**Dropped connections.** A joining player whose connection drops retries after 1, 2, 4 and 8 seconds, then every 8 seconds, and gives up 2 minutes after the drop. A `hello` with the same token, from a reconnection or a reload of the same tab, restores the player's role and realm, and the host sends `welcome` again. While a player is offline, its realm stays reserved for it and idle; the host can release it, and another player can then take it.
+**Dropped connections.** A joining player whose connection drops retries after 1, 2, 4 and 8 seconds, then every 8 seconds, and gives up 2 minutes after the drop. A `hello` with the same token, from a reconnection or a reload of the same tab, restores the player's role and realm, and the host sends `welcome` again. While a player is offline, its realm stays reserved for it and the AI runs it by the realm's personality; control returns when the player is back. The host can release the realm, and another player can then take it.
 
 **Broker.** The game's own broker is a Cloudflare Worker (`apps/broker`) speaking the PeerServer protocol, with every peer's WebSocket in one Durable Object. A build setting (`VITE_BROKER_URL`) gives its address; a build without it uses the free PeerJS cloud broker. A `?peer=host:port[/path]` query setting points the game at another broker, such as the Worker run locally (`pnpm broker`, port 8787), which the end-to-end tests and local network play use.
 
@@ -1301,7 +1304,7 @@ The interface is map-first: the map fills the screen and panels sit beside it on
 ### Screens
 
 1. **Join.** Opening a join link asks for the player's name, then connects; a reload of the same tab rejoins without asking. The host's refusal or an unreachable host is shown.
-2. **New game.** The player picks a catalog (small, medium or large), a map size (300, 1,000 or 3,000 areas), the number of realms (4, 6, 8, 12, 16, 24 or 32, at most one per 8 areas; default 8) and a seed. The map is then generated and warmed up in the worker, behind a progress bar. Finally comes the **lobby**: the founded governments with capital, population, area count and the player holding each. Each player picks a free realm, takes a random one or watches. The host can invite players there (a join link with a Copy button), see who is online, and release the realm of a player who went offline. The host's pick starts the game; a joined player enters once the host accepts its pick.
+2. **New game.** The player picks a catalog (small, medium or large), a map size (300, 1,000 or 3,000 areas), the number of realms (4, 6, 8, 12, 16, 24 or 32, at most one per 8 areas; default 8), the AI's personality mix (balanced, peaceful or aggressive; section 11) and a seed. The map is then generated and warmed up in the worker, behind a progress bar. Finally comes the **lobby**: the founded governments with capital, population, area count, and the player holding each or its AI personality. Each player picks a free realm, takes a random one or watches. The host can invite players there (a join link with a Copy button), see who is online, and release the realm of a player who went offline. The host's pick starts the game; a joined player enters once the host accepts its pick.
 3. **Game.** The map, the top bar and the panels.
 4. **End of session.** Shown when the player's government is eliminated, or when the player ends the game. It lists days played, peak and final population, areas held and treasury, and offers a new game. There is no score.
 
@@ -1350,7 +1353,7 @@ Mouse or one finger pans and the wheel or a pinch zooms around the pointer. A cl
 | Orders | Depot contents per area, open market orders, standing orders, depot transfers in transit | Place and cancel market orders in any own area; add and remove standing orders; transfer goods between depots |
 | Jobs | For one own area or the whole realm: the workforce split between private jobs, government jobs and unemployment, and private workers, output per day and output per worker by good. Per own area: each job's target and workers, and the wage offer | Set job targets and wage offers |
 | Armies | Soldier wage, realm average wage, soldiers and their pay per day; weapons in depots and being bought; each army's soldiers, equipment, power, stance, location and path | Set the soldier wage, recruit, buy weapons, set stance, move (then pick the destination on the map), disband |
-| Diplomacy | Relations with every government, pending proposals | Declare war; propose peace (payment and areas picked on the map); accept or refuse proposals |
+| Diplomacy | Relations with every government, with who runs each (a player, "AI · personality", or an offline player's realm run by the AI), pending proposals | Declare war; propose peace (payment and areas picked on the map); accept or refuse proposals |
 
 A rejected command is shown as a short message with its reason.
 
@@ -1366,3 +1369,94 @@ The top bar holds pause and four speeds: 1×, 2× and 5× (`maxTicksPerSecond` 2
 
 - **Desktop** (900 px wide and more): the map fills the window, under a top bar. A sidebar on the right holds the panels as tabs. It is 380 px wide by default; dragging the divider between map and sidebar resizes it between 280 px and the smaller of 900 px and 70% of the window, arrow keys nudge it, and a double-click restores the default. The width is remembered on the device.
 - **Phone:** the map fills the screen under a compact top bar. The panels sit in a bottom sheet with three heights: a peek showing the selection, half the screen, and full screen. Touch targets are at least 44 px.
+
+## 11. AI governments
+
+Every realm no player holds, or whose player is offline, is run by the AI. The AI uses the same commands as players and reads only what a player of that realm would see.
+
+### Personalities
+
+| Personality | Plays | Tax (start, bounds) | Jobs: research, infrastructure, ports and airport, fortification | Standing orders | Army |
+| --- | --- | --- | --- | --- | --- |
+| Trader | Trade and transport | 4%, [2%, 20%] | 10%, 45%, 40%, 5% | In every area, for the six most consumed goods: buy below 0.8× labor value, up to 20 days of an area's consumption; sell above 1.3× | Defends only |
+| Builder | Growth and safety | 6%, [3%, 25%] | 35%, 35%, 10%, 20% | Granaries in the five most populous areas, for the three most consumed staples (necessity goods): keep 10 days of demand at up to 1.2× labor value, sell above 2× | Defends only |
+| Conqueror | Expansion by war | 8%, [5%, 30%] | 20%, 20%, 5%, 55% | Weapons bought at the capital below 3× labor value, up to one per soldier of its army | 1.5% of its population; wars of conquest |
+
+- **Mix.** Founding gives each realm a personality from the game's mix, in a seeded order: balanced (a third each), peaceful (half traders, half builders) or aggressive (half conquerors, a quarter traders, a quarter builders). "Idle" never acts; only test worlds use it.
+- **Shown.** Players see each realm's personality.
+
+### Perception
+
+An AI decides from the view a player of its realm gets: the snapshot built for its government (section 9, Snapshots), with the detail of every visible area; the static data; and the price table, decoded. It never reads the world directly.
+
+### Cadence
+
+- Each AI realm decides every `ai.decisionIntervalDays` (default 10), realm `id` first at tick `id mod interval`, so realms take turns.
+- At most `ai.maxDecisionsPerTick` (default 4) realms decide in one tick; the others decide at the next tick. Each tick starts from a different realm. The cap counts decisions, not time, so a replay is identical on every device.
+- Decisions run in phase 0, after the queued commands and before standing orders. Their commands are validated and applied like any other, as `"ai"`; rejected ones are dropped.
+- The warm-up runs without AI decisions.
+
+### Memory
+
+```typescript
+interface AiMemory {
+  nextDecisionTick: number;             // tick of the next decision
+  createdDay: number;                   // game day the AI first ran the realm
+  lastDecisionDay: number | null;       // game day of the last decision; null before the first
+  lastTreasury: number;                 // treasury at the last decision
+  standingOrdersPlaced: boolean;        // the personality's standing orders are set
+  wars: AiWar[];                        // wars in progress
+  lastPeaceDay: number | null;          // game day the last war ended
+  ownedAreaCount: number;               // areas owned at the last decision, to notice captures
+}
+
+interface AiWar {
+  enemy: GovernmentId;                  // the government at war with this one
+  startDay: number;                     // game day the war began, or the AI first saw it
+  areasAtStart: number;                 // areas this government owned then
+  enemyAreasAtStart: number;            // areas the enemy owned then
+  lastCaptureDay: number;               // game day of this government's last capture
+  declaredByMe: boolean;                // this government declared the war
+  lastProposalDay: number | null;       // game day of its last peace proposal
+  target: AreaId | null;                // enemy area its main army marches on
+}
+```
+
+### Economy
+
+- **Income.** Production taxes owed per day: the realm rate times the value of the owned areas' output at their prices.
+- **Taxes.** The realm production tax rate starts at the personality's base. Each later decision:
+  - when the treasury fell and holds less than `reserveDays` of income (60 days; 45 for a conqueror), the rate rises by 2 points, or by 4 below half that reserve;
+  - when the treasury rose and holds more than twice the reserve, the rate falls by 1 point;
+  - the rate stays within the personality's bounds, in steps of 0.5 points.
+- **Wages.** Wage offers and the soldier wage are 1.1× the area's (or the realm's population-weighted) wage level, within [0.1, 10], changed when they move by more than 5%.
+- **Jobs.** A share of income after soldiers' wages pays government workers (trader 40%, builder 60%, conqueror 25%), at most 1% of the realm's workforce. While the treasury falls and is below the reserve, it is cut to at most half of the current job wages. The workers are split by the personality's weights:
+  - research at the capital, up to level 5;
+  - infrastructure on the three land edges between owned areas carrying the most tonnage;
+  - ports in the two most populous coastal areas, and an airport at the capital, below their maximum levels;
+  - fortification of the three most populous border areas, below the maximum level.
+
+  A kind with nowhere to go drops out, and the others share its workers. A job's target changes only when it moves by more than 10%; jobs not wanted any more are set to zero.
+- **Standing orders** are placed at the first decision (table above), and the conqueror's weapons order whenever its capital lacks one. There is one order per rule kind, good and areas.
+
+### War and peace
+
+- **Defense** (every personality). At war, an enemy army in attack stance threatens the owned area it stands in or marches into next. Where the threat exceeds 0.8× the area's defense (militia and own armies, times one plus its fortification), the AI:
+  - recruits a holding army there of `(1.2 × threat − defense) / (1 + fortification)` soldiers, within its unemployed plus half its private workers and 10% of its population, at least 50;
+  - sends its nearest idle army that is not itself threatened.
+- **Standing army** (conqueror). While the treasury holds its reserve, the army is topped up toward 1.5% of the population, recruited in the three most populous areas, at most 1% of an area's population per decision.
+- **Declaring war** (conqueror). Only at peace, at least 90 days after the AI first ran the realm and 120 days after its last peace, with its army near its target and the treasury at its reserve.
+  - Candidates are the governments owning an area across a land border, with at most 3× its population.
+  - It picks the one whose weakest border area has the least defense, if its idle armies at home have at least twice that power, with a 20% random spread.
+  - It declares war and sends its armies, the eight largest at most, to that area in attack stance.
+- **Attacking.** At war, idle armies at home (the eight largest at most) march on the enemy area across a land border with the least defense, if they have 1.5× its power. Armies already fighting in enemy land keep at it.
+- **Done with a war.** An attacker is done when any of these holds, and then stops attacking:
+  - it took 20% of the enemy's areas at the start;
+  - the war has lasted 150 days with no capture in the last 60;
+  - the war has lasted 360 days;
+  - it is losing: fewer areas than at the start, and the enemy's armies at least as strong;
+  - its treasury is below a third of its reserve.
+- **Proposing peace.** Status quo (no areas, no payment), expiring in 30 days, at most every 30 days per war: by a defender 30 days into a war, and by an attacker that is done.
+- **Answering peace.** The AI accepts a proposal that costs it no area and at most 10% of its treasury, if it wants peace (a defender, or a done attacker). When losing, it also accepts up to two areas and 20% of its treasury. Otherwise it refuses.
+- **At peace.** Armies abroad come home and hold; soldiers beyond 1.5× the army target are disbanded.
+

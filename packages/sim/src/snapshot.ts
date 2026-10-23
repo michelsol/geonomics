@@ -17,6 +17,7 @@ import type {
   MarketOrder,
   Need,
   PeaceProposal,
+  Personality,
   PolicySetting,
   Relation,
   StandingOrder,
@@ -76,6 +77,8 @@ export interface GovernmentSummary {
   areaCount: number;
   population: number;
   isEliminated: boolean;
+  personality: Personality; // how the AI runs the realm whenever it controls it
+  ai: boolean; // the AI controls the realm now
 }
 
 /** Stocks and flows of one area, sent for the viewer's areas and their direct neighbors. */
@@ -264,11 +267,12 @@ export function buildSnapshot(
       areaCount: g.ownedAreas.length,
       population: g.ownedAreas.reduce((sum, id) => sum + (world.areas[id]?.population ?? 0), 0),
       isEliminated: g.isEliminated,
+      personality: g.personality,
+      ai: g.controller.kind === "ai",
     })),
   };
 }
 
-/** Owned areas and their direct neighbors over every active edge, in area order. */
 /** Owned areas and their direct neighbors over every active edge, in area order: the areas a government sees. */
 function visibleAreas(world: World, owned: readonly AreaId[]): AreaId[] {
   const visible = new Set<AreaId>(owned);

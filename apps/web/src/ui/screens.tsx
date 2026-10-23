@@ -1,11 +1,13 @@
 // New game, realm choice and end-of-session screens (specification §10, Screens).
+
+import type { AiMix } from "@geonomics/sim";
 import { useState } from "react";
 import type { CatalogName } from "../host/protocol";
 import { hostEntered, stopHosting } from "../net/host";
 import { joinTarget, savedName } from "../net/options";
 import { useGame } from "../state/store";
 import { count, fmt, Select, Swatch } from "./components";
-import { Invite, Players } from "./Players";
+import { controllerLabel, Invite, Players } from "./Players";
 
 const SIZES = [
   { value: 300, label: "Small — 300 areas" },
@@ -16,6 +18,12 @@ const CATALOGS: { value: CatalogName; label: string }[] = [
   { value: "small", label: "Small — 5 goods" },
   { value: "medium", label: "Medium — 14 goods" },
   { value: "large", label: "Large — 54 goods" },
+];
+
+const AI_MIXES: { value: AiMix; label: string }[] = [
+  { value: "balanced", label: "Balanced — traders, builders, conquerors" },
+  { value: "peaceful", label: "Peaceful — traders and builders" },
+  { value: "aggressive", label: "Aggressive — half conquerors" },
 ];
 
 const REALM_COUNTS = [4, 6, 8, 12, 16, 24, 32];
@@ -35,6 +43,7 @@ export function NewGame() {
   const [areas, setAreas] = useState<number>(1000);
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e6));
   const [chosenRealms, setRealms] = useState(8);
+  const [aiMix, setAiMix] = useState<AiMix>("balanced");
   const realmOptions = REALM_COUNTS.filter((n) => n * AREAS_PER_REALM <= areas).map((n) => ({
     value: n,
     label: `${n} realms`,
@@ -62,7 +71,7 @@ export function NewGame() {
             onSubmit={(event) => {
               event.preventDefault();
               stopHosting();
-              newGame({ catalog, areas, seed, realms, warmupDays: warmupOverride() });
+              newGame({ catalog, areas, seed, realms, aiMix, warmupDays: warmupOverride() });
             }}
           >
             <div className="form-grid">
@@ -72,6 +81,8 @@ export function NewGame() {
               <Select label="Map size" value={areas} options={SIZES} onChange={setAreas} />
               <label htmlFor="realms">Realms</label>
               <Select label="Realms" value={realms} options={realmOptions} onChange={setRealms} />
+              <label htmlFor="ai-mix">AI</label>
+              <Select label="AI personalities" value={aiMix} options={AI_MIXES} onChange={setAiMix} />
               <label htmlFor="seed">Seed</label>
               <div className="row">
                 <input
@@ -135,8 +146,8 @@ export function ChooseRealm() {
                   {government.capital === null ? government.name : data?.areas[government.capital]?.name}
                 </span>
                 <span className="muted">
-                  {held ? `${held.name} · ` : ""}
-                  {government.areaCount} areas · {count(government.population)} people
+                  {held ? held.name : controllerLabel(government, session.players)} · {government.areaCount} areas ·{" "}
+                  {count(government.population)} people
                 </span>
               </button>
             );

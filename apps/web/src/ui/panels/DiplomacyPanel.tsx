@@ -3,6 +3,7 @@ import type { PeaceProposal } from "@geonomics/sim";
 import { useState } from "react";
 import { useGame } from "../../state/store";
 import { fmt, NumberField, Section, Select, Swatch } from "../components";
+import { controllerLabel } from "../Players";
 import { areaName, useSend, useView } from "./common";
 
 export function DiplomacyPanel() {
@@ -55,7 +56,7 @@ export function DiplomacyPanel() {
                 <Swatch color={g.color} />
                 {g.name}{" "}
                 <span className="muted">
-                  {players.find((p) => p.government === g.id)?.name ?? "AI"} · {g.areaCount} areas
+                  {controllerLabel(g, players)} · {g.areaCount} areas
                 </span>
               </span>
               {relation === "war" ? (

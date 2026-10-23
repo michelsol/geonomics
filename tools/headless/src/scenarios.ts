@@ -1,6 +1,7 @@
 // Worlds for convergence checks and benchmarks. The hand-built ones work with any catalog: primary goods are spread
 // generically and capacities are sized from the reference demand. "map" runs the map generator.
 import {
+  type AiMix,
   type AreaSpec,
   type Catalog,
   createConfig,
@@ -20,6 +21,7 @@ export interface ScenarioOptions {
   catalog: Catalog;
   seed?: number;
   config?: DeepPartial<WorldConfig>;
+  aiMix?: AiMix; // personalities of the map scenario's realms
 }
 
 export interface Scenario {
@@ -153,7 +155,7 @@ export const scenarios = {
       const config = createConfig(options.catalog, options.config);
       const { world, capitals } = generateMap(options.catalog, config, options.seed ?? 1);
       initializeWorld(world);
-      foundGovernments(world, capitals);
+      foundGovernments(world, capitals, options.aiMix);
       return world;
     },
   },

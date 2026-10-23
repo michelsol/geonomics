@@ -7,7 +7,10 @@ import { conquestEstimate, employmentOf, priceExtremes, priceOf } from "./select
 import { createGameStore } from "./store";
 
 function setup() {
-  const world: World = createGame({ catalog: "small", areas: 60, seed: 5, realms: 4, warmupDays: 0 }, () => {});
+  const world: World = createGame(
+    { catalog: "small", areas: 60, seed: 5, realms: 4, aiMix: "balanced", warmupDays: 0 },
+    () => {},
+  );
   const sent: ToWorker[] = [];
   const store = createGameStore({ postMessage: (message) => sent.push(message) });
   const state = () => store.getState();

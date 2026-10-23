@@ -272,3 +272,36 @@ Credentials last 24 hours, longer than a game session usually runs. The host's p
 
 On 2026-10-23, Firefox 158 on Windows gathered no ICE candidates at all, not even host ones, on pages loaded over IPv6 loopback (`http://[::1]:…`, or `localhost` when the server listens only on `::1`, as Vite does by default with Node on Windows). The same page over `127.0.0.1` gathered host and server-reflexive candidates, and so did public pages loaded over IPv4. Every join from Firefox then failed with "ICE failed, your TURN server appears to be broken", whatever the ICE servers. The dev and preview servers therefore listen on `127.0.0.1`. Pages loaded over public IPv6 were not tested: the machine had no IPv6 route.
 
+## AI governments (roadmap stage 10)
+
+### Exit runs
+
+`pnpm headless -- --ai <mix> --catalog medium --areas 1000 --realms 8 --days 2000 --seed <n>`: a generated 1,000-area map, the medium catalog, 8 AI realms, the 180-day warm-up, then 2,000 days with nobody but the AI.
+
+| Mix, seed | Realms alive | Population | Trade (t/day) | Wars declared, ended | Longest war | AI ms/tick (max) |
+| --- | --- | --- | --- | --- | --- | --- |
+| Balanced, 1 | 8/8 | +13.4% | 440k → 477k | 10, 10 | 362 days | 1.11 (5.7) |
+| Balanced, 2 | 8/8 | +12.5% | 397k → 471k | 10, 9 | 363 days | 1.11 (5.4) |
+| Balanced, 3 | 8/8 | +15.4% | 427k → 491k | 9, 8 | 356 days | 1.14 (5.3) |
+| Aggressive, 1 | 8/8 | +8.3% | 440k → 456k | 20, 19 | 368 days | 1.29 (8.2) |
+| Aggressive, 2 | 8/8 | +8.7% | 398k → 448k | 18, 17 | 310 days | 1.20 (6.4) |
+| Peaceful, 1 | 8/8 | +17.0% | 440k → 476k | 0, 0 | — | 0.99 (4.5) |
+
+No AI command was rejected in these runs. The tick itself takes about 10 ms, so the AI adds about a tenth. For comparison, the same map with idle realms grows about 17% over the 2,000 days. Conquerors gain areas, mostly from traders and builders, but no realm falls: a conqueror stops once it took a fifth of its enemy, or after a year. The vitest suite runs a shorter version (300 areas, the small catalog, 600 days).
+
+### Tuning, and what it showed
+
+- **Spending the starting treasury.** A first version spent the treasury above its reserve on jobs over two years. The starting treasury is 30 days of the realm's whole private income, so that meant hiring several percent of the workforce. Research then climbed to hundreds of levels and people went hungry. Jobs are now paid from tax income only, up to 1% of the workforce.
+- **Research hurts past a few levels.** With idle realms and research fixed at a level for the whole run, the population grew 17% at level 0, 14% at level 10 and not at all at level 40, with necessity satisfaction falling in the larger realms. Higher productivity should never make people hungrier, so this is a fault in the economy, probably in how labor allocation or natural capacity reacts to higher output per worker. It affects human players too. Until it is fixed, the AI stops researching at level 5; the roadmap lists it.
+- **Income.** The treasury trend mixes taxes with market trades, so a builder buying for its granaries saw its income as negative and staffed nothing. Income is now the production tax owed on the owned areas' output at their prices.
+- **Granaries in every area** cost a builder its treasury in spoiled food; they are now in its five most populous areas.
+- **Conquerors.** At 3% of the population, raised at the capital, the army emptied the capital. It is now 1.5%, raised a little at a time in the three most populous areas. Targets across the sea were unreachable for armies without a port, so war targets are land neighbors. Wars never ended while a conqueror kept capturing, until it got a conquest share and a maximum length.
+- **Time.** Conquerors ordering dozens of small armies to march made some decisions take 50–75 ms, each order planning a path. Moving at most the eight largest armies per decision brought the worst tick under 10 ms.
+
+### Choices
+
+- **A cap on decisions, not on time.** The roadmap asks for a limit on host time per tick. A wall-clock budget would make the world depend on the device's speed and break replays; a fixed number of decisions per tick (4, each realm every 10 days) keeps the tick deterministic, and the runs above measure what it costs.
+- **What the AI reads.** Decisions take a view built by `perceive()`: the same snapshot a player of the realm receives, the static data and the decoded price table. Decision code never receives the world, so the AI cannot see more than a player. Applying the commands is the only place the AI touches the world, through `applyCommand` like any player.
+- **Memory in the world.** `Government.aiMemory` is plain data in the world, so a saved game resumes its AI where it was, and the world hash covers it.
+- **Offline players.** The AI runs an offline player's realm by its personality rather than leaving it idle, so a player who drops during a war still defends. The realm stays reserved in the lobby, and control returns on reconnect.
+

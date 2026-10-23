@@ -28,7 +28,10 @@ function fakeTime() {
 }
 
 function setup(speed: number | "max" = 5) {
-  const world = createGame({ catalog: "small", areas: 60, seed: 3, realms: 4, warmupDays: 0 }, () => {});
+  const world = createGame(
+    { catalog: "small", areas: 60, seed: 3, realms: 4, aiMix: "balanced", warmupDays: 0 },
+    () => {},
+  );
   (world.governments[0] as (typeof world.governments)[number]).controller = { kind: "human", player: LOCAL_PLAYER };
   const time = fakeTime();
   const messages: FromWorker[] = [];
@@ -111,7 +114,7 @@ describe("HostLoop", () => {
 
   it("sends each joined player its own snapshot, packed, and spectators public data only", async () => {
     const { world, messages, loop } = setup(5);
-    (world.governments[1] as (typeof world.governments)[number]).controller = { kind: "ai", personality: "idle" };
+    (world.governments[1] as (typeof world.governments)[number]).controller = { kind: "ai" };
     loop.setPlayer("bob", 1, true);
     loop.setPlayer("eve", null, true);
     expect(world.governments[1]?.controller).toEqual({ kind: "human", player: "bob" });
@@ -128,9 +131,14 @@ describe("HostLoop", () => {
     expect(snapshotFor("eve")?.snapshot.detail).toEqual([]);
     expect(unpacked.some((u) => u.to === null && (u.message as { type: string }).type === "priceTable")).toBe(true);
 
-    // Taking another realm gives the first back to the idle AI; stopping to watch keeps the realm.
-    loop.setPlayer("bob", 2, false);
+    // Taking another realm gives the first back to the AI; going offline lets the AI run the realm until the
+    // player is back.
+    loop.setPlayer("bob", 2, true);
     expect(world.governments[1]?.controller.kind).toBe("ai");
+    expect(world.governments[2]?.controller).toEqual({ kind: "human", player: "bob" });
+    loop.setPlayer("bob", 2, false);
+    expect(world.governments[2]?.controller.kind).toBe("ai");
+    loop.setPlayer("bob", 2, true);
     expect(world.governments[2]?.controller).toEqual({ kind: "human", player: "bob" });
   });
 
