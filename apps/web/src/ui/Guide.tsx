@@ -31,8 +31,8 @@ export function Guide() {
           <p>
             Every area produces, consumes and trades with its neighbors on its own. Prices rise where goods are short
             and fall where they pile up, so goods flow from cheap areas to dear ones, and people move toward work and
-            food. Money is counted in man-hours (mh): one hour of an average worker's labor. Prices are public: the
-            Goods panel shows where each good is cheapest and dearest.
+            food. Money is counted in man-hours (mh): one hour of an average worker's labor. Prices are public: the Good
+            section, at the bottom of the Area panel, shows where each good is cheapest and dearest.
           </p>
         </section>
 
@@ -41,11 +41,12 @@ export function Guide() {
           <ul>
             <li>
               <b>Policies</b>: taxes and tariffs (a negative tax is a subsidy), head tax, price ceilings and floors, for
-              the whole realm or one area. Taxes fill your treasury but slow the economy down.
+              the whole realm or one area. Taxes fill your treasury but slow the economy down. Standing orders buy cheap
+              and sell dear for your depots on their own.
             </li>
             <li>
-              <b>Orders</b>: buy and sell on any of your markets into your depots, move goods between depots, and set
-              standing orders that buy cheap and sell dear on their own.
+              <b>Depots</b>: the Area panel shows what your government holds in an area, and sends goods between your
+              areas.
             </li>
             <li>
               <b>Jobs</b>: hire workers to build roads, ports, airports and fortifications, or to produce goods. Better

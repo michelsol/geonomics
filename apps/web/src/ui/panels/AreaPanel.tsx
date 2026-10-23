@@ -1,10 +1,13 @@
-// The selected area: public figures, resources, defense, and a sortable market table.
+// The selected area: public figures, defense, resources, a sortable market table, the depot, and one good across the
+// world.
 import { useState } from "react";
 import { mapControls } from "../../map/MapView";
 import { capacityMaximum, conquestEstimate, detailOf, policiesInForce, priceOf } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { count, fmt, pct, Section, Stat, Swatch } from "../components";
-import { type PanelName, type PanelProps, usePublicView } from "./common";
+import { type PanelProps, usePublicView } from "./common";
+import { Depots } from "./Depots";
+import { GoodSection } from "./GoodSection";
 
 const WAGE_HINT = "Mean value added per private worker-hour, weighted by workers, in man-hours (not a median).";
 
@@ -128,7 +131,9 @@ export function AreaPanel({ onOpen }: PanelProps) {
         <span className="hint">Units per day. See a good across the map with the Resources layer.</span>
       </Section>
 
-      <MarketTable area={area} onOpen={onOpen} />
+      <MarketTable area={area} />
+      <Depots areas={[area]} />
+      <GoodSection />
     </>
   );
 }
@@ -209,7 +214,7 @@ function saveSort(sort: Sort): void {
 }
 
 /** Prices of every good, plus stocks and flows where the snapshot carries them; columns sort on click. */
-function MarketTable({ area, onOpen }: { area: number; onOpen: (panel: PanelName) => void }) {
+function MarketTable({ area }: { area: number }) {
   const view = usePublicView();
   const table = useGame((state) => state.priceTable);
   const selectGood = useGame((state) => state.selectGood);
@@ -273,7 +278,7 @@ function MarketTable({ area, onOpen }: { area: number; onOpen: (panel: PanelName
                   className="link"
                   onClick={() => {
                     selectGood(row.good.id);
-                    onOpen("good");
+                    document.getElementById("good-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
                   }}
                 >
                   {row.good.name}

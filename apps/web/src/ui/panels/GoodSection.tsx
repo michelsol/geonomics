@@ -1,11 +1,12 @@
-// One good across the world: lowest, median and highest price with their areas, and their history.
+// One good across the world, at the bottom of the Area panel: lowest, median and highest price with their areas,
+// and their history.
 import { priceExtremes, priceOf } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { Chart } from "../Chart";
 import { fmt, Section, Select } from "../components";
 import { AreaLink, areaName, goodOptions, usePublicView } from "./common";
 
-export function GoodPanel() {
+export function GoodSection() {
   const view = usePublicView();
   const good = useGame((state) => state.selectedGood);
   const table = useGame((state) => state.priceTable);
@@ -23,7 +24,7 @@ export function GoodPanel() {
   const local = area === null ? undefined : history?.areaPrices.get(area);
 
   return (
-    <>
+    <div className="section" id="good-section">
       <Section title="Good">
         <div className="row">
           <Select label="Good" value={good} options={goodOptions(data)} onChange={selectGood} />
@@ -87,7 +88,7 @@ export function GoodPanel() {
           />
         </Section>
       )}
-    </>
+    </div>
   );
 }
 

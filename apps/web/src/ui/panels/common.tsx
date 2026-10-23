@@ -2,7 +2,7 @@
 import type { GovernmentView, Snapshot, StaticData } from "@geonomics/sim";
 import { useGame } from "../../state/store";
 
-export type PanelName = "area" | "good" | "government" | "policies" | "orders" | "jobs" | "armies" | "diplomacy";
+export type PanelName = "area" | "government" | "policies" | "jobs" | "armies" | "diplomacy";
 export interface PanelProps {
   onOpen: (panel: PanelName) => void;
 }

@@ -22,18 +22,14 @@ import { AreaPanel } from "./panels/AreaPanel";
 import { ArmiesPanel } from "./panels/ArmiesPanel";
 import type { PanelName, PanelProps } from "./panels/common";
 import { DiplomacyPanel } from "./panels/DiplomacyPanel";
-import { GoodPanel } from "./panels/GoodPanel";
 import { GovernmentPanel } from "./panels/GovernmentPanel";
 import { JobsPanel } from "./panels/JobsPanel";
-import { OrdersPanel } from "./panels/OrdersPanel";
 import { PoliciesPanel } from "./panels/PoliciesPanel";
 
 const PANELS = {
   area: { label: "Area", view: AreaPanel },
-  good: { label: "Goods", view: GoodPanel },
   government: { label: "Realm", view: GovernmentPanel },
   policies: { label: "Policies", view: PoliciesPanel },
-  orders: { label: "Orders", view: OrdersPanel },
   jobs: { label: "Jobs", view: JobsPanel },
   armies: { label: "Armies", view: ArmiesPanel },
   diplomacy: { label: "Diplomacy", view: DiplomacyPanel },
@@ -57,7 +53,7 @@ const FLOWS: { value: Flows; label: string }[] = [
 
 type SheetHeight = "peek" | "half" | "full";
 
-const SPECTATOR_PANELS: readonly PanelName[] = ["area", "good"];
+const SPECTATOR_PANELS: readonly PanelName[] = ["area"];
 
 /** Keeps the host's screen on while its game runs and the tab is visible (specification §9, Hosting on mobile). */
 function useWakeLock(): void {
