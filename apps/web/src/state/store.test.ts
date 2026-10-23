@@ -104,7 +104,7 @@ describe("game store", () => {
     expect(state().governments.length).toBeGreaterThan(0);
     state().chooseRealm(1);
     expect(state().screen).toBe("game");
-    expect(sent.at(-1)).toEqual({ type: "start", government: 1 });
+    expect(sent.at(-1)).toEqual({ type: "start", government: 1, speed: 5 }); // 2× off phones
     expect(state().selectedArea).toBe(state().governments[1]?.capital);
   });
 
@@ -187,7 +187,7 @@ describe("game store", () => {
     const { state, sent } = setup();
     state().setSession({ role: "client" });
     state().chooseRealm(2);
-    expect(sent.at(-1)).toEqual({ type: "start", government: 2 });
+    expect(sent.at(-1)).toEqual({ type: "start", government: 2, speed: 5 });
     expect(state().screen).toBe("chooseRealm"); // waiting for the host
     const you = { id: "bob", name: "Bob", role: "player" as const, government: 2, online: true, isHost: false };
     state().enterAs(you);
