@@ -10,3 +10,4 @@ tools/headless/out/
 apps/broker/worker-configuration.d.ts
 apps/broker/.wrangler/
 apps/broker/.dev.vars
+*.local

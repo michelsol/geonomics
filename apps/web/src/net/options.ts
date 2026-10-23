@@ -17,11 +17,7 @@ function broker(host: string, port: number, path: string, secure: boolean): Brok
  * local play run one). `?relay=1` allows relayed connections only, to check TURN. The settings travel in the join link,
  * so joined players use the same broker.
  */
-export function brokerOptions(
-  search = location.search,
-  builtIn = BUILT_IN_BROKER,
-  pageProtocol = location.protocol,
-): BrokerOptions {
+export function brokerOptions(search = location.search, builtIn = BUILT_IN_BROKER): BrokerOptions {
   const params = new URLSearchParams(search);
   const relay: BrokerOptions = params.get("relay") === "1" ? { relayOnly: true } : {};
   const value = params.get("peer");
@@ -31,7 +27,8 @@ export function brokerOptions(
     const host = match[1] as string;
     const local = host === "localhost" || host === "127.0.0.1";
     const port = match[2] ? Number(match[2]) : local ? 8787 : 443;
-    return { ...broker(host, port, match[3] ?? "/", !local && pageProtocol === "https:"), ...relay };
+    // Brokers on the web answer on 443 with TLS (a Worker, the PeerJS cloud); local ones run plain on their own port.
+    return { ...broker(host, port, match[3] ?? "/", port === 443), ...relay };
   }
   if (builtIn) {
     const url = new URL(builtIn);

@@ -16,7 +16,10 @@ pnpm dev      # the game, in another terminal
 
 Open the game with `?peer=localhost:8787`, or `?peer=<this machine's address>:8787` from another device. Without a TURN key, `/ice` answers 503 and browsers use PeerJS's defaults: Google's public STUN, and no working relay (PeerJS's public TURN servers no longer resolve), so `?relay=1` cannot connect.
 
-To try TURN locally, put the two secrets below in `apps/broker/.dev.vars` (ignored by git):
+To play locally with TURN, either use the deployed broker or give the local one the TURN key.
+
+- **The deployed broker:** put `VITE_BROKER_URL=https://geonomics-broker.<account subdomain>.workers.dev` in `apps/web/.env.local` (ignored by git), restart `pnpm dev`, and open the game without `?peer=`. Or keep the file out and open `http://localhost:5173/?peer=geonomics-broker.<account subdomain>.workers.dev`.
+- **The local broker:** put the two secrets below in `apps/broker/.dev.vars` (ignored by git), restart `pnpm broker`, and open the game with `?peer=localhost:8787`:
 
 ```sh
 TURN_KEY_ID=...
