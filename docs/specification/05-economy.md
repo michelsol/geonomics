@@ -1,0 +1,285 @@
+[Specification](README.md) · section 5 of 11
+
+## 5. Economy mechanics
+
+The private economy of every area is five steps: produce, consume, trade, reprice, reallocate labor. Population then reacts slowly to the result. In the formulas below, `days` means `gameDaysPerTick`, and `fraction(rate)` is the helper from section 4, rule 2.
+
+### Workforce
+
+```typescript
+workforce = area.population * config.economy.workforceShare
+// workforce = sum(privateWorkers) + government workers + unemployedWorkers
+hourlyOutputPerWorker(good) =
+  config.economy.hoursPerWorkerDay * area.productivity / good.laborHoursPerUnit                          // units per worker per day
+```
+
+### Production
+
+Goods are processed in catalog order, so inputs made this tick are available to their outputs. Private and government workers on the same primary good share the natural capacity, and output is split between them in proportion to workers.
+
+```typescript
+// Primary goods: diminishing returns on nature
+laborOutputPerDay = totalWorkers * hourlyOutputPerWorker(good)
+outputPerDay      = capacity * (1 - exp(-laborOutputPerDay / capacity))
+output            = outputPerDay * days
+marginalOutputPerWorker = hourlyOutputPerWorker(good) * exp(-laborOutputPerDay / capacity)
+naturalCapacity  -= output * good.depletionPerUnitExtracted
+
+// Crafted goods: limited by labor and by rationed inputs
+maximumByLabor  = workers * hourlyOutputPerWorker(good) * days
+output          = maximumByLabor * min over inputs of ration[input.good]
+outputLimitedByInputs = output < maximumByLabor
+marginalOutputPerWorker = hourlyOutputPerWorker(good) * min over inputs of ration[input.good]
+```
+
+**Input rationing.** Several goods often share one input; electricity, for example, feeds most recipes. A scarce input is split between its users in proportion to what each one requests, not handed to whichever comes first in the catalog. This takes one pass, because catalog order guarantees that when good `i` is reached, all of its production for the tick is done and all of its users come later:
+
+```typescript
+// computed when good i is reached, before any of its users produce
+requested[i]     = sum over private recipes c using i of maximumByLabor[c] * quantity(c, i)
+ration[i]        = min(1, stock[i] / max(requested[i], epsilon))
+inputDemanded[i] = requested[i]
+```
+
+A user limited by another input takes less than its ration, and the rest stays in stock. Producers draw before consumers in the same tick.
+
+`inputDemanded` matters as much as consumer demand. **Total demand** for a good is `max(demanded, consumed) + inputDemanded + governmentDemanded`: what consumers wanted or, when they fell back on it because a substitute ran out, what they actually ate, plus what producers requested, plus what governments tried to buy. It is the demand used by the price target, the exportable surplus, the labor plan and the initial stock. Government buy orders and standing orders use the inhabitants' part only, without `governmentDemanded`.
+
+Private production draws inputs from the area's stock. Government production draws from the government depot, with its own rationing over the depot, and is not part of `inputDemanded`. Services are produced like crafted goods but go straight to consumption and never enter stock.
+
+### Consumption
+
+Consumption has three parts: the area's purchasing power, the demand for each need split between the goods that satisfy it, and a spillover pass when some of those goods run out.
+
+**Purchasing power** combines income and savings. Savings near `targetSavingsDays` of income are neutral. More savings raise demand and fewer lower it, mostly for needs with a high `wealthElasticity`. The same `savingsFactor` sets the wage workers accept (Labor allocation):
+
+```typescript
+incomePerPersonPerDay = max(wageLevel, 0.1) * hoursPerWorkerDay * workforceShare
+savingsDays     = savings / max(population * incomePerPersonPerDay, epsilon)
+savingsFactor   = clamp(savingsDays / targetSavingsDays, savingsFactorMin, savingsFactorMax) ** savingsElasticity
+purchasingPower = max(wageLevel, 0.1) * savingsFactor
+```
+
+The effect stabilizes itself. Consumption inside an area does not move money, but higher demand raises local prices, which pulls in imports and spends savings down toward the target. An area with depleted savings demands less, so its prices fall, it exports more and its savings refill.
+
+**Demand per need** and the **split between substitutes**: each good competes on the price of the need units it provides.
+
+```typescript
+consumerPrice[g] = price[g] * (1 + consumptionTaxRate[g])
+unitPrice[g]     = consumerPrice[g] / g.satisfies.unitsPerGood         // price of one need unit through g
+share[g]         = g.satisfies.preference * unitPrice[g] ** -need.substitutionElasticity
+                   / sum of the same over all goods of the need
+needPrice        = sum over goods of the need of share[g] * unitPrice[g]
+
+needDemanded = population * need.demandPerPersonPerDay * days
+             * (need.referenceUnitPrice / needPrice) ** need.priceElasticity
+             * purchasingPower ** need.wealthElasticity
+demanded[g]  = needDemanded * share[g] / g.satisfies.unitsPerGood
+consumed[g]  = min(stock[g], demanded[g])
+```
+
+**Spillover:** after the first pass, the need units left unmet by goods that ran out are spread over the goods of the same need that still have stock, in proportion to `share` and capped by that stock. One pass is enough. `demanded` keeps the value from before spillover, so a scarce good keeps its upward price pressure while its substitutes cover the shortfall. `needConsumed` is the sum of `consumed[g] × unitsPerGood` over the need's goods.
+
+`referenceUnitPrice` is `needPrice` computed once at startup, with every consumer price equal to labor value. At those prices and at a purchasing power of 1, an area demands exactly `demandPerPersonPerDay`. A substitution elasticity of 0 keeps shares fixed by preference; 2 to 4 lets consumers switch strongly toward the cheapest good while keeping some variety.
+
+`necessitySatisfaction` is the sum of `needConsumed` divided by the sum of `needDemanded` over necessity needs, each valued at its `referenceUnitPrice` so that needs measured in different units add up. `satisfaction` is the same ratio over all needs, with each need also weighted by its tier in `tierWeights`.
+
+### Trade
+
+Trade is computed per edge, per good and per direction, from a snapshot of the state before trade; all flows are applied together afterward. Land, sea and air edges use the same formula. Each edge keeps a **shipping rate** per good and direction (`Edge.tradeFlowPerDay`), which moves toward a target set by the price gap. An area splits its exportable surplus of a good evenly between the edges where that good has a positive gap, and its import demand evenly between the edges it can import it from.
+
+```typescript
+transport  = edge.transportCost * good.transportWeight
+tariffs    = crossesBorder ? sellerPrice * exportTariffRate[seller] + sellerPrice * importTariffRate[buyer] : 0
+gap        = buyerPrice - sellerPrice - transport - tariffs
+           - tradeMargin * max(buyerPrice, sellerPrice)          // 0 on an inactive or blocked edge
+
+// The wider the gap, the more of its reserve the buyer refills from this edge each day
+targetRate = gap > 0 ? reserveDaysOf(good) * buyerTotalDemandedPerDay
+                       * tradeGapSensitivity * gap / buyerPrice / buyerEdgesWithPositiveGap
+                     : 0
+rate      += fraction(tradeRatePerDay) * (targetRate - rate)
+// a fading rate below 1% of the buyer's daily use is set to 0
+if (gap <= 0 || good.isService) skip
+
+// The seller keeps part of its reserve and splits the rest between its exporting edges
+exportable = max(0, sellerStock - exportReserveShare * reserveDaysOf(good) * sellerTotalDemandedPerDay)
+             / sellerEdgesWithPositiveGap
+quantity   = min(rate * days, exportable)      // shipments under 0.1% of the buyer's daily use are skipped
+unitPaid   = sellerPrice + transport + tariffs + gap / 2   // the buyer and seller split the gain
+```
+
+After capacity (below), an area whose imports would cost more than its savings has all of them scaled down by the same ratio: the buyer can only spend what it has, across all its edges and goods together. The seller receives `sellerPrice + transport + gap / 2` per unit, the transport going to its carriers; tariffs go to the respective treasuries.
+
+The rate's inertia keeps trade from sloshing between areas whose prices are almost equal. Scaling by the reserve damps perishable goods as much as durable ones; in exchange they need a wider gap to travel.
+
+**Capacity.** Sea and air routes carry at most `capacityPerDay × days` tonnes in each direction. When the flows of all goods in one direction exceed it, the route is filled greedily, in order of gap per tonne, so the most profitable cargo goes first. Land edges have infinite capacity and skip this step. Routes are few, so the sort costs little.
+
+Goods reach distant areas by being re-exported over several ticks. Price differences spread through the network like heat, so no area ever needs to know about areas that are not its neighbors.
+
+### Sea and air routes
+
+Sea and air traffic reuse edges instead of adding a separate system. A route is an `Edge` with `mode: "sea"` or `"air"` between two distant areas. Trade, tariffs, blocking, migration and depot transfers then work unchanged, and cost per tick stays proportional to edges × goods. The route graph is kept sparse on purpose. Because prices spread hop by hop, a few routes per port or airport are enough to connect distant markets; joining every airport to every other one would add edges with the square of the number of airports and gain little.
+
+| | Sea routes | Air routes |
+| --- | --- | --- |
+| Endpoints | Two coastal areas, both with `portLevel` ≥ 1 | Two areas, both with `airportLevel` ≥ 1 |
+| Created by | Map generation: each coastal area is linked to its `seaRoutesPerPort` nearest coastal areas by distance over water | Rebuilt whenever an airport opens or grows: each airport is linked to its `airRoutesPerAirport` nearest airports, and airports at `maximumAirportLevel` are all linked to each other as hubs |
+| Base transport cost | `seaCostPerDistance × distance` | `airBaseCost + airCostPerDistance × distance` |
+| Capacity per day and direction | `seaCapacityPerPortLevel × min(portLevel)` | `airCapacityPerAirportLevel × min(airportLevel)` |
+| Suits | Heavy bulk goods over long distances | Light, valuable or perishable goods |
+| Armies | Can embark from a port owned by their government; crossing takes `seaTravelDaysPerDistance × distance` | Cannot use them |
+| Migration | Multiplied by `migrationFactorBySea` | Multiplied by `migrationFactorByAir` |
+
+- Map generation gives every coastal area a port of level 1, so the base economy trades by sea with no players. It also gives an airport of level 1 to the `initialAirportShare` most populous areas.
+- Governments raise port and airport levels with the `buildPort` and `buildAirport` jobs. Captures leave port and airport levels intact. An air route dropped by a rebuild is deactivated (`isActive` set to false) instead of deleted, so edge ids stay stable, and it is reactivated if a later rebuild picks the same pair again.
+- Infrastructure jobs do not lower route costs; they raise route capacity through port and airport levels.
+- Rebuilding air routes runs only on a change of airport level, which is rare. It is a nearest-neighbor search over the airports by straight-line distance, ties going to the lower area id, done in phase 10, never as part of the normal per-tick work. Every port or airport level change also recomputes the capacity of the routes touching that area.
+- Blocking works as on land: a route is blocked when its two endpoints belong to governments at war, or when either endpoint is under siege. Naval combat and blockades are possible future additions.
+
+### Prices
+
+Every good has two prices. `smoothedPrice` is the **long-run price**: it drifts while the good stays scarce or abundant, and jobs follow it. `price` is the **market price**: the long-run price times a premium proportional to current scarcity, which trade, consumers and the price table see.
+
+Scarcity is measured by a **pressure** between -1 and 1. Storable goods are priced on stock, with a flow term that reacts before the stock has moved far; exports count in the stock target, so an exporter keeps a reserve for its customers. Perishable goods keep a smaller target, so their reserve never rots faster than `maxReserveSpoilageShare` of demand: bread keeps about 1 day, fish 1.25 days and electricity a third of a day. Services have no stock, so they are priced on flows within the tick.
+
+```typescript
+reserveDaysOf(good) = min(reserveDays, maxReserveSpoilageShare / max(good.spoilageRatePerDay, epsilon))
+used     = max(demanded, consumed) + inputDemanded + governmentDemanded
+         + exportRate * days                                            // exports at the smoothed shipping rates
+
+if (good.isService)
+  pressure = (demanded - produced) / max(demanded, produced, epsilon)
+else
+  target        = reserveDaysOf(good) * used / days
+  stockPressure = (target - stock) / max(target, stock, epsilon)
+  supplied      = produced + imported - exported
+  required      = used + target * (1 - exp(-spoilageRatePerDay * days))  // the reserve's spoilage must be replaced
+  flowPressure  = (required - supplied) / max(required, abs(supplied), epsilon)
+  pressure      = clamp(stockPressure + priceFlowWeight * flowPressure, -1, 1)
+
+floor          = max(laborValue * priceFloorMultiple, policy priceFloor)
+ceiling        = min(laborValue * priceCeilingMultiple, policy priceCeiling)
+targetPrice    = smoothedPrice * exp(scarcityPremium * pressure)
+logChange      = clamp(fraction(priceAdjustmentRatePerDay) * (log(targetPrice) - log(price)),
+                       -log(1 + maxPriceChangePerTick), log(1 + maxPriceChangePerTick))
+price          = clamp(price * exp(logChange), floor, ceiling)
+smoothedPrice  = clamp(smoothedPrice + fraction(priceSmoothingRatePerDay) * (price - smoothedPrice), floor, ceiling)
+```
+
+### Labor allocation
+
+Workers move toward a target allocation: the labor needed to meet total demand, exports included, and to bring the stock back to its reserve, tilted toward jobs whose value added beats the **reservation wage**, the value per hour below which workers would rather stay unemployed. Value added is computed from smoothed prices and after production taxes or subsidies.
+
+```typescript
+valueAddedPerHour(good) =
+  (smoothedPrice[good] * (1 - productionTaxRate[good])
+   - sum over inputs of input.quantity * smoothedPrice[input.good])
+  * marginalOutputPerWorker(good) / hoursPerWorkerDay
+
+wageLevel = sum(valueAddedPerHour * privateWorkers) / max(sum(privateWorkers), epsilon)
+
+reservation = reservationWage * savingsFactor          // workers short of savings accept less
+needPerDay  = used / days + (isService ? 0 : (reserveDaysOf(good) * used / days - stock) / stockRecoveryDays)
+needed(job) = isPrimary ? -capacity * ln(1 - min(needPerDay, 0.95 * capacity) / capacity) / hourlyOutputPerWorker
+                        : needPerDay / hourlyOutputPerWorker
+target(job) = needed(job) * exp(min(5, (valueAddedPerHour(job) - reservation)
+                                       / (laborAllocationTemperature * reservation)))
+// scale all targets down together if they exceed the available private workforce; the rest is unemployed
+change(job) = fraction(laborMobilityRatePerDay) * (target(job) - workers(job))
+// scale all changes down if more than maxLaborShiftPerTick of the workforce would change jobs
+```
+
+Each job settles where it adds about the reservation wage: a job adding more grows beyond local need and exports, a job adding less shrinks and its good is imported. Because the reservation wage follows savings, an area importing more than it exports gets cheaper until it exports.
+
+A good is producible in an area if it is primary with natural capacity there, or crafted with a recipe. Workers stuck without inputs see their marginal output fall with the input's ration and drift away.
+
+### Population
+
+```typescript
+if (necessitySatisfaction >= growthSatisfactionThreshold)
+  growth = growthRatePerDay * (necessitySatisfaction - threshold) / (1 - threshold)
+else
+  growth = -starvationRatePerDay * (threshold - necessitySatisfaction) / threshold
+population *= exp(growth * demographyResponsiveness * days)
+
+attractiveness = (1 - migrationWageWeight) * satisfaction
+               + migrationWageWeight * wageLevel / (wageLevel + 1)
+// per active, non-blocked edge, from the less attractive area to the more attractive one
+modeFactor = land: 1, sea: migrationFactorBySea, air: migrationFactorByAir
+migrants = population * fraction(migrationRatePerDay) * attractivenessDifference * modeFactor / edgeCount
+// population and edgeCount (active, non-blocked edges) of the less attractive area
+```
+
+Migration reads populations after growth and applies every edge together; migrants leave their savings behind. New inhabitants and migrants join `unemployedWorkers` in proportion to `workforceShare`; the labor phase places them. When population falls, from starvation or emigration, the lost workers (the same `workforceShare` of the loss) are taken from `unemployedWorkers` first, then from private jobs in proportion to their size. Government workers and soldiers are not affected.
+
+### Map generation
+
+A map is generated from a seed, the catalog and `WorldConfig.map`. Every random draw comes from the seeded generator, so the same inputs give the same map.
+
+1. **Cells.** `landAreaCount / landShare` points on a jittered grid with `cellSpacing` spacing over a 3:2 rectangle, relaxed twice toward their Voronoi centroids (Lloyd).
+2. **Elevation.** Fractal simplex noise (`elevationOctaves`) minus a radial falloff toward the edges. Cells within 1.5 spacings of the border are water. The sea level is set so the land share gives `landAreaCount` land cells, after water bodies that cannot reach the open sea become land (no lakes) and land masses smaller than `minimumIslandAreas` sink; it is corrected up to four times.
+3. **Terrain.** Land cells are ranked by the elevation noise alone: the top 15% are mountains, the next 20% hills. The rest are desert where a moisture noise is low, forest where it is high, and plains otherwise.
+
+| Terrain | Productivity | Land cost factor | Population density |
+| --- | --- | --- | --- |
+| Plains | 1.0 | 1 | 1.2 |
+| Forest | 0.9 | 1.5 | 0.8 |
+| Hills | 0.9 | 2 | 0.7 |
+| Mountains | 0.7 | 4 | 0.3 |
+| Desert | 0.8 | 1.5 | 0.35 |
+
+4. **Areas.** Each land cell is an area. An area is coastal when it borders a water cell; coastal areas get `portLevel` 1. Productivity is the terrain value times 0.9 to 1.1 from noise. Population is the terrain density, ×1.3 on coasts, times 0.6 to 1.4 from noise, scaled to a mean of `meanAreaPopulation`.
+5. **Land edges** join neighboring land cells. Distance is between cell centers; `terrainFactor` is the mean land cost factor of the two areas; `travelDays` is `distance / 25 × terrainFactor`.
+6. **Sea routes.** Each coastal area is linked to its `seaRoutesPerPort` nearest coastal areas by distance over water (a search over water cells), skipping areas it already shares a land edge with. Then, while some areas cannot reach the others, the shortest water route from the group of area 0 to another group is added.
+7. **Natural capacity.** For each primary good, the eligible areas are those whose terrain is in the good's `terrains` (`coast` meaning coastal areas), or all areas if none match. A noise field per good ranks them. The top areas are chosen until both `presence[abundance]` of the eligible areas and enough population to supply world demand with `extractionLaborShare` of its workforce are reached. An area that holds no primary good gets its best-scoring common good, preferring one suited to its terrain. Capacity totals `capacityHeadroom` × reference demand × world population, split in proportion to population × (noise above the cut + 0.2).
+8. **Airports.** The `initialAirportShare` most populous areas get airport level 1, then air routes are built (section 5, Sea and air routes).
+9. **Capitals.** `governmentCount` capitals: the most populous area, then each next one maximizing hops to the nearest capital over land and sea edges × √population. An area no capital reaches counts one hop beyond the farthest reachable area.
+
+The world is then initialized (Rule 6), a government is founded on each capital (section 6, Founding), and the world is warmed up.
+
+### Goods catalogs
+
+Needs and goods are loaded from a JSON catalog chosen when a game is created. Three catalogs ship with the game, all in an industrial to modern setting. All numbers are plausible first guesses for tuning in the headless runner.
+
+| Catalog | File | Goods | Needs | Purpose |
+| --- | --- | --- | --- | --- |
+| Small | `data/goods/small.json` | 5 | food, equipment | Unit tests and convergence scenarios |
+| Medium | `data/goods/medium.json` | 14 | food, energy, clothing, household, health | Balancing, short games, slow devices |
+| Large | `data/goods/large.json` | 54 | food, energy, shelter, clothing, household, health, mobility, communication, education, leisure | Full games |
+
+**Format.** A catalog holds `name`, `description`, `needs`, `goods` and `military`.
+
+- **Needs and goods** carry the fields of the `Need` and `Good` interfaces, minus the derived ones (`id`, `laborValue`, `referenceUnitPrice`).
+- **References** between needs, goods and recipe inputs use string `key`s, resolved to ids at load.
+- **`kind`** is `"primary"`, `"crafted"` or `"service"`. The loader derives `isPrimary` and `isService` from it.
+- **`terrains`** (optional, primary goods) lists where map generation places the good: `plains`, `forest`, `hills`, `mountains`, `desert` or `coast`.
+- **`military`** names the `weaponsGood` used for `WorldConfig.military`.
+
+```json
+{
+  "key": "bread", "name": "Bread", "unit": "kg", "kind": "crafted", "laborHoursPerUnit": 0.2,
+  "transportWeight": 0.0012, "spoilageRatePerDay": 0.1, "depletionPerUnitExtracted": 0,
+  "regenerationRatePerDay": 0, "abundance": null,
+  "inputs": [{"good": "flour", "quantity": 0.007}, {"good": "electricity", "quantity": 0.05}],
+  "satisfies": {"need": "food", "unitsPerGood": 1.3, "preference": 1}
+}
+```
+
+The loader rejects a catalog if any of these hold:
+
+- A key is duplicated or a reference does not resolve.
+- An input is listed after the good that uses it.
+- A service is used as an input.
+- A primary good has inputs or no `abundance`.
+- A need has no good satisfying it.
+- A terrain is not one of the listed values.
+
+**Conventions used by the shipped catalogs:**
+
+- `transportWeight` is in tonnes per unit, so land transport between neighbors (about 0.3 man-hours per tonne) costs a few percent of the value of most goods. Stone, sand and timber are the exceptions: they barely travel by land and are what sea routes are for.
+- Need units are physical where that makes sense (2,000 kcal of food, 10 kWh of energy, 10 passenger-km). Heterogeneous needs such as health, household goods, education and leisure use value units: one unit is one man-hour of that need at reference prices, and each good's `unitsPerGood` equals its labor value.
+- Goods that are used together, such as a car and its fuel, are bundled into a service whose recipe consumes both (car travel). Durables enter that service as a small input per use, which stands in for depreciation. The model therefore needs no complementary demand.
+- Electricity is a crafted good with a spoilage of 0.3 per day and a near-zero weight. It moves over the grid like any good, but its reserve is only about a third of a day of demand, and imported power loses about a quarter on the way, which stands for grid losses.
+
+**Calibration rule.** At labor-value prices and a purchasing power of 1, the full consumption basket should cost 70–85% of the labor available per person (`hoursPerWorkerDay × workforceShare`, 4 hours by default), and necessities should take roughly 30–40% of the basket. The rest of the labor is left for government jobs, armies and transport. The shipped catalogs use about 73% of the labor; necessities take 32% of the small basket, 29% of the medium one and 35% of the large one.

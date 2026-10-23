@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-This roadmap turns [specification.md](specification.md) into a playable game in twelve stages. Each stage ends with something that runs and is tested, so the work can pause after any stage without leaving loose ends.
+This roadmap turns the [specification](specification/README.md) into a playable game in twelve stages. Each stage ends with something that runs and is tested, so the work can pause after any stage without leaving loose ends.
 
 Section numbers (§) refer to the specification.
 
