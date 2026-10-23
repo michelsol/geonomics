@@ -192,4 +192,25 @@ describe("host and client sessions", () => {
     expect(client.state).toBe("lost");
     vi.useRealTimers();
   });
+
+  it("tell why each attempt to reach the host failed, and keep trying", async () => {
+    let attempts = 0;
+    const client = new ClientSession({
+      name: "Bob",
+      token: "bob-token",
+      retryDelaysMs: [5],
+      connect: async () => {
+        attempts++;
+        throw new Error("the host is not on the signaling server: is its tab still open?");
+      },
+    });
+    const problems: string[] = [];
+    client.onProblem((problem) => problems.push(problem));
+    client.start();
+    await settle();
+    expect(attempts).toBeGreaterThan(1);
+    expect(problems[0]).toBe("the host is not on the signaling server: is its tab still open?");
+    expect(client.state).toBe("connecting");
+    client.leave();
+  });
 });

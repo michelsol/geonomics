@@ -198,6 +198,11 @@ export function Join() {
           </button>
         </form>
         {session.refused && <p data-testid="join-status">The host refused: {session.refused}</p>}
+        {connecting && session.problem && (
+          <p className="muted" data-testid="join-problem">
+            Still trying: {session.problem}.
+          </p>
+        )}
         {session.connection === "lost" && <p data-testid="join-status">Could not reach the host. Is its tab open?</p>}
       </div>
     </main>

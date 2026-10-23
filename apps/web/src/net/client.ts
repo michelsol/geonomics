@@ -51,11 +51,15 @@ export function join(hostId: string, name: string): void {
     store().setSession({ connection });
     if (connection === "lost") store().toast("The connection to the host is lost.");
   });
+  client.onProblem((problem) => {
+    console.warn(`Joining ${hostId}: ${problem}`);
+    store().setSession({ problem });
+  });
   client.onMessage((message) => {
     switch (message.type) {
       case "welcome":
         markJoined(hostId);
-        store().setSession({ refused: null });
+        store().setSession({ refused: null, problem: null });
         store().receive({ type: "static", data: message.data, governments: message.governments });
         store().enterAs(message.you);
         return;
@@ -88,6 +92,6 @@ export function join(hostId: string, name: string): void {
       }
     }
   });
-  store().setSession({ connection: "connecting", refused: null });
+  store().setSession({ connection: "connecting", refused: null, problem: null });
   client.start();
 }

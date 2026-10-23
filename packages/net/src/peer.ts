@@ -80,6 +80,22 @@ function linkOf(connection: DataConnection): Link {
   };
 }
 
+/** What went wrong, for the player: PeerJS errors carry a type. */
+function explain(error: unknown): Error {
+  const type = (error as { type?: string } | null)?.type;
+  const reasons: Record<string, string> = {
+    "peer-unavailable": "the host is not on the signaling server: is its tab still open?",
+    "negotiation-failed": "no direct or relayed connection to the host could be opened",
+    network: "the signaling server is unreachable",
+    "server-error": "the signaling server is unreachable",
+    "socket-error": "the signaling server is unreachable",
+    "socket-closed": "the signaling server closed the connection",
+    "browser-incompatible": "this browser cannot open WebRTC connections",
+  };
+  const reason = type ? reasons[type] : undefined;
+  return new Error(reason ?? (error instanceof Error ? error.message : String(error)));
+}
+
 function whenOpen(peer: Peer): Promise<string> {
   return new Promise((resolve, reject) => {
     if (peer.open) {
@@ -93,7 +109,7 @@ function whenOpen(peer: Peer): Promise<string> {
     });
     peer.once("error", (error) => {
       clearTimeout(timer);
-      reject(error);
+      reject(explain(error));
     });
   });
 }
@@ -128,7 +144,7 @@ export function connector(hostId: string, broker: BrokerOptions): () => Promise<
     return new Promise<Link>((resolve, reject) => {
       const timer = setTimeout(() => {
         connection.close();
-        reject(new Error("the host did not answer"));
+        reject(new Error("the connection to the host did not open in time"));
       }, CONNECT_TIMEOUT_MS);
       connection.once("open", () => {
         clearTimeout(timer);
@@ -136,11 +152,11 @@ export function connector(hostId: string, broker: BrokerOptions): () => Promise<
       });
       connection.once("error", (error) => {
         clearTimeout(timer);
-        reject(error);
+        reject(explain(error));
       });
       peer?.once("error", (error) => {
         clearTimeout(timer);
-        reject(error);
+        reject(explain(error));
       });
     });
   };

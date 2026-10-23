@@ -41,6 +41,7 @@ export interface Session {
   connection: ConnectionState | null; // a joined player's link to the host
   hostHidden: boolean; // the host's tab is hidden: browsers may slow it down, and phones freeze it
   refused: string | null; // why the host refused a joined player
+  problem: string | null; // why the last attempt to reach the host failed
 }
 
 const SOLO: Session = {
@@ -52,6 +53,7 @@ const SOLO: Session = {
   connection: null,
   hostHidden: false,
   refused: null,
+  problem: null,
 };
 
 export interface GameState {

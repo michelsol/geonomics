@@ -15,12 +15,25 @@ export interface IceServer {
   credential?: string;
 }
 
-/** Browsers block port 53, so those URLs would only time out. */
+/**
+ * Firefox slows down with five or more URLs, so keep these four: STUN, TURN over UDP and TCP, and TURN over TLS on 443
+ * for networks letting only HTTPS out. Browsers block port 53 anyway.
+ */
+const PREFERRED = [
+  /^stun:[^?]+:3478$/,
+  /^turn:[^?]+:3478\?transport=udp$/,
+  /^turn:[^?]+:3478\?transport=tcp$/,
+  /^turns:[^?]+:443\?transport=tcp$/,
+];
 const usable = (url: string) => !/:53(\?|$)/.test(url);
 
-function withoutPort53(server: IceServer): IceServer | null {
-  const urls = (Array.isArray(server.urls) ? server.urls : [server.urls]).filter(usable);
-  return urls.length > 0 ? { ...server, urls } : null;
+function trimmed(servers: IceServer[]): IceServer[] {
+  const urlsOf = (server: IceServer) => (Array.isArray(server.urls) ? server.urls : [server.urls]).filter(usable);
+  const preferred = servers.some((server) => urlsOf(server).some((url) => PREFERRED.some((p) => p.test(url))));
+  return servers.flatMap((server) => {
+    const urls = urlsOf(server).filter((url) => !preferred || PREFERRED.some((p) => p.test(url)));
+    return urls.length > 0 ? [{ ...server, urls }] : [];
+  });
 }
 
 /** The ICE servers and their lifetime, or null when the TURN key is not configured or Cloudflare refuses. */
@@ -39,7 +52,7 @@ export async function iceServers(
   );
   if (!response.ok) return null;
   const body = (await response.json()) as { iceServers?: IceServer[] };
-  const servers = (body.iceServers ?? []).map(withoutPort53).filter((server) => server !== null);
+  const servers = trimmed(body.iceServers ?? []);
   return servers.length > 0 ? { iceServers: servers, ttl: CREDENTIAL_TTL_S } : null;
 }
 

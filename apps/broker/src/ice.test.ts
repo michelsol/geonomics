@@ -39,6 +39,34 @@ describe("iceServers", () => {
     expect(JSON.parse(init?.body as string)).toEqual({ ttl: CREDENTIAL_TTL_S });
   });
 
+  it("keeps four of Cloudflare's URLs: STUN, TURN over UDP, TCP and TLS", async () => {
+    const { fetcher } = replying(201, {
+      iceServers: [
+        { urls: ["stun:stun.cloudflare.com:3478", "stun:stun.cloudflare.com:53"] },
+        {
+          urls: [
+            "turn:turn.cloudflare.com:3478?transport=udp",
+            "turn:turn.cloudflare.com:3478?transport=tcp",
+            "turns:turn.cloudflare.com:5349?transport=tcp",
+            "turn:turn.cloudflare.com:53?transport=udp",
+            "turn:turn.cloudflare.com:80?transport=tcp",
+            "turns:turn.cloudflare.com:443?transport=tcp",
+          ],
+          username: "u",
+          credential: "c",
+        },
+      ],
+    });
+    expect((await iceServers(env, fetcher))?.iceServers.map((server) => server.urls)).toEqual([
+      ["stun:stun.cloudflare.com:3478"],
+      [
+        "turn:turn.cloudflare.com:3478?transport=udp",
+        "turn:turn.cloudflare.com:3478?transport=tcp",
+        "turns:turn.cloudflare.com:443?transport=tcp",
+      ],
+    ]);
+  });
+
   it("gives nothing without a TURN key or when Cloudflare refuses", async () => {
     const { calls, fetcher } = replying(401, {});
     expect(await iceServers({}, fetcher)).toBeNull();

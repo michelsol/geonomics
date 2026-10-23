@@ -24,6 +24,7 @@ export class ClientSession {
   private link: MessageLink<ToClient, ToHost> | null = null;
   private readonly messageListeners = new Set<(message: ToClient) => void>();
   private readonly stateListeners = new Set<(state: ConnectionState) => void>();
+  private readonly problemListeners = new Set<(problem: string) => void>();
   private attempt = 0;
   private droppedAt = 0;
   private readonly schedule: NonNullable<ClientOptions["schedule"]>;
@@ -49,6 +50,12 @@ export class ClientSession {
     return () => this.stateListeners.delete(listener);
   }
 
+  /** Why the last attempt to reach the host failed; the session retries after each. */
+  onProblem(listener: (problem: string) => void): () => void {
+    this.problemListeners.add(listener);
+    return () => this.problemListeners.delete(listener);
+  }
+
   /** Sends a message to the host; messages sent while disconnected are dropped. */
   send(message: ToHost): void {
     if (this.state === "connected") this.link?.send(message);
@@ -65,7 +72,8 @@ export class ClientSession {
     let link: Link;
     try {
       link = await this.options.connect();
-    } catch {
+    } catch (error) {
+      this.problem(error instanceof Error ? error.message : String(error));
       this.retry();
       return;
     }
@@ -85,6 +93,9 @@ export class ClientSession {
     link.onClose(() => {
       if (this.link !== messages) return;
       this.link = null;
+      this.problem(
+        this.state === "connected" ? "the connection to the host dropped" : "the host closed the connection",
+      );
       this.retry();
     });
     messages.send({ type: "hello", version: PROTOCOL_VERSION, name: this.options.name, token: this.options.token });
@@ -104,6 +115,10 @@ export class ClientSession {
     const delay = delays[Math.min(this.attempt, delays.length - 1)] as number;
     this.attempt++;
     this.schedule(() => void this.open(), delay);
+  }
+
+  private problem(problem: string): void {
+    for (const listener of this.problemListeners) listener(problem);
   }
 
   private setState(state: ConnectionState): void {
