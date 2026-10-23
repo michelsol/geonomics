@@ -41,4 +41,4 @@ Pushing to `main` runs CI and deploys the web app to GitHub Pages.
 
 ## License
 
-See [LICENSE](LICENSE).
+GNU General Public License v3; see [LICENSE](LICENSE).

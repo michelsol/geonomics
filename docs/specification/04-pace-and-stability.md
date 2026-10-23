@@ -88,7 +88,7 @@ Defaults are starting points for tuning in the headless runner.
 ```typescript
 interface WorldConfig {
   pace: {
-    maxTicksPerSecond: number;          // wall-clock cap of the host loop; lower on mobile (default 10)
+    maxTicksPerSecond: number;          // wall-clock cap of the host loop (default 10); games start lower, at 2 on phones and 5 elsewhere
     gameDaysPerTick: number;            // game days simulated per tick (default 1)
     economyResponsiveness: number;      // multiplier on price, trade, smoothing and labor rates (default 1)
     demographyResponsiveness: number;   // multiplier on growth, starvation and migration rates (default 1)

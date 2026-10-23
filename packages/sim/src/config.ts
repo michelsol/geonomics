@@ -4,7 +4,7 @@ import type { GoodId } from "./types";
 
 export interface WorldConfig {
   pace: {
-    maxTicksPerSecond: number; // wall-clock cap of the host loop; lower on mobile
+    maxTicksPerSecond: number; // wall-clock cap of the host loop; games start lower, at 2 on phones and 5 elsewhere
     gameDaysPerTick: number; // game days simulated per tick
     economyResponsiveness: number; // multiplier on price, trade, smoothing and labor rates
     demographyResponsiveness: number; // multiplier on growth, starvation and migration rates

@@ -128,11 +128,21 @@ The interface uses the table in two places:
 
 - A host keeps its game running while its tab is hidden: the simulation runs in a worker, which desktop browsers keep running. Phones freeze hidden tabs, so `hostStatus` tells players whether the host's tab is hidden.
 - The host requests a Screen Wake Lock while its game runs and its tab is visible, and releases it when paused or hidden.
-- The default `maxTicksPerSecond` is lower on mobile devices.
+- A game starts at 1× on phones (devices whose main pointer is coarse) and at 2× elsewhere.
+- Closing the host's tab while players are joined asks for confirmation.
 
 ### Save and load
 
-The world is serialized with msgpack, keeping typed arrays, plus a save format version number. The host autosaves to IndexedDB at a fixed game-day interval and can export the save as a file. Any player can load a save and host it, which is how a game continues when the host leaves.
+- **Format.** A save is the msgpack array `["geonomics-save", version, info, world]`, compressed with gzip. `info` holds the game id, a title (the local player's realm), the game day, the save time, the catalog and the area count, and is read without the world for listings. A file with another first element is refused as not a save, and a version above the game's as from a newer version. Loading also accepts an uncompressed save.
+- **Exactness.** The whole world is saved, bit for bit: typed arrays keep their bytes and type, Maps their entries in order, and every number is written as a float64. A loaded world replays the same commands to the same world hash. Interface history (charts) is not saved.
+- **Loading.** Player tokens do not outlive a session: on load, every realm a player held goes back to the AI, and the AI's memory is kept. The game opens paused in the lobby, as a new game does, and players pick their realms again.
+- **Autosave.** The host (or solo player) saves the game every 30 game days while it runs, when its tab is hidden (phones may discard hidden tabs) and when the game ends. Saves go to IndexedDB, one slot per game, overwritten each time; the five most recent games are kept. Joined players do not save.
+- **Export and load.** The host can export the game as a `.geonomics` file. Anyone can load a saved game or a file from the new game screen and host it, which is how a game continues when the host leaves.
+
+### Offline and install
+
+- The site is a PWA: a web app manifest with icons (192 and 512 px, and a maskable 512 px) makes it installable, and a service worker precaches every file of the build, so the app starts and solo games run without a network once it has loaded. Joining and hosting need the network; requests to the broker are never cached.
+- A new version waits: the service worker installs it in the background, and the new game screen offers to reload into it. A running game is never interrupted, since it may still load parts of the app from the version it started with.
 
 ### Single player
 
@@ -146,6 +156,6 @@ A solo game uses the same data flow as a hosted one, without the network. The wo
 | `priceTable` | At `priceTableRate` | As in Price table |
 | `status` | With every snapshot, and on rejections | Running or paused, target and actual ticks per second, milliseconds per tick, and rejected commands with their reasons |
 
-The main thread sends `create`, `start` (with the local player's government, or none to watch), `command`, `setSpeed`, `pause`, `resume`, `endGame`, and `setFlowGood` to choose the good whose trade flows snapshots carry (none by default). While paused, `setFlowGood` is answered with a snapshot at once. The local player sends commands under the player id `local`.
+The main thread sends `create`, `load` (a save file) or `loadSaved` (a game id), `start` (with the local player's government, or none to watch, and the starting speed), `save` (autosave now), `export` (answered with `exported`, the save file), `command`, `setSpeed`, `pause`, `resume`, `endGame`, and `setFlowGood` to choose the good whose trade flows snapshots carry (none by default). While paused, `setFlowGood` is answered with a snapshot at once. The local player sends commands under the player id `local`.
 
 When hosting, `command` and `setFlowGood` may name a joined player, `player` sets a joined player's government and whether it receives snapshots, and `focus` names the area it looks at. The worker then also posts `remote` messages, packed for one player or for all of them, and rejections name the player they are for.

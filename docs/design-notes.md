@@ -309,3 +309,31 @@ Conquerors gain areas, mostly from traders and builders, but no realm falls: a c
 - **Memory in the world.** `Government.aiMemory` is plain data in the world, so a saved game resumes its AI where it was, and the world hash covers it.
 - **Offline players.** The AI runs an offline player's realm by its personality rather than leaving it idle, so a player who drops during a war still defends. The realm stays reserved in the lobby, and control returns on reconnect.
 
+## Persistence, PWA and release (roadmap stage 11)
+
+### Save sizes
+
+Measured in Node after a 10-day warm-up, 8 realms. The save is written in one go on the worker, between two ticks; gzip runs as a stream after it.
+
+| Areas | Catalog | Save | Gzip | Serialize | Gzip time | Load |
+| --- | --- | --- | --- | --- | --- | --- |
+| 300 | small | 0.93 MB | 0.22 MB | 13 ms | 8 ms | 11 ms |
+| 300 | medium | 1.54 MB | 0.39 MB | 12 ms | 11 ms | 9 ms |
+| 300 | large | 4.24 MB | 1.21 MB | 10 ms | 30 ms | 10 ms |
+| 1,000 | small | 3.03 MB | 0.67 MB | 26 ms | 22 ms | 21 ms |
+| 1,000 | medium | 5.05 MB | 1.23 MB | 28 ms | 35 ms | 21 ms |
+| 1,000 | large | 13.93 MB | 3.79 MB | 31 ms | 93 ms | 28 ms |
+| 3,000 | small | 8.94 MB | 1.92 MB | 77 ms | 74 ms | 52 ms |
+| 3,000 | medium | 14.95 MB | 3.46 MB | 76 ms | 105 ms | 62 ms |
+| 3,000 | large | 41.30 MB | 10.59 MB | 108 ms | 270 ms | 66 ms |
+
+At worst an autosave delays one tick by about 0.1 s every 30 game days. Five kept games of the largest kind take about 53 MB of IndexedDB, well within browser quotas.
+
+### Choices
+
+- **The whole world, exactly.** Saving only the inputs (seed, options and command log) and replaying them would be small, but replays take as long as the game and break with any change to the rules. A full world, bit for bit, loads in tens of milliseconds and keeps working across versions as long as the data model does; the format version guards the rest. Every number is written as a float64: msgpack would otherwise turn −0 into 0, which changes the world hash.
+- **The tick's scratch buffers.** They live outside the world, so a loaded world starts with fresh ones. The replay test (save mid-war with AI realms, replay 60 ticks of player commands on both worlds) gives the same hash, which confirms that no phase carries scratch state from one tick to the next.
+- **Players start over in the lobby.** Player tokens live in one browser tab, so a saved controller would point at nobody. Loading gives every realm to the AI, which already runs offline players' realms, and players pick again.
+- **Updates wait.** With an update that takes over at once, the new service worker deletes the old version's cache, and a running game that then opens the Game or PeerJS chunk for the first time would fail to load it. The new version therefore waits for a reload, offered on the menu only.
+- **Phones.** The audit at Pixel 7 and iPhone 14 sizes found: fields under 16 px (iOS zooms into them), 40 px tabs and 18 px inline links, a lobby wider than the screen, the map layer and flows hidden past the edge of a sideways-scrolling top bar, and areas centered under the bottom sheet. All are fixed, and an end-to-end test keeps every screen and panel within the phone's width.
+

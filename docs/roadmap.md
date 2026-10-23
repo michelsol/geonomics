@@ -263,7 +263,7 @@ After the stage, the game got its own broker on Cloudflare, with a TURN relay fo
 
 Findings: [design-notes.md](design-notes.md#ai-governments-roadmap-stage-10).
 
-## Stage 11: Persistence, PWA and release
+## Stage 11: Persistence, PWA and release ✅
 
 - Save and load with msgpack, including typed arrays and a format version. Autosave to IndexedDB, export to a file, load from a file to host a game.
 - PWA: manifest, icons, offline cache (`vite-plugin-pwa`), installable on phones.
@@ -272,8 +272,10 @@ Findings: [design-notes.md](design-notes.md#ai-governments-roadmap-stage-10).
 
 **Exit:**
 - Saving, reloading and replaying the same commands reproduces the same world hash.
-- The PWA installs and starts offline on Android and iOS.
-- The game is live on GitHub Pages.
+- The PWA installs and starts offline on Android and iOS. *Checked in Chromium (desktop and Pixel 7 emulation) by the end-to-end tests; real Android and iOS installs are to be checked on devices.*
+- The game is live on GitHub Pages. *Once `main` is pushed: the Pages workflow deploys it.*
+
+Findings: [design-notes.md](design-notes.md#persistence-pwa-and-release-roadmap-stage-11).
 
 ---
 
