@@ -164,6 +164,15 @@ describe("HostLoop", () => {
     loop.stop();
   });
 
+  it("sends the state it stopped on when paused", () => {
+    const { world, time, loop, messages } = setup(10);
+    loop.resume();
+    time.advance(450); // ticks run between snapshots
+    loop.pause();
+    const last = messages.filter((m) => m.type === "snapshot").at(-1);
+    expect(last?.type === "snapshot" && last.snapshot.tick).toBe(world.tick);
+  });
+
   it("autosaves every 30 game days while running", () => {
     let saves = 0;
     const { world, time, loop } = setup("max", () => saves++);

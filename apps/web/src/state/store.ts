@@ -6,12 +6,18 @@ import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { FromWorker, GameOptions, HostStatus, Speed, ToWorker } from "../host/protocol";
 import { History } from "./history";
-import { priceExtremes, priceOf, realmPopulation } from "./selectors";
+import { areasInPolygon, meanPrices, type Point, priceExtremes, priceOf, realmPopulation } from "./selectors";
 
 export type Screen = "newGame" | "guide" | "join" | "chooseRealm" | "game" | "ended";
 export type Layer = "realms" | "population" | "prices" | "resources" | "satisfaction" | "wage" | "terrain";
 export type Flows = "none" | "migration" | "transport"; // arrows drawn over the area layer
-export type Mode = { kind: "select" } | { kind: "moveArmy"; army: number } | { kind: "pickPeaceAreas" };
+/** What closing a lasso does with the areas inside it: replace the selection, add to it, or remove from it. */
+export type LassoOperation = "replace" | "add" | "remove";
+export type Mode =
+  | { kind: "select" }
+  | { kind: "moveArmy"; army: number }
+  | { kind: "pickPeaceAreas" }
+  | { kind: "lasso"; points: Point[]; operation: LassoOperation }; // corners in map units
 
 export interface Toast {
   id: number;
@@ -70,7 +76,8 @@ export interface GameState {
   history: History | null;
   historyVersion: number; // bumped on every new sample, so charts know when to redraw
   status: HostStatus;
-  selectedArea: number | null;
+  selection: number[]; // the selected areas (specification §10, Selection)
+  selectedArea: number | null; // the selected area when exactly one is selected
   selectedGood: number;
   selectedArmy: number | null;
   layer: Layer;
@@ -102,8 +109,16 @@ export interface GameState {
   setPaused(paused: boolean): void;
   endGame(): void;
   backToMenu(): void;
-  clickArea(area: number | null): void;
+  /** A tap on the map; `additive` (Shift or Ctrl) adds or removes the area from the selection. */
+  clickArea(area: number | null, additive?: boolean): void;
   selectArea(area: number | null): void;
+  selectAreas(areas: readonly number[]): void;
+  toggleArea(area: number): void;
+  startLasso(point: Point): void;
+  addLassoPoint(point: Point): void;
+  setLassoOperation(operation: LassoOperation): void;
+  /** Applies the lasso to the selection; fewer than three corners cancel it. */
+  closeLasso(): void;
   selectGood(good: number): void;
   selectArmy(army: number | null): void;
   setLayer(layer: Layer): void;
@@ -111,6 +126,7 @@ export interface GameState {
   setTransportGood(good: number | "all"): void;
   setMode(mode: Mode): void;
   togglePeaceArea(area: number): void;
+  setPeaceAreas(areas: readonly number[]): void;
   toast(text: string): void;
   dismissToast(id: number): void;
   receive(message: FromWorker): void;
@@ -120,7 +136,11 @@ const IDLE_STATUS: HostStatus = { paused: true, speed: 5, ticksPerSecond: 0, msP
 const TOAST_LIMIT = 4;
 let nextToast = 1;
 
+/** A double tap's first tap selects one area; a lasso started this soon after it keeps the selection from before. */
+const DOUBLE_TAP_RESTORE_MS = 600;
+
 export function createGameStore(port: Port): StoreApi<GameState> {
+  let lastTap = { at: Number.NEGATIVE_INFINITY, selection: [] as number[] };
   const store = createStore<GameState>()((set, get) => ({
     screen: "newGame",
     progress: null,
@@ -135,6 +155,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     history: null,
     historyVersion: 0,
     status: IDLE_STATUS,
+    selection: [],
     selectedArea: null,
     selectedGood: 0,
     selectedArmy: null,
@@ -190,7 +211,13 @@ export function createGameStore(port: Port): StoreApi<GameState> {
       // A joined player enters once the host accepts the choice (enterAs); the host enters at once.
       if (get().session.role === "client") return;
       const capital = government === null ? null : (get().governments[government]?.capital ?? null);
-      set({ viewer: government, screen: "game", selectedArea: capital, peakPopulation: 0 });
+      set({
+        viewer: government,
+        screen: "game",
+        selectedArea: capital,
+        selection: capital === null ? [] : [capital],
+        peakPopulation: 0,
+      });
     },
     setSession(session) {
       set({ session: { ...get().session, ...session } });
@@ -203,7 +230,13 @@ export function createGameStore(port: Port): StoreApi<GameState> {
       }
       if (get().screen === "game" && get().viewer === you.government) return;
       const capital = you.government === null ? null : (get().governments[you.government]?.capital ?? null);
-      set({ viewer: you.government, screen: "game", selectedArea: capital, peakPopulation: 0 });
+      set({
+        viewer: you.government,
+        screen: "game",
+        selectedArea: capital,
+        selection: capital === null ? [] : [capital],
+        peakPopulation: 0,
+      });
     },
     send(command) {
       port.postMessage({ type: "command", command });
@@ -226,19 +259,65 @@ export function createGameStore(port: Port): StoreApi<GameState> {
       set({ screen: "newGame", progress: null, snapshot: null, data: null, summary: null, status: IDLE_STATUS });
       port.postMessage({ type: "pause" }); // nothing runs behind the menu
     },
-    clickArea(area) {
+    clickArea(area, additive = false) {
       const { mode } = get();
+      // Every tap counts as a double tap's possible first one, water included, so a lasso restores the right selection.
+      if (mode.kind === "select" && !additive) lastTap = { at: Date.now(), selection: get().selection };
       if (area === null) return;
       if (mode.kind === "moveArmy") {
         get().send({ type: "moveArmy", army: mode.army, destination: area });
         set({ mode: { kind: "select" } });
       } else if (mode.kind === "pickPeaceAreas") get().togglePeaceArea(area);
-      else get().selectArea(area);
+      else if (mode.kind === "select") {
+        if (additive) get().toggleArea(area);
+        else get().selectArea(area);
+      }
     },
     selectArea(area) {
       if (area !== null) get().history?.track(area);
-      set({ selectedArea: area });
+      set({ selectedArea: area, selection: area === null ? [] : [area] });
       port.postMessage({ type: "focus", player: "local", area });
+    },
+    selectAreas(areas) {
+      const unique = [...new Set(areas)];
+      if (unique.length <= 1) {
+        get().selectArea(unique[0] ?? null);
+        return;
+      }
+      get().history?.trackSelection(unique);
+      set({ selectedArea: null, selection: unique });
+      port.postMessage({ type: "focus", player: "local", area: null });
+    },
+    toggleArea(area) {
+      const { selection } = get();
+      get().selectAreas(selection.includes(area) ? selection.filter((a) => a !== area) : [...selection, area]);
+    },
+    startLasso(point) {
+      if (Date.now() - lastTap.at < DOUBLE_TAP_RESTORE_MS) get().selectAreas(lastTap.selection);
+      lastTap = { at: Number.NEGATIVE_INFINITY, selection: [] };
+      const operation = get().selection.length > 1 ? "add" : "replace";
+      set({ mode: { kind: "lasso", points: [point], operation } });
+    },
+    addLassoPoint(point) {
+      const { mode } = get();
+      if (mode.kind === "lasso") set({ mode: { ...mode, points: [...mode.points, point] } });
+    },
+    setLassoOperation(operation) {
+      const { mode } = get();
+      if (mode.kind === "lasso") set({ mode: { ...mode, operation } });
+    },
+    closeLasso() {
+      const { mode, data, selection } = get();
+      set({ mode: { kind: "select" } });
+      if (mode.kind !== "lasso" || mode.points.length < 3 || !data) return;
+      const inside = areasInPolygon(data, mode.points);
+      const next =
+        mode.operation === "replace"
+          ? inside
+          : mode.operation === "add"
+            ? [...selection, ...inside]
+            : selection.filter((area) => !inside.includes(area));
+      get().selectAreas(next);
     },
     selectGood(good) {
       set({ selectedGood: good });
@@ -261,6 +340,9 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     setMode(mode) {
       // Picking peace areas starts from an empty selection; the picks stay for the proposal form afterwards.
       set(mode.kind === "pickPeaceAreas" ? { mode, peaceAreas: [] } : { mode });
+    },
+    setPeaceAreas(areas) {
+      set({ peaceAreas: [...areas] });
     },
     togglePeaceArea(area) {
       const areas = get().peaceAreas;
@@ -332,6 +414,8 @@ export function createGameStore(port: Port): StoreApi<GameState> {
               const prices = data.goods.map((good) => priceOf(data, message.table, area, good.id));
               series.push(message.gameDay, prices);
             }
+            for (const { areas, series } of history.selectionPrices.values())
+              series.push(message.gameDay, meanPrices(data, message.table, areas));
           }
           set({ priceTable: message.table, historyVersion: state.historyVersion + 1 });
           return;

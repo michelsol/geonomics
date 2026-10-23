@@ -11,6 +11,7 @@ import {
   BLOCKED,
   BORDER,
   CELL_LINE,
+  LASSO_REMOVE,
   MIGRATION_ARROW,
   NEUTRAL,
   PICKED,
@@ -132,7 +133,7 @@ export class MapRenderer {
       this.drawMarkers(state, px);
       this.drawn.markers = markerInputs;
     }
-    const selectionInputs = [state.selectedArea, state.peaceAreas, state.mode.kind, this.lineScale];
+    const selectionInputs = [state.selection, state.peaceAreas, state.mode, this.lineScale];
     if (changed(this.drawn.selection, selectionInputs)) {
       this.drawSelection(state, px);
       this.drawn.selection = selectionInputs;
@@ -353,10 +354,17 @@ export class MapRenderer {
 
   private drawSelection(state: GameState, px: number): void {
     const g = this.selection.clear();
-    if (state.selectedArea !== null) {
-      const polygon = this.geometry.cells[state.selectedArea];
-      if (polygon && polygon.length >= 6) g.poly(polygon).stroke({ width: 3 * px, color: SELECTION });
+    const several = state.selection.length > 1;
+    for (const area of state.selection) {
+      const polygon = this.geometry.cells[area];
+      if (!polygon || polygon.length < 6) continue;
+      if (several)
+        g.poly(polygon)
+          .fill({ color: SELECTION, alpha: 0.18 })
+          .stroke({ width: 1.5 * px, color: SELECTION });
+      else g.poly(polygon).stroke({ width: 3 * px, color: SELECTION });
     }
+    if (state.mode.kind === "lasso") this.drawLasso(g, state.mode.points, state.mode.operation === "remove", px);
     for (const area of state.mode.kind === "pickPeaceAreas" || state.peaceAreas.length > 0 ? state.peaceAreas : []) {
       const polygon = this.geometry.cells[area];
       if (polygon && polygon.length >= 6)
@@ -366,7 +374,42 @@ export class MapRenderer {
     }
   }
 
+  /** The polygon being drawn: dashed sides, a dot at each corner, and a ring on the first, where it closes. */
+  private drawLasso(g: Graphics, points: readonly { x: number; y: number }[], removing: boolean, px: number): void {
+    const color = removing ? LASSO_REMOVE : SELECTION;
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1] as { x: number; y: number };
+      const b = points[i] as { x: number; y: number };
+      dashed(g, a.x, a.y, b.x, b.y, 8 * px, 5 * px);
+    }
+    g.stroke({ width: 2.5 * px, color });
+    for (const [i, point] of points.entries()) {
+      if (i === 0) g.circle(point.x, point.y, 9 * px).stroke({ width: 2.5 * px, color });
+      g.circle(point.x, point.y, 3.5 * px).fill({ color });
+    }
+  }
+
   // Camera
+
+  /** Map units under a screen point. */
+  toMap(sx: number, sy: number): { x: number; y: number } {
+    const scale = this.root.scale.x;
+    return { x: (sx - this.root.position.x) / scale, y: (sy - this.root.position.y) / scale };
+  }
+
+  /** The screen point of a map position. */
+  toScreen(x: number, y: number): { x: number; y: number } {
+    const scale = this.root.scale.x;
+    return { x: this.root.position.x + x * scale, y: this.root.position.y + y * scale };
+  }
+
+  /** Centers the visible part of the view on a map position without changing the zoom. */
+  centerOnPoint(x: number, y: number): void {
+    const scale = this.root.scale.x;
+    const center = this.viewCenter();
+    this.root.position.set(center.x - x * scale, center.y - y * scale);
+    this.afterCameraMove();
+  }
 
   /** Fits the whole map in the view. */
   fit(): void {
@@ -389,10 +432,7 @@ export class MapRenderer {
   /** Centers the visible part of the view on an area without changing the zoom. */
   centerOn(area: number): void {
     const { x, y } = this.data.areas[area] as StaticData["areas"][number];
-    const scale = this.root.scale.x;
-    const center = this.viewCenter();
-    this.root.position.set(center.x - x * scale, center.y - y * scale);
-    this.afterCameraMove();
+    this.centerOnPoint(x, y);
   }
 
   panBy(dx: number, dy: number): void {

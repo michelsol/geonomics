@@ -112,8 +112,11 @@ export class HostLoop {
     } else this.queue.push({ player, command });
   }
 
+  /** Stops the clock; every viewer gets the state it stopped on, so no one is left a tick behind. */
   pause(): void {
+    const wasRunning = !this.paused;
     this.paused = true;
+    if (wasRunning && !this.stopped) this.emitSnapshot();
     this.emitStatus();
   }
 

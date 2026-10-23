@@ -1,6 +1,8 @@
 // Bounded time series for the charts, built on the client from successive snapshots and price tables.
 
 export const HISTORY_SAMPLES = 365;
+/** Selections of several areas whose mean prices are recorded; the oldest is dropped beyond this. */
+export const TRACKED_SELECTIONS = 20;
 
 /** A ring buffer of samples: one x (game day) and a fixed number of channels per sample. */
 export class Series {
@@ -55,6 +57,7 @@ export class Series {
 export class History {
   readonly goodPrices: Series[]; // per good: lowest, median and highest price in the world
   readonly areaPrices = new Map<number, Series>(); // per tracked area: the price of every good
+  readonly selectionPrices = new Map<string, { areas: number[]; series: Series }>(); // per selection: mean prices
   readonly realm = new Series(2); // population and treasury of the player's realm
 
   constructor(readonly goodCount: number) {
@@ -65,4 +68,29 @@ export class History {
   track(area: number): void {
     if (!this.areaPrices.has(area)) this.areaPrices.set(area, new Series(this.goodCount));
   }
+
+  /** Starts recording the mean prices of several areas; the series of the oldest selection goes past the limit. */
+  trackSelection(areas: readonly number[]): Series {
+    const key = selectionKey(areas);
+    const known = this.selectionPrices.get(key);
+    if (known) return known.series;
+    const series = new Series(this.goodCount);
+    this.selectionPrices.set(key, { areas: [...areas], series });
+    for (const old of this.selectionPrices.keys()) {
+      if (this.selectionPrices.size <= TRACKED_SELECTIONS) break;
+      this.selectionPrices.delete(old);
+    }
+    return series;
+  }
+
+  /** The recorded prices of one area, or the mean prices of several. */
+  pricesOf(areas: readonly number[]): Series | undefined {
+    if (areas.length === 1) return this.areaPrices.get(areas[0] as number);
+    return this.selectionPrices.get(selectionKey(areas))?.series;
+  }
+}
+
+/** The same areas in any order give the same key. */
+export function selectionKey(areas: readonly number[]): string {
+  return [...areas].sort((a, b) => a - b).join(",");
 }

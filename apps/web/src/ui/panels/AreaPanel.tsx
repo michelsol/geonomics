@@ -1,11 +1,18 @@
-// The selected area: public figures, defense, resources, a sortable market table, the depot, and one good across the
-// world.
+// The selected area, or the totals of several (specification §10, Selection): public figures, defense, resources, a
+// sortable market table, the depot, and one good across the world.
 import { useState } from "react";
 import { mapControls } from "../../map/MapView";
-import { capacityMaximum, conquestEstimate, detailOf, policiesInForce, priceOf } from "../../state/selectors";
+import {
+  capacityMaximum,
+  conquestEstimate,
+  detailOf,
+  policiesInForce,
+  priceOf,
+  selectionSummary,
+} from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { count, fmt, pct, Section, Stat, Swatch } from "../components";
-import { type PanelProps, usePublicView } from "./common";
+import { AreaLink, type PanelProps, usePublicView } from "./common";
 import { Depots } from "./Depots";
 import { GoodSection } from "./GoodSection";
 
@@ -14,8 +21,16 @@ const WAGE_HINT = "Mean value added per private worker-hour, weighted by workers
 export function AreaPanel({ onOpen }: PanelProps) {
   const view = usePublicView();
   const area = useGame((state) => state.selectedArea);
+  const selection = useGame((state) => state.selection);
   if (!view) return <p className="muted">Waiting for the first snapshot…</p>;
-  if (area === null) return <p className="muted">Click an area on the map.</p>;
+  if (selection.length > 1) return <RegionView areas={selection} />;
+  if (area === null)
+    return (
+      <>
+        <p className="muted">Click an area on the map.</p>
+        <SelectionHint />
+      </>
+    );
   const { data, snapshot, government } = view;
   const static_ = data.areas[area];
   if (!static_) return null;
@@ -33,9 +48,12 @@ export function AreaPanel({ onOpen }: PanelProps) {
       <Section
         title="Area"
         actions={
-          <button type="button" onClick={() => mapControls.renderer?.centerOn(area)}>
-            Center
-          </button>
+          <>
+            <SelectRealm />
+            <button type="button" onClick={() => mapControls.renderer?.centerOn(area)}>
+              Center
+            </button>
+          </>
         }
       >
         <h2 data-testid="area-name">{static_.name}</h2>
@@ -131,8 +149,142 @@ export function AreaPanel({ onOpen }: PanelProps) {
         <span className="hint">Units per day. See a good across the map with the Resources layer.</span>
       </Section>
 
-      <MarketTable area={area} />
+      <MarketTable areas={[area]} />
       <Depots areas={[area]} />
+      <GoodSection />
+      <SelectionHint />
+    </>
+  );
+}
+
+function SelectionHint() {
+  return (
+    <p className="hint">
+      Double-click or double-tap the map to draw a region: tap its corners, then the first one again. Shift-click adds
+      or removes one area.
+    </p>
+  );
+}
+
+/** Selects every area of the player's realm, for its totals and realm-wide actions. */
+function SelectRealm() {
+  const owned = useGame((state) => state.snapshot?.government?.ownedAreas);
+  const selectAreas = useGame((state) => state.selectAreas);
+  if (!owned || owned.length < 2) return null;
+  return (
+    <button type="button" onClick={() => selectAreas(owned)}>
+      My realm
+    </button>
+  );
+}
+
+/** Several selected areas: their totals and population-weighted means. */
+function RegionView({ areas }: { areas: number[] }) {
+  const view = usePublicView();
+  const table = useGame((state) => state.priceTable);
+  const selectArea = useGame((state) => state.selectArea);
+  if (!view) return null;
+  const { data, snapshot, government } = view;
+  const summary = selectionSummary(data, snapshot, table, areas);
+  const centroid = areas.reduce(
+    (sum, area) => ({ x: sum.x + (data.areas[area]?.x ?? 0), y: sum.y + (data.areas[area]?.y ?? 0) }),
+    { x: 0, y: 0 },
+  );
+  // The foreign area that takes the most to conquer.
+  let hardest: { area: number; equipped: number } | null = null;
+  for (const area of areas) {
+    if (government && snapshot.areas.owner[area] === government.id) continue;
+    const equipped = conquestEstimate(data, snapshot, area).equippedNeeded;
+    if (!hardest || equipped > hardest.equipped) hardest = { area, equipped };
+  }
+  const resources = data.goods.filter((good) => good.isPrimary && (summary.capacity[good.id] as number) > 0);
+  const partial = summary.withDetail < areas.length;
+
+  return (
+    <>
+      <Section
+        title="Selection"
+        actions={
+          <>
+            <SelectRealm />
+            <button
+              type="button"
+              onClick={() => mapControls.renderer?.centerOnPoint(centroid.x / areas.length, centroid.y / areas.length)}
+            >
+              Center
+            </button>
+            <button type="button" onClick={() => selectArea(null)}>
+              Clear
+            </button>
+          </>
+        }
+      >
+        <h2 data-testid="selection-name">{count(areas.length)} areas</h2>
+        <div className="row muted">
+          {summary.owners.map(({ owner, areas: n }) => {
+            const realm = owner >= 0 ? snapshot.governments[owner] : undefined;
+            return (
+              <span key={owner}>
+                {realm && <Swatch color={realm.color} />}
+                {realm ? realm.name : "Neutral"}
+                {government && owner === government.id ? " (you)" : ""} · {n}
+              </span>
+            );
+          })}
+        </div>
+        <div className="stats">
+          <Stat label="Population" value={count(summary.population)} testId="selection-population" />
+          <Stat label="Average wage" value={fmt(summary.wageLevel)} />
+          <Stat label="Necessities met" value={pct(summary.necessitySatisfaction)} />
+          <Stat label="Satisfaction" value={pct(summary.satisfaction)} />
+          <Stat label="Militia" value={count(summary.militia)} />
+          {summary.withDetail > 0 && <Stat label="Savings" value={`${fmt(summary.savings)} mh`} />}
+          {summary.withDetail > 0 && <Stat label="Unemployed" value={count(summary.unemployed)} />}
+        </div>
+        <p className="hint">
+          Wages and satisfaction are weighted by population.
+          {partial
+            ? ` Savings, unemployment, stocks and flows cover the ${summary.withDetail} of ${areas.length} areas you see in detail: yours and their neighbors.`
+            : ""}
+        </p>
+      </Section>
+
+      {hardest && (
+        <Section title="Defense">
+          <p>
+            Hardest to take: <AreaLink area={hardest.area} />, with more than{" "}
+            <strong>{count(Math.ceil(hardest.equipped))}</strong> equipped soldiers.
+          </p>
+        </Section>
+      )}
+
+      <Section title="Natural resources">
+        {resources.length === 0 ? (
+          <span className="muted">None.</span>
+        ) : (
+          <table data-testid="resources">
+            <thead>
+              <tr>
+                <th>Good</th>
+                <th className="num" title="Largest extraction per day, summed over the areas">
+                  Capacity
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {resources.map((good) => (
+                <tr key={good.id}>
+                  <td title={good.unit}>{good.name}</td>
+                  <td className="num">{fmt(summary.capacity[good.id] as number)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Section>
+
+      <MarketTable areas={areas} />
+      <Depots areas={areas} />
       <GoodSection />
     </>
   );
@@ -214,17 +366,22 @@ function saveSort(sort: Sort): void {
 }
 
 /** Prices of every good, plus stocks and flows where the snapshot carries them; columns sort on click. */
-function MarketTable({ area }: { area: number }) {
+function MarketTable({ areas }: { areas: number[] }) {
   const view = usePublicView();
   const table = useGame((state) => state.priceTable);
   const selectGood = useGame((state) => state.selectGood);
   const [sort, setSort] = useState(storedSort);
   if (!view) return null;
   const { data, snapshot } = view;
-  const detail = detailOf(snapshot, area);
-  const columns = COLUMNS.filter((c) => detail || !c.detailOnly);
+  const single = areas.length === 1 ? (areas[0] as number) : null;
+  const summary = single === null ? selectionSummary(data, snapshot, table, areas) : null;
+  const detail = single === null ? undefined : detailOf(snapshot, single);
+  const hasDetail = summary ? summary.withDetail > 0 : detail !== undefined;
+  const columns = COLUMNS.filter((c) => hasDetail || !c.detailOnly);
   const rows = data.goods.map((good) => {
     const g = good.id;
+    if (summary) return { good, ...(summary.market[g] as (typeof summary.market)[number]) };
+    const area = single as number;
     return {
       good,
       price: detail ? (detail.price[g] as number) : table ? priceOf(data, table, area, g) : 0,
@@ -251,7 +408,7 @@ function MarketTable({ area }: { area: number }) {
   };
 
   return (
-    <Section title={detail ? "Market" : "Prices"}>
+    <Section title={hasDetail ? "Market" : "Prices"}>
       <table data-testid="market">
         <thead>
           <tr>
@@ -287,7 +444,7 @@ function MarketTable({ area }: { area: number }) {
               <td className="num" title={`labor value ${fmt(row.good.laborValue)}`}>
                 {fmt(row.price)}
               </td>
-              {detail && (
+              {hasDetail && (
                 <>
                   <td className="num">{row.good.isService ? "—" : fmt(row.stock)}</td>
                   <td className="num">{fmt(row.made)}</td>
@@ -299,6 +456,13 @@ function MarketTable({ area }: { area: number }) {
           ))}
         </tbody>
       </table>
+      {summary && (
+        <span className="hint">
+          Prices are means over the {areas.length} areas; stocks, production, use and net trade are sums
+          {summary.withDetail < areas.length ? ` over the ${summary.withDetail} areas you see in detail` : ""}. Trade
+          between two selected areas cancels out.
+        </span>
+      )}
       {key !== null && (
         <button
           type="button"

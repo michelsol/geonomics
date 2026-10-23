@@ -434,6 +434,20 @@ td {
   color: var(--text);
   border: 0;
 }
+.mode-banner {
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: calc(100% - 20px);
+  width: max-content;
+}
+.mode-banner .group {
+  display: flex;
+  gap: 4px;
+}
+.mode-banner button.active {
+  background: var(--text);
+  color: var(--accent-text);
+}
 .toasts {
   position: absolute;
   right: 10px;

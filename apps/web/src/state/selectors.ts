@@ -193,3 +193,143 @@ export function policiesInForce(government: GovernmentView, area: number, goodCo
   resolveSettings(resolved, government.realmPolicies, state.policyOverrides);
   return resolved;
 }
+
+export interface Point {
+  x: number;
+  y: number;
+}
+
+/** Areas whose center lies inside a polygon given by its corners, in map units (even-odd rule). */
+export function areasInPolygon(data: StaticData, corners: readonly Point[]): number[] {
+  if (corners.length < 3) return [];
+  const inside: number[] = [];
+  for (const [id, area] of data.areas.entries()) {
+    let odd = false;
+    for (let i = 0, j = corners.length - 1; i < corners.length; j = i++) {
+      const a = corners[i] as Point;
+      const b = corners[j] as Point;
+      if (a.y > area.y !== b.y > area.y && area.x < ((b.x - a.x) * (area.y - a.y)) / (b.y - a.y) + a.x) odd = !odd;
+    }
+    if (odd) inside.push(id);
+  }
+  return inside;
+}
+
+/**
+ * Splits a whole number over areas in proportion to their population, by largest remainder, so the parts sum to the
+ * total exactly. Areas without people get a share only when nobody lives in any of them (then evenly).
+ */
+export function splitByPopulation(total: number, areas: readonly number[], population: ArrayLike<number>): number[] {
+  const whole = Math.max(0, Math.round(total));
+  if (areas.length === 0) return [];
+  const people = areas.map((area) => Math.max(0, population[area] ?? 0));
+  const sum = people.reduce((a, b) => a + b, 0);
+  const weights = sum > 0 ? people : areas.map(() => 1);
+  const weightSum = sum > 0 ? sum : areas.length;
+  const exact = weights.map((w) => (whole * w) / weightSum);
+  const parts = exact.map(Math.floor);
+  let left = whole - parts.reduce((a, b) => a + b, 0);
+  const order = exact.map((value, i) => ({ i, rest: value - Math.floor(value) })).sort((a, b) => b.rest - a.rest);
+  for (const { i } of order) {
+    if (left <= 0) break;
+    parts[i] = (parts[i] as number) + 1;
+    left--;
+  }
+  return parts;
+}
+
+export interface MarketRow {
+  price: number; // mean price over the areas
+  stock: number; // the rest are sums over the areas whose detail the snapshot carries
+  made: number;
+  used: number;
+  trade: number; // net imports: trade between two of the areas cancels out
+}
+
+export interface SelectionSummary {
+  areas: number;
+  owners: { owner: number; areas: number }[]; // -1: neutral; most areas first
+  population: number;
+  wageLevel: number; // means weighted by population
+  satisfaction: number;
+  necessitySatisfaction: number;
+  militia: number;
+  withDetail: number; // areas whose stocks and flows the snapshot carries
+  savings: number; // over the areas with detail
+  unemployed: number;
+  capacity: Float64Array; // per good: maximum natural capacity, summed
+  market: MarketRow[]; // per good
+}
+
+/** Totals and population-weighted means over several areas (specification §10, Selection). */
+export function selectionSummary(
+  data: StaticData,
+  snapshot: Snapshot,
+  table: Uint16Array | null,
+  areas: readonly number[],
+): SelectionSummary {
+  const goods = data.goods.length;
+  const owners = new Map<number, number>();
+  const capacity = new Float64Array(goods);
+  const market: MarketRow[] = data.goods.map(() => ({ price: 0, stock: 0, made: 0, used: 0, trade: 0 }));
+  let population = 0;
+  let wage = 0;
+  let satisfaction = 0;
+  let necessities = 0;
+  let militia = 0;
+  let withDetail = 0;
+  let savings = 0;
+  let unemployed = 0;
+  for (const area of areas) {
+    const owner = snapshot.areas.owner[area] as number;
+    owners.set(owner, (owners.get(owner) ?? 0) + 1);
+    const people = snapshot.areas.population[area] as number;
+    population += people;
+    wage += people * (snapshot.areas.wageLevel[area] as number);
+    satisfaction += people * (snapshot.areas.satisfaction[area] as number);
+    necessities += people * (snapshot.areas.necessitySatisfaction[area] as number);
+    militia += snapshot.areas.militia[area] as number;
+    const detail = detailOf(snapshot, area);
+    if (detail) {
+      withDetail++;
+      savings += detail.savings;
+      unemployed += detail.unemployedWorkers;
+    }
+    for (let g = 0; g < goods; g++) {
+      capacity[g] = (capacity[g] as number) + capacityMaximum(data, area, g);
+      const row = market[g] as MarketRow;
+      row.price += detail ? (detail.price[g] as number) : table ? priceOf(data, table, area, g) : 0;
+      if (!detail) continue;
+      row.stock += detail.stock[g] as number;
+      row.made += detail.produced[g] as number;
+      row.used += detail.consumed[g] as number;
+      row.trade += (detail.imported[g] as number) - (detail.exported[g] as number);
+    }
+  }
+  const count = Math.max(areas.length, 1);
+  for (const row of market) row.price /= count;
+  const weight = population > 0 ? 1 / population : 0;
+  return {
+    areas: areas.length,
+    owners: [...owners].map(([owner, n]) => ({ owner, areas: n })).sort((a, b) => b.areas - a.areas),
+    population,
+    wageLevel: wage * weight,
+    satisfaction: satisfaction * weight,
+    necessitySatisfaction: necessities * weight,
+    militia,
+    withDetail,
+    savings,
+    unemployed,
+    capacity,
+    market,
+  };
+}
+
+/** Mean price of every good over some areas, from the public price table. */
+export function meanPrices(data: StaticData, table: Uint16Array, areas: readonly number[]): number[] {
+  return data.goods.map((good) => {
+    let sum = 0;
+    for (const area of areas) sum += priceOf(data, table, area, good.id);
+    return areas.length > 0 ? sum / areas.length : 0;
+  });
+}

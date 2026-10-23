@@ -23,17 +23,22 @@ export function StandingOrders() {
   const view = useView();
   const send = useSend();
   const selected = useGame((state) => state.selectedArea);
+  const selection = useGame((state) => state.selection);
   const [rule, setRule] = useState({
     kind: "keepDepotStock" as RuleKind,
     good: 0,
     a: 10,
     b: 5,
-    scope: "all" as "all" | "area",
+    scope: "all" as "all" | "area" | "selection",
   });
   if (!view) return null;
   const { data, government } = view;
   const goodName = (g: number) => data.goods[g]?.name ?? "?";
   const scopeArea = selected !== null && government.ownedAreas.includes(selected) ? selected : government.capital;
+  const ownSelected = selection.filter((a) => government.ownedAreas.includes(a));
+  const scope = rule.scope === "selection" && ownSelected.length < 2 ? "area" : rule.scope;
+  const ruleAreas = (): number[] | "all" =>
+    scope === "all" || scopeArea === null ? "all" : scope === "selection" ? ownSelected : [scopeArea];
 
   const buildRule = (): StandingRule => {
     switch (rule.kind) {
@@ -97,9 +102,12 @@ export function StandingOrders() {
         )}
         <Select
           label="Rule scope"
-          value={rule.scope}
+          value={scope}
           options={[
             { value: "all", label: "All areas" },
+            ...(ownSelected.length >= 2
+              ? [{ value: "selection" as const, label: `Selection (${ownSelected.length} areas)` }]
+              : []),
             { value: "area", label: scopeArea === null ? "This area" : `${data.areas[scopeArea]?.name} only` },
           ]}
           onChange={(scope) => setRule({ ...rule, scope })}
@@ -109,7 +117,7 @@ export function StandingOrders() {
           onClick={() =>
             send({
               type: "addStandingOrder",
-              order: { areas: rule.scope === "all" || scopeArea === null ? "all" : [scopeArea], rule: buildRule() },
+              order: { areas: ruleAreas(), rule: buildRule() },
             })
           }
         >

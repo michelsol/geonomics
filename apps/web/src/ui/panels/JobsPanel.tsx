@@ -1,16 +1,19 @@
-// Employment in the realm or one area, and government jobs and wage offers per owned area.
-import type { GovernmentJob } from "@geonomics/sim";
-import { useState } from "react";
-import { employmentOf } from "../../state/selectors";
+// Employment, government jobs and wage offers in one of the player's areas or in the selected ones. Totals for several
+// areas are split over them by population (specification §10, Selection).
+import type { Command, GovernmentJob } from "@geonomics/sim";
+import { useEffect, useState } from "react";
+import { employmentOf, splitByPopulation } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { count, fmt, NumberField, pct, Section, Select } from "../components";
-import { areaName, ownedOptions, useSend, useView } from "./common";
+import { areaName, ownedOptions, useSend, useView, type View } from "./common";
 
 // Categorical slots 1 and 2 of the chart palette (dark steps), validated against the panel surface; the unemployed
 // are a neutral gray, since they are the absence of a job rather than a third kind of one.
 const PRIVATE_COLOR = "#3987e5";
 const GOVERNMENT_COLOR = "#d95926";
 const UNEMPLOYED_COLOR = "#5b6270";
+
+const SELECTED = -2; // the player's areas in the map selection, in the area select
 
 type JobKind = GovernmentJob["kind"];
 const JOB_LABELS: Record<JobKind, string> = {
@@ -21,94 +24,175 @@ const JOB_LABELS: Record<JobKind, string> = {
   buildAirport: "Build airport",
 };
 
+/** The same job in several areas, as one line: summed workers and targets. */
+interface JobGroup {
+  job: GovernmentJob;
+  areas: number[];
+  workers: number;
+  target: number;
+}
+
 export function JobsPanel() {
   const view = useView();
   const send = useSend();
   const selected = useGame((state) => state.selectedArea);
+  const selection = useGame((state) => state.selection);
   const edges = useGame((state) => state.edges);
   const selectArea = useGame((state) => state.selectArea);
   const [job, setJob] = useState({ kind: "fortify" as JobKind, good: 0, edge: -1, workers: 100 });
   if (!view) return null;
-  const { data, government } = view;
-  const area = selected !== null && government.ownedAreas.includes(selected) ? selected : government.capital;
-  if (area === null) return <p className="muted">You hold no area.</p>;
-  const state = government.areaStates.find((s) => s.area === area);
-  if (!state) return null;
+  const { data, government, snapshot } = view;
+  const ownSelected = selection.filter((area) => government.ownedAreas.includes(area));
+  const region = ownSelected.length >= 2;
+  const single = selected !== null && government.ownedAreas.includes(selected) ? selected : government.capital;
+  if (!region && single === null) return <p className="muted">You hold no area.</p>;
+  const areas = region ? ownSelected : [single as number];
+  const population = snapshot.areas.population;
+  const label = region ? `Selection (${areas.length} areas)` : areaName(data, areas[0] as number);
+
+  // Roads: from one area, a chosen edge; across a selection, every land edge inside it.
+  const inside = new Set(areas);
   const roads = edges
     .map((edge, id) => ({ edge, id }))
-    .filter(({ edge }) => edge.mode === "land" && (edge.areaA === area || edge.areaB === area))
-    .map(({ edge, id }) => ({
-      value: id,
-      label: `to ${areaName(data, edge.areaA === area ? edge.areaB : edge.areaA)}`,
-    }));
+    .filter(({ edge }) =>
+      edge.mode !== "land"
+        ? false
+        : region
+          ? inside.has(edge.areaA) && inside.has(edge.areaB)
+          : edge.areaA === single || edge.areaB === single,
+    );
+  const coastal = areas.filter((area) => data.areas[area]?.isCoastal);
   const kinds = (Object.keys(JOB_LABELS) as JobKind[])
-    .filter((kind) => kind !== "buildPort" || data.areas[area]?.isCoastal)
+    .filter((kind) => kind !== "buildPort" || coastal.length > 0)
     .filter((kind) => kind !== "buildInfrastructure" || roads.length > 0)
-    .map((kind) => ({ value: kind, label: JOB_LABELS[kind] }));
-  const describeJob = (j: GovernmentJob) =>
+    .map((kind) => ({
+      value: kind,
+      label: kind === "buildInfrastructure" && region ? `Build roads (${roads.length} inside)` : JOB_LABELS[kind],
+    }));
+  const otherEnd = (edge: number, from: number) =>
+    edges[edge]?.areaA === from ? (edges[edge]?.areaB ?? from) : (edges[edge]?.areaA ?? from);
+  const describeJob = (j: GovernmentJob, area: number) =>
     j.kind === "produce"
       ? `Produce ${data.goods[j.good]?.name}`
       : j.kind === "buildInfrastructure"
-        ? `Road to ${areaName(data, (edges[j.edge]?.areaA === area ? edges[j.edge]?.areaB : edges[j.edge]?.areaA) ?? 0)}`
+        ? `Road ${areaName(data, area)} – ${areaName(data, otherEnd(j.edge, area))}`
         : JOB_LABELS[j.kind];
-  const buildJob = (): GovernmentJob => {
+
+  // Jobs across the areas, one line per distinct job.
+  const groups = new Map<string, JobGroup>();
+  for (const area of areas) {
+    for (const assignment of government.areaStates.find((s) => s.area === area)?.jobs ?? []) {
+      const key = JSON.stringify(assignment.job);
+      const group = groups.get(key) ?? { job: assignment.job, areas: [], workers: 0, target: 0 };
+      group.areas.push(area);
+      group.workers += assignment.workers;
+      group.target += assignment.targetWorkers;
+      groups.set(key, group);
+    }
+  }
+
+  /** Commands giving a job `total` workers over `over`, split by population (roads: evenly over the edges). */
+  const hire = (kind: GovernmentJob, total: number, over: number[]): Command[] =>
+    splitByPopulation(total, over, population).map((targetWorkers, i) => ({
+      type: "setJobTarget",
+      area: over[i] as number,
+      job: kind,
+      targetWorkers,
+    }));
+  const hireNew = (): Command[] => {
     switch (job.kind) {
       case "produce":
-        return { kind: "produce", good: job.good };
-      case "buildInfrastructure":
-        return { kind: "buildInfrastructure", edge: job.edge >= 0 ? job.edge : (roads[0]?.value ?? 0) };
+        return hire({ kind: "produce", good: job.good }, job.workers, areas);
+      case "buildPort":
+        return hire({ kind: "buildPort" }, job.workers, coastal);
+      case "buildInfrastructure": {
+        if (!region) {
+          const edge = job.edge >= 0 ? job.edge : (roads[0]?.id ?? 0);
+          return [
+            {
+              type: "setJobTarget",
+              area: single as number,
+              job: { kind: "buildInfrastructure", edge },
+              targetWorkers: job.workers,
+            },
+          ];
+        }
+        const evenly = splitByPopulation(
+          job.workers,
+          roads.map((_, i) => i),
+          roads.map(() => 1),
+        );
+        return roads.map(({ edge, id }, i) => ({
+          type: "setJobTarget",
+          area: edge.areaA,
+          job: { kind: "buildInfrastructure", edge: id },
+          targetWorkers: evenly[i] as number,
+        }));
+      }
       default:
-        return { kind: job.kind };
+        return hire({ kind: job.kind }, job.workers, areas);
     }
   };
+  const sendAll = (commands: Command[]) => {
+    for (const command of commands) send(command);
+  };
+
+  // Wage offers: the population-weighted mean of the areas'; setting it sets each area.
+  let weighted = 0;
+  let people = 0;
+  for (const area of areas) {
+    const offer = government.areaStates.find((s) => s.area === area)?.wageOffer ?? 0;
+    weighted += offer * (population[area] as number);
+    people += population[area] as number;
+  }
+  const wageOffer = people > 0 ? weighted / people : 0;
+  const averageWage =
+    areas.reduce((sum, area) => sum + (snapshot.areas.wageLevel[area] as number) * (population[area] as number), 0) /
+    Math.max(people, 1);
 
   return (
     <>
       <Section title="Area">
-        <Select label="Jobs area" value={area} options={ownedOptions(view)} onChange={selectArea} />
+        <Select
+          label="Jobs area"
+          value={region ? SELECTED : (single as number)}
+          options={[...(region ? [{ value: SELECTED, label }] : []), ...ownedOptions(view)]}
+          onChange={(area) => {
+            if (area !== SELECTED) selectArea(area);
+          }}
+        />
+        {region && <span className="hint">Workers you hire here are split over the areas by population.</span>}
       </Section>
 
-      <EmploymentSection area={area} />
+      <EmploymentSection view={view} areas={areas} label={label} />
 
       <Section title="Wages">
         <div className="row">
           <span>Wage offer</span>
           <NumberField
             label="Jobs wage offer"
-            value={state.wageOffer}
+            value={Math.round(wageOffer * 100) / 100}
             min={0}
-            onChange={(wageOffer) => send({ type: "setWageOffer", area, wageOffer })}
+            onChange={(offer) => sendAll(areas.map((area) => ({ type: "setWageOffer", area, wageOffer: offer })))}
           />
-          <span className="muted">average wage here {fmt(view.snapshot.areas.wageLevel[area] as number)}</span>
+          <span className="muted">
+            average wage {region ? "in the selection" : "here"} {fmt(averageWage)}
+          </span>
         </div>
-        <span className="muted">Workers only take government jobs paying at least the average wage here.</span>
+        <span className="muted">
+          Workers only take government jobs paying at least the average wage where they live.
+        </span>
       </Section>
 
       <Section title="Jobs">
-        {state.jobs.length === 0 && <span className="muted">No government jobs here.</span>}
-        {state.jobs.map((assignment) => (
-          <div className="list-item" key={JSON.stringify(assignment.job)}>
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <span>{describeJob(assignment.job)}</span>
-              <span className="muted">
-                {count(assignment.workers)} / {count(assignment.targetWorkers)} workers
-              </span>
-            </div>
-            <div className="row">
-              <NumberField
-                label="Target workers"
-                value={assignment.targetWorkers}
-                min={0}
-                onChange={(targetWorkers) => send({ type: "setJobTarget", area, job: assignment.job, targetWorkers })}
-              />
-              <button
-                type="button"
-                onClick={() => send({ type: "setJobTarget", area, job: assignment.job, targetWorkers: 0 })}
-              >
-                Stop
-              </button>
-            </div>
-          </div>
+        {groups.size === 0 && <span className="muted">No government jobs here.</span>}
+        {[...groups.values()].map((group) => (
+          <JobLine
+            key={JSON.stringify(group.job)}
+            group={group}
+            title={describeJob(group.job, group.areas[0] as number)}
+            onTarget={(total) => sendAll(hire(group.job, total, group.areas))}
+          />
         ))}
       </Section>
 
@@ -123,11 +207,14 @@ export function JobsPanel() {
               onChange={(good) => setJob({ ...job, good })}
             />
           )}
-          {job.kind === "buildInfrastructure" && (
+          {job.kind === "buildInfrastructure" && !region && (
             <Select
               label="Road"
-              value={job.edge >= 0 ? job.edge : (roads[0]?.value ?? 0)}
-              options={roads}
+              value={job.edge >= 0 ? job.edge : (roads[0]?.id ?? 0)}
+              options={roads.map(({ id }) => ({
+                value: id,
+                label: `to ${areaName(data, otherEnd(id, single as number))}`,
+              }))}
               onChange={(edge) => setJob({ ...job, edge })}
             />
           )}
@@ -139,27 +226,49 @@ export function JobsPanel() {
             min={0}
             onChange={(workers) => setJob({ ...job, workers })}
           />
-          <button
-            type="button"
-            className="primary"
-            onClick={() => send({ type: "setJobTarget", area, job: buildJob(), targetWorkers: job.workers })}
-          >
+          <button type="button" className="primary" onClick={() => sendAll(hireNew())}>
             Hire
           </button>
+          {region && <span className="muted">in total</span>}
         </div>
       </Section>
     </>
   );
 }
 
+/** One job across its areas: workers against the target, and a new total target. */
+function JobLine({ group, title, onTarget }: { group: JobGroup; title: string; onTarget: (total: number) => void }) {
+  const [target, setTarget] = useState(group.target);
+  useEffect(() => setTarget(group.target), [group.target]);
+  return (
+    <div className="list-item" data-testid="job">
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <span>
+          {title}
+          {group.areas.length > 1 ? ` · ${group.areas.length} areas` : ""}
+        </span>
+        <span className="muted">
+          {count(group.workers)} / {count(group.target)} workers
+        </span>
+      </div>
+      <div className="row">
+        <NumberField label="Target workers" value={group.target} min={0} onChange={setTarget} />
+        <button type="button" onClick={() => onTarget(target)}>
+          Set
+        </button>
+        <button type="button" onClick={() => onTarget(0)}>
+          Stop
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Who works at what, as a share bar (private, government, unemployed) and a table of private jobs by good. */
-function EmploymentSection({ area }: { area: number }) {
-  const view = useView();
-  const [scope, setScope] = useState<"area" | "realm">("area");
-  if (!view) return null;
+function EmploymentSection({ view, areas, label }: { view: View; areas: number[]; label: string }) {
+  const [scope, setScope] = useState<"here" | "realm">("here");
   const { data, snapshot, government } = view;
-  const areas = scope === "realm" ? government.ownedAreas : [area];
-  const employment = employmentOf(data, snapshot, government, areas);
+  const employment = employmentOf(data, snapshot, government, scope === "realm" ? government.ownedAreas : areas);
   const total = employment.privateTotal + employment.government + employment.unemployed;
   const parts = [
     { label: "Private jobs", value: employment.privateTotal, color: PRIVATE_COLOR },
@@ -184,7 +293,7 @@ function EmploymentSection({ area }: { area: number }) {
           label="Employment scope"
           value={scope}
           options={[
-            { value: "area", label: areaName(data, area) },
+            { value: "here", label },
             { value: "realm", label: "Whole realm" },
           ]}
           onChange={setScope}

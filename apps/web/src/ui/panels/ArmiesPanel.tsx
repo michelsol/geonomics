@@ -1,15 +1,18 @@
 // The player's armies: pay, recruiting, weapons, stance, moves and disbanding; foreign armies for awareness.
 import type { Army } from "@geonomics/sim";
 import { useState } from "react";
-import { realmWageLevel } from "../../state/selectors";
+import { realmWageLevel, splitByPopulation } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { count, fmt, NumberField, pct, Section, Select, Stat, Swatch } from "../components";
 import { AreaLink, areaName, ownedOptions, useSend, useView } from "./common";
+
+const SELECTED = -2; // the player's areas in the map selection, in the area select
 
 export function ArmiesPanel() {
   const view = useView();
   const send = useSend();
   const selected = useGame((state) => state.selectedArea);
+  const selection = useGame((state) => state.selection);
   const selectedArmy = useGame((state) => state.selectedArmy);
   const selectArmy = useGame((state) => state.selectArmy);
   const setMode = useGame((state) => state.setMode);
@@ -18,12 +21,26 @@ export function ArmiesPanel() {
   const { snapshot, government, data } = view;
   const own = snapshot.armies.filter((army) => army.owner === government.id);
   const foreign = snapshot.armies.filter((army) => army.owner !== government.id);
+  const ownSelected = selection.filter((area) => government.ownedAreas.includes(area));
+  const region = ownSelected.length >= 2;
   const recruitArea =
-    recruit.area >= 0
+    recruit.area >= 0 || (recruit.area === SELECTED && region)
       ? recruit.area
-      : selected !== null && government.ownedAreas.includes(selected)
-        ? selected
-        : (government.capital ?? 0);
+      : region
+        ? SELECTED
+        : selected !== null && government.ownedAreas.includes(selected)
+          ? selected
+          : (government.capital ?? 0);
+  // Recruits for the selection are split over its areas by population: one army per area that gets any.
+  const recruitIn = (soldiers: number) => {
+    if (recruitArea !== SELECTED) {
+      send({ type: "recruitArmy", area: recruitArea, soldiers });
+      return;
+    }
+    splitByPopulation(soldiers, ownSelected, snapshot.areas.population).forEach((part, i) => {
+      if (part >= 1) send({ type: "recruitArmy", area: ownSelected[i] as number, soldiers: part });
+    });
+  };
   const soldiers = own.reduce((sum, army) => sum + army.soldiers, 0);
   const averageWage = realmWageLevel(snapshot);
   const bill = soldiers * government.soldierWage * data.config.economy.hoursPerWorkerDay;
@@ -56,7 +73,10 @@ export function ArmiesPanel() {
           <Select
             label="Recruit in"
             value={recruitArea}
-            options={ownedOptions(view)}
+            options={[
+              ...(region ? [{ value: SELECTED, label: `Selection (${ownSelected.length} areas)` }] : []),
+              ...ownedOptions(view),
+            ]}
             onChange={(area) => setRecruit({ ...recruit, area })}
           />
           <NumberField
@@ -65,15 +85,14 @@ export function ArmiesPanel() {
             min={1}
             onChange={(soldiers) => setRecruit({ ...recruit, soldiers })}
           />
-          <button
-            type="button"
-            className="primary"
-            onClick={() => send({ type: "recruitArmy", area: recruitArea, soldiers: recruit.soldiers })}
-          >
+          <button type="button" className="primary" onClick={() => recruitIn(recruit.soldiers)}>
             Recruit
           </button>
         </div>
-        <span className="hint">Recruits leave the workforce of the area.</span>
+        <span className="hint">
+          Recruits leave the workforce of the area.
+          {recruitArea === SELECTED ? " The total is split over the selection by population, one army per area." : ""}
+        </span>
       </Section>
 
       <Weapons />

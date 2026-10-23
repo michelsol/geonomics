@@ -1,4 +1,5 @@
-// Taxes and price controls: realm-wide settings and per-area overrides, each for one good or every good.
+// Taxes and price controls: realm-wide settings and per-area overrides, each for one good or every good. A setting
+// for the selection is an override in each of the player's selected areas.
 import type { PolicyName, PolicySetting } from "@geonomics/sim";
 import { useEffect, useState } from "react";
 import { policiesInForce } from "../../state/selectors";
@@ -17,6 +18,7 @@ const POLICIES: { value: PolicyName; label: string; rate: boolean }[] = [
 ];
 
 const ALL = -1; // "All areas" or "All goods" in the selects
+const SELECTED = -2; // the player's areas in the map selection
 
 /** Slider range of the policies that have one: rates in percent, head tax in man-hours per person per day. */
 const SLIDERS: Partial<Record<PolicyName, { min: number; max: number; step: number }>> = {
@@ -34,21 +36,28 @@ export function PolicyEditor() {
   const view = useView();
   const send = useSend();
   const selected = useGame((state) => state.selectedArea);
+  const selection = useGame((state) => state.selection);
   const [policy, setPolicy] = useState<PolicyName>("productionTaxRate");
   const [scope, setScope] = useState<number | null>(null); // null: all areas until one is picked
   const [good, setGood] = useState(ALL);
   const [value, setValue] = useState(0); // as shown: percent for rates, man-hours otherwise
   const owned = view?.government.ownedAreas ?? [];
+  const ownSelected = selection.filter((a) => owned.includes(a));
+  const region = ownSelected.length >= 2;
   const area = scope ?? ALL;
-  const target = area !== ALL && owned.includes(area) ? area : ALL;
+  const target = area === SELECTED ? (region ? SELECTED : ALL) : area !== ALL && owned.includes(area) ? area : ALL;
+  const targetAreas = target === SELECTED ? ownSelected : target === ALL ? [] : [target];
   const perGood = policy !== "headTaxPerPersonPerDay";
   const settingGood = perGood && good !== ALL ? good : null;
   // The setting in force for exactly this scope, policy and good, so the slider starts at the current level.
-  const settings =
+  const valueIn = (settings: PolicySetting[] | undefined) =>
+    settings?.find((s) => s.policy === policy && s.good === settingGood)?.value ?? 0;
+  const values =
     target === ALL
-      ? view?.government.realmPolicies
-      : view?.government.areaStates.find((s) => s.area === target)?.policyOverrides;
-  const current = settings?.find((s) => s.policy === policy && s.good === settingGood)?.value ?? 0;
+      ? [valueIn(view?.government.realmPolicies)]
+      : targetAreas.map((a) => valueIn(view?.government.areaStates.find((s) => s.area === a)?.policyOverrides));
+  const current = values[0] ?? 0;
+  const varies = values.some((v) => v !== current);
   const shown = isRate(policy) ? Math.round(100 * current * 100) / 100 : current;
   // biome-ignore lint/correctness/useExhaustiveDependencies: refills only when the scope changes, not on every snapshot
   useEffect(() => setValue(shown), [policy, target, settingGood]);
@@ -65,16 +74,17 @@ export function PolicyEditor() {
   const headTax =
     target === ALL
       ? realmHeadTax
-      : (policiesInForce(government, target, data.goods.length)?.headTaxPerPersonPerDay ?? 0);
+      : targetAreas.reduce(
+          (sum, a) => sum + (policiesInForce(government, a, data.goods.length)?.headTaxPerPersonPerDay ?? 0),
+          0,
+        ) / targetAreas.length;
   const overrides = government.areaStates.filter((s) => s.policyOverrides.length > 0);
 
   const setting = (): PolicySetting => ({ policy, good: settingGood, value: isRate(policy) ? value / 100 : value });
-  const apply = () =>
-    send(
-      target === ALL
-        ? { type: "setRealmPolicy", setting: setting() }
-        : { type: "setAreaPolicy", area: target, setting: setting() },
-    );
+  const apply = () => {
+    if (target === ALL) send({ type: "setRealmPolicy", setting: setting() });
+    else for (const a of targetAreas) send({ type: "setAreaPolicy", area: a, setting: setting() });
+  };
 
   return (
     <div className="section">
@@ -134,6 +144,7 @@ export function PolicyEditor() {
           value={target}
           options={[
             { value: ALL, label: "All areas" },
+            ...(region ? [{ value: SELECTED, label: `Selection (${ownSelected.length} of your areas)` }] : []),
             ...owned.map((id) => ({ value: id, label: areaName(data, id) })),
           ]}
           onChange={setScope}
@@ -141,6 +152,11 @@ export function PolicyEditor() {
         {selected !== null && owned.includes(selected) && selected !== target && (
           <button type="button" className="link" onClick={() => setScope(selected)}>
             use {areaName(data, selected)}
+          </button>
+        )}
+        {region && target !== SELECTED && (
+          <button type="button" className="link" onClick={() => setScope(SELECTED)}>
+            use the selection
           </button>
         )}
       </div>
@@ -181,11 +197,17 @@ export function PolicyEditor() {
         </button>
       </div>
       <div className="muted">
-        In force for this choice: {isRate(policy) ? `${fmt(100 * current)}%` : `${fmt(current)} mh`}
+        In force for this choice:{" "}
+        {varies ? "varies by area" : isRate(policy) ? `${fmt(100 * current)}%` : `${fmt(current)} mh`}
       </div>
       <div className="row muted" data-testid="head-tax">
-        Head tax in force {target === ALL ? "across the realm" : `in ${areaName(data, target)}`}: {fmt(headTax)} mh per
-        person per day
+        Head tax in force{" "}
+        {target === ALL
+          ? "across the realm"
+          : target === SELECTED
+            ? "in the selection, on average"
+            : `in ${areaName(data, target)}`}
+        : {fmt(headTax)} mh per person per day
       </div>
       <p className="hint">
         A setting for one good beats one for all goods; a setting for one area beats the realm's. Negative production

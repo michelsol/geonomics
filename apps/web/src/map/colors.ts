@@ -10,6 +10,7 @@ export const SEA_ROUTE = 0x7fb2e8;
 export const AIR_ROUTE = 0xe8c37f;
 export const SELECTION = 0xffffff;
 export const PICKED = 0xffd54a;
+export const LASSO_REMOVE = 0xef5d5d; // a lasso that takes areas out of the selection
 
 export const TERRAIN_COLORS: Record<Terrain, number> = {
   plains: 0x8fb36b,

@@ -137,6 +137,13 @@ export function Game() {
     // Space toggles pause. A solo game pauses while its tab is hidden; a hosted one runs on for its players. Both save.
     const key = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
+      if (event.code === "Escape") {
+        // Escape leaves a lasso, then a selection of several areas.
+        const state = gameStore.getState();
+        if (state.mode.kind !== "select") state.setMode({ kind: "select" });
+        else if (state.selection.length > 1) state.selectArea(null);
+        return;
+      }
       if (event.code !== "Space" || target?.closest("input, select, textarea, button")) return;
       event.preventDefault();
       gameStore.getState().togglePause();
@@ -469,8 +476,47 @@ function AreaLegend() {
 function ModeBanner() {
   const mode = useGame((state) => state.mode);
   const picked = useGame((state) => state.peaceAreas.length);
+  const selected = useGame((state) => state.selection.length);
   const setMode = useGame((state) => state.setMode);
-  if (mode.kind === "select") return null;
+  const { closeLasso, setLassoOperation, selectArea } = gameStore.getState();
+  if (mode.kind === "lasso")
+    return (
+      <div className="mode-banner" role="status" data-testid="lasso-banner">
+        Tap corners, then the first one to close ({mode.points.length})
+        {selected > 1 && (
+          <span className="group">
+            {(["add", "remove"] as const).map((operation) => (
+              <button
+                type="button"
+                key={operation}
+                className={mode.operation === operation ? "active" : ""}
+                aria-pressed={mode.operation === operation}
+                onClick={() => setLassoOperation(operation)}
+              >
+                {operation === "add" ? "Add" : "Remove"}
+              </button>
+            ))}
+          </span>
+        )}
+        <button type="button" onClick={closeLasso} disabled={mode.points.length < 3}>
+          Done
+        </button>
+        <button type="button" onClick={() => setMode({ kind: "select" })}>
+          Cancel
+        </button>
+      </div>
+    );
+  if (mode.kind === "select") {
+    if (selected <= 1) return null;
+    return (
+      <div className="mode-banner" role="status">
+        <span data-testid="selection-count">{selected} areas selected</span>
+        <button type="button" onClick={() => selectArea(null)}>
+          Clear
+        </button>
+      </div>
+    );
+  }
   return (
     <div className="mode-banner" role="status">
       {mode.kind === "moveArmy" ? "Click the destination" : `Click areas to exchange (${picked})`}

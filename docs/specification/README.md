@@ -13,5 +13,5 @@ The rules of the game, one file per section. Section numbers are stable: code co
 | 7 | [War and conquest](07-war.md) | Relations, Militia, Armies, Equipment and desertion, Power, Combat, Siege and capture, Peace |
 | 8 | [Simulation tick](08-tick.md) | — |
 | 9 | [Architecture and stack](09-architecture.md) | Stack, Packages, Host loop, Messages, Encoding, Snapshots, Price table, Joining, Hosting on mobile, Save and load, Offline and install, Single player |
-| 10 | [Interface](10-interface.md) | Screens, Map, Panels, Time controls, Layout |
+| 10 | [Interface](10-interface.md) | Screens, Map, Selection, Panels, Time controls, Layout |
 | 11 | [AI governments](11-ai.md) | Personalities, Perception, Cadence, Memory, Economy, War and peace |

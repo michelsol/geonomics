@@ -10,6 +10,8 @@ export function DiplomacyPanel() {
   const view = useView();
   const send = useSend();
   const peaceAreas = useGame((state) => state.peaceAreas);
+  const selection = useGame((state) => state.selection);
+  const setPeaceAreas = useGame((state) => state.setPeaceAreas);
   const setMode = useGame((state) => state.setMode);
   const players = useGame((state) => state.session.players);
   const [target, setTarget] = useState(-1);
@@ -117,6 +119,11 @@ export function DiplomacyPanel() {
             <button type="button" onClick={() => setMode({ kind: "pickPeaceAreas" })}>
               Pick areas on the map
             </button>
+            {selection.length > 1 && (
+              <button type="button" onClick={() => setPeaceAreas(selection)}>
+                Use the selection
+              </button>
+            )}
             <span className="muted">
               {transfers.length === 0
                 ? "No areas"

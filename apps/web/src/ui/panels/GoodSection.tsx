@@ -1,6 +1,6 @@
 // One good across the world, at the bottom of the Area panel: lowest, median and highest price with their areas,
 // and their history.
-import { priceExtremes, priceOf } from "../../state/selectors";
+import { meanPrices, priceExtremes } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { Chart } from "../Chart";
 import { fmt, Section, Select } from "../components";
@@ -11,7 +11,7 @@ export function GoodSection() {
   const good = useGame((state) => state.selectedGood);
   const table = useGame((state) => state.priceTable);
   const history = useGame((state) => state.history);
-  const area = useGame((state) => state.selectedArea);
+  const selection = useGame((state) => state.selection);
   useGame((state) => state.historyVersion); // redraw the chart with every new sample
   const selectGood = useGame((state) => state.selectGood);
   const setLayer = useGame((state) => state.setLayer);
@@ -21,7 +21,10 @@ export function GoodSection() {
   if (!info) return null;
   const extremes = table ? priceExtremes(data, table, good) : null;
   const world = history?.goodPrices[good];
-  const local = area === null ? undefined : history?.areaPrices.get(area);
+  const local = selection.length === 0 ? undefined : history?.pricesOf(selection);
+  // The selected area, or the mean over several.
+  const selectedLabel =
+    selection.length === 1 ? areaName(data, selection[0] as number) : `${selection.length} areas (mean)`;
 
   return (
     <div className="section" id="good-section">
@@ -53,10 +56,10 @@ export function GoodSection() {
                   </td>
                 </tr>
               ))}
-              {area !== null && table && (
+              {selection.length > 0 && table && (
                 <tr>
-                  <td>{areaName(data, area)}</td>
-                  <td className="num">{fmt(priceOf(data, table, area, good))}</td>
+                  <td>{selectedLabel}</td>
+                  <td className="num">{fmt(meanPrices(data, table, selection)[good] as number)}</td>
                   <td className="muted">selected</td>
                 </tr>
               )}
@@ -77,7 +80,7 @@ export function GoodSection() {
               ...(local && local.length > 1
                 ? [
                     {
-                      label: area === null ? "area" : areaName(data, area),
+                      label: selectedLabel,
                       color: "#ffd54a",
                       values: alignTo(world.xs(), local.xs(), local.channel(good)),
                       dash: [4, 4],

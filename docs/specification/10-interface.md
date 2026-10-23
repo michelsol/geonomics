@@ -47,6 +47,20 @@ One layer and one flow choice are active at a time, each with its own legend, st
 
 Mouse or one finger pans and the wheel or a pinch zooms around the pointer. A click or tap selects the area under it. While the player moves an army or picks areas for a peace proposal, a click picks the target instead.
 
+### Selection
+
+- **One area.** A click or tap selects the area under it, alone; Escape or Clear empties a selection of several.
+- **Regions.** A double click or double tap starts a polygon at that point. Each tap adds a corner, drawn as a dashed line with a dot; a tap within 20 px of the first corner (drawn as a ring), or Done, closes it once it has three corners, and selects every area whose center lies inside. Dragging and pinching still pan and zoom while drawing; Cancel or Escape stops.
+- **Several polygons.** With several areas selected, a new polygon adds its areas to the selection; a switch in the banner makes it remove them instead. With one area or none, a polygon replaces the selection. The double tap's first tap does not change the selection the polygon builds on.
+- **Single areas.** Shift-, Ctrl- or Cmd-click adds or removes one area. The Area panel's My realm button selects every area of the player's realm.
+- **Drawing.** Selected areas are outlined; with several, each is also lightly filled. A banner shows how many are selected.
+- **Totals.** With several areas selected, the Area panel shows the owners and how many areas each holds, total population, militia, savings and unemployed, population-weighted average wage, satisfaction and necessities met, the hardest area to conquer, summed natural capacities, and the market: mean prices, and stock, production, use and net trade summed (trade between two selected areas cancels out). Stocks, flows, savings and unemployment cover only the areas whose detail the snapshot carries, which the panel says. The Good section shows the selection's mean price and records its history.
+- **Region actions.** When at least two of the player's areas are selected, the Policies, standing orders, Jobs and Armies panels offer the selection as a scope, over the player's selected areas:
+  - **Rates and prices** (taxes, tariffs, price controls, wage offers) are set to the same value in each area, and the setting in force reads "varies by area" when they differ.
+  - **Amounts** (workers to hire, recruits) are totals, split over the areas by population, in whole numbers that add up to the total. A port job goes over the coastal areas only; a road job over the land edges inside the selection, evenly. Recruits make one army per area that gets any.
+  - Jobs show one line per job across the selection, with summed workers and target; a new target is split again.
+  - A peace proposal can take the selection as its areas.
+
 ### Panels
 
 | Panel | Shows | Actions |
