@@ -126,9 +126,9 @@ The siege runs a little slower than its nominal rate because weapons wear (equip
 
 Peace transfers are applied one by one, so a treaty that swaps areas could briefly leave a side with none, and eliminate it before it received its new area. Capital moves and eliminations are therefore settled once all of a treaty's transfers are done.
 
-### Militia only defends neutral areas
+### Militia defends every area
 
-Initialization gives every area a militia, but only neutral areas use it. Combat counts it only when the area has no owner, so owned areas without armies are besieged at once.
+Every area now has a militia of 2% of its population, beside its owner's armies. Before playtesting, only neutral areas used it, and owned areas without armies fell to a siege at once. Now taking an area of 10,000 people means first beating 200 unequipped militia, so more than 100 equipped soldiers. In the headless realm war, 800 equipped soldiers no longer take two areas within 60 days; the test now allows 90.
 
 ### Soldiers and the workforce
 
@@ -195,3 +195,21 @@ Migration and transport arrows show what moved in the last tick, scaled to a day
 
 On a 3,000-area map with the large catalog, about 8,000 directions carry trade. Pixi v8 builds geometry when it renders, and stroking 8,000 outlined arrows took about 100 ms per redraw, three times a second. That saturated the main thread, and a map drag slowed to a crawl. Drawing the outline as a slightly larger dark arrow under each one (fills tessellate much faster than strokes), keeping the 2,500 largest flows and skipping arrows with less than 14 px of room brought most redraws under 20 ms. Dragging the map with the Transport layer on stays at about 52 fps, against about 58 fps on the realm layer.
 
+
+
+## A fully claimed map
+
+Every area starts in a realm: the realms split the map by distance to the nearest capital over land and sea, and the player picks the number of realms. On 300-, 1,000- and 3,000-area maps with 8 and 32 realms (medium catalog, seed 1), no area is left unowned and no two realms touching over land share a color. Realm sizes:
+
+| Map | Realms | Smallest | Median | Largest |
+| --- | --- | --- | --- | --- |
+| 300 | 8 | 20 | 36 | 69 |
+| 300 | 32 | 3 | 9 | 21 |
+| 1,000 | 8 | 78 | 132 | 193 |
+| 1,000 | 32 | 13 | 31 | 49 |
+| 3,000 | 8 | 93 | 462 | 624 |
+| 3,000 | 32 | 40 | 94 | 170 |
+
+Capital placement scored an area no capital reached (an island) as infinitely far, so every island tied for the next capital and the first one in id order won. Such areas now count one hop beyond the farthest reachable area: islands still come early, ranked by population.
+
+The flows moved to their own dropdown so they can be read against any area layer, such as migration over population or trade over prices. Arrows keep their dark outline, so the dimmed realm colors under them were dropped.

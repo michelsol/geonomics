@@ -182,7 +182,7 @@ interface Area {
   airportLevel: number;                 // 0 = no airport; raises the capacity of the area's air routes
   airportProgress: number;              // worker-days accumulated toward the next airport level
   siegeProgress: number;                // 0 to 1; the area changes owner when it reaches 1
-  militia: number;                      // neutral areas: militia still standing (section 7, Neutral areas)
+  militia: number;                      // militia still standing (section 7, Militia)
   besiegingGovernment: GovernmentId | null; // government currently besieging the area, if any
 
   // Per-good arrays, indexed by GoodId
@@ -570,7 +570,6 @@ interface WorldConfig {
     maximumFortificationLevel: number;  // highest fortification level (default 3)
     researchWorkerDaysPerLevel: number; // work needed per research level (default 10000)
     researchProductivityBonus: number;  // productivity added per research level (default 0.05)
-    startingRealmRadius: number;        // a starting realm is its capital plus land neighbors up to this many hops away (default 1)
     startingTreasuryDays: number;       // starting treasury, in days of the realm's income (default 30)
     standingOrderShareOfDemandPerDay: number; // pacing of standing orders, as a share of the area's daily demand (default 0.2)
   };
@@ -584,7 +583,7 @@ interface WorldConfig {
     desertionRatePerDay: number;        // share of soldiers leaving per day per unit of wage shortfall or unpaid share (default 0.05)
     soldierWage: number;                // starting soldier wage of every government, per soldier-hour, in man-hours (default 1.5)
     combatLethalityPerDay: number;      // losses per day per unit of enemy power over own power per soldier (default 0.05)
-    militiaShare: number;               // share of a neutral area's population that defends it (default 0.02)
+    militiaShare: number;               // share of an area's population that defends it as militia (default 0.02)
     siegeRatePerDay: number;            // siege progress per day per unit of power per inhabitant (default 0.25)
     battleStockDestructionPerDay: number; // share of an area's stock destroyed per day of fighting (default 0.02)
     battleCivilianLossPerDay: number;   // share of an area's population lost per day of fighting (default 0.002)
@@ -599,7 +598,7 @@ interface WorldConfig {
     capacityHeadroom: number;           // world capacity of a primary good as a multiple of its reference demand (default 2.5)
     presence: { common: number; regional: number; rare: number }; // share of eligible areas holding a primary good (default 0.85, 0.3, 0.08)
     extractionLaborShare: number;       // producing areas of a primary good could supply the world with this share of their labor (default 0.1)
-    governmentCount: number;            // capitals placed for the players (default 6)
+    governmentCount: number;            // realms founded, which split the whole map; chosen by the player (default 6)
     minimumIslandAreas: number;         // smaller islands sink (default 2)
   };
   warmupDays: number;                   // game days simulated with no players before the game opens (default 180)
@@ -842,7 +841,7 @@ A map is generated from a seed, the catalog and `WorldConfig.map`. Every random 
 6. **Sea routes.** Each coastal area is linked to its `seaRoutesPerPort` nearest coastal areas by distance over water (a search over water cells), skipping areas it already shares a land edge with. Then, while some areas cannot reach the others, the shortest water route from the group of area 0 to another group is added.
 7. **Natural capacity.** For each primary good, the eligible areas are those whose terrain is in the good's `terrains` (`coast` meaning coastal areas), or all areas if none match. A noise field per good ranks them. The top areas are chosen until both `presence[abundance]` of the eligible areas and enough population to supply world demand with `extractionLaborShare` of its workforce are reached. An area that holds no primary good gets its best-scoring common good, preferring one suited to its terrain. Capacity totals `capacityHeadroom` × reference demand × world population, split in proportion to population × (noise above the cut + 0.2).
 8. **Airports.** The `initialAirportShare` most populous areas get airport level 1, then air routes are built (section 5, Sea and air routes).
-9. **Capitals.** `governmentCount` capitals: the most populous area, then each next one maximizing hops to the nearest capital over land and sea edges × √population.
+9. **Capitals.** `governmentCount` capitals: the most populous area, then each next one maximizing hops to the nearest capital over land and sea edges × √population. An area no capital reaches counts one hop beyond the farthest reachable area.
 
 The world is then initialized (Rule 6), a government is founded on each capital (section 6, Founding), and the world is warmed up.
 
@@ -900,7 +899,8 @@ A government touches the private economy through three channels only: policies, 
 
 A government is founded on each capital placed by map generation, in capital order.
 
-- **Realm:** the capital, plus the areas up to `startingRealmRadius` land edges away that no earlier government or other capital has claimed.
+- **Realm:** the realms split the whole map. Each area joins the capital nearest by distance over active land and sea edges, the earlier capital on a tie; an area with no such path joins the capital nearest in a straight line. No area starts neutral.
+- **Color:** each realm in turn takes the palette color (12 colors) least used by its already colored neighbors, then least used overall.
 - **Treasury:** starts at `startingTreasuryDays` of the realm's income, `population × workforceShare × hoursPerWorkerDay × wageLevel` summed over its areas.
 - **Owned areas:** each starts with an empty depot, no jobs, a `wageOffer` of 1 and no policies.
 - **Relations:** every pair of governments starts at peace.
@@ -1035,9 +1035,9 @@ Every pair of governments is at `peace` or `war`. A `declareWar` command takes e
 
 An edge is **blocked** when its two areas belong to governments at war, or when either area is under siege. Blocked edges carry no trade, migration or depot transfers. Armies still cross them.
 
-### Neutral areas
+### Militia
 
-Areas with no owner defend themselves with a militia. `Area.militia` is `population × militiaShare` (default 2%) whenever no attacker is present. Combat depletes it, and militia losses are also losses of population. The militia has no equipment and no fortifications, and once it falls below one soldier the attackers besiege the area. Owned areas rely on armies and fortifications only.
+Every area defends itself with a militia, beside its owner's armies. `Area.militia` is `population × militiaShare` (default 2%) whenever no attacker is present. Combat depletes it, and militia losses are also losses of population. The militia has no equipment. Once it falls below one soldier and no defending army is left, the attackers besiege the area. A captured area's militia restarts, now defending its new owner. Areas can still become neutral through code paths such as peace terms in later stages; they defend with their militia alone.
 
 ### Armies
 
@@ -1064,7 +1064,7 @@ armyPower    = soldiers * powerPerSoldier
 defensePower = (sum of defending army power + militia) * (1 + fortificationLevel)
 ```
 
-Defenders are the owner's armies in the area (any stance), plus militia for a neutral area. Attackers are the attacking armies standing there (see Armies).
+Defenders are the area's militia and its owner's armies in the area (any stance). Attackers are the attacking armies standing there (see Armies).
 
 ### Combat
 
@@ -1076,7 +1076,7 @@ attackerSoldiersLost = min(attackerSoldiers, k * defensePower / attackerPowerPer
 defenderSoldiersLost = min(defenderSoldiers, k * attackPower / defenderPowerPerSoldier)
 // powers per soldier are averages over each side; militia counts as defenders with power 1
 // losses are shared across the armies of each side (and the militia) in proportion to their soldiers
-// militia losses reduce the neutral area's population
+// militia losses reduce the area's population
 ```
 
 Each tick of fighting also destroys `fraction(battleStockDestructionPerDay)` of the area's stock and kills `fraction(battleCivilianLossPerDay)` of its population.
@@ -1138,7 +1138,7 @@ function runTick(world: World, commands: CommandEnvelope[]): CommandRejection[] 
 5. **Taxes, subsidies and wages.** Collect taxes from savings, with the shortfall taken in kind. Pay subsidies, government wages and soldier wages from the treasury, scaled down together if the treasury is short.
 6. **Prices.** Measure each good's scarcity against its stock target and flows, or for services against production and demand. Move each price toward the smoothed price times the scarcity premium, within the per-tick limit and the price bounds, then move `smoothedPrice` toward the price.
 7. **Labor.** Compute value added per job from smoothed prices and production taxes, and update `wageLevel`. Move private workers toward the labor each job needs, tilted by value added against the reservation wage, within `maxLaborShiftPerTick`. Then apply government hiring, quitting and firing, and soldier desertion.
-8. **Military.** Move marching armies. Resolve combat in contested areas and refill the militia of neutral areas without attackers. Advance or decay sieges. Transfer captured areas, move capitals and eliminate governments with no area left.
+8. **Military.** Move marching armies. Resolve combat in contested areas and refill the militia of areas without attackers. Advance or decay sieges. Transfer captured areas, move capitals and eliminate governments with no area left.
 9. **Population.** Apply growth or starvation from `necessitySatisfaction`. Compute migration along active, non-blocked edges from the snapshot, scaled by each edge's mode, and apply it together.
 10. **Decay and progress.** Spoil stock, depots and transfers, and wear out carried weapons. Regenerate natural capacity: `capacity += (maximum - capacity) × (1 - exp(-regenerationRatePerDay × days))`. Apply infrastructure, fortification, port, airport and research progress. If any port or airport level changed, update the capacity of the routes touching it; if an airport level changed, also rebuild the air routes. Increment `tick` and add `gameDaysPerTick` to `gameDay`.
 
@@ -1201,7 +1201,7 @@ The main thread forwards local and remote commands to the worker, updates its ow
 The host broadcasts snapshots at `snapshotRate` (default 3 per second), independent of the tick rate. A snapshot contains:
 
 - `tick` and `gameDay`.
-- Per area, for every area: owner, population, wage level, satisfaction, port, airport and fortification levels, siege progress and besieger, and the militia of neutral areas.
+- Per area, for every area: owner, population, wage level, satisfaction, port, airport and fortification levels, siege progress and besieger, and militia.
 - Per area, for the receiving player's owned areas and their direct neighbors: savings, unemployed workers, and the price, stock, produced, consumed, imported, exported, private worker and natural capacity arrays. Other areas' stocks and flows are not sent.
 - The static data sent once at the start also carries every area's maximum natural capacity per good.
 - Per edge: transport cost, capacity, active and blocked state, plus the full data of any route edge created since the last snapshot.
@@ -1267,7 +1267,7 @@ The interface is map-first: the map fills the screen and panels sit beside it on
 
 ### Screens
 
-1. **New game.** The player picks a catalog (small, medium or large), a map size (300, 1,000 or 3,000 areas) and a seed. The map is then generated and warmed up in the worker, behind a progress bar. Finally the player chooses a realm, from a list of the founded governments with capital, population and area count, or takes a random one.
+1. **New game.** The player picks a catalog (small, medium or large), a map size (300, 1,000 or 3,000 areas), the number of realms (4, 6, 8, 12, 16, 24 or 32, at most one per 8 areas; default 8) and a seed. The map is then generated and warmed up in the worker, behind a progress bar. Finally the player chooses a realm, from a list of the founded governments with capital, population and area count, or takes a random one.
 2. **Game.** The map, the top bar and the panels.
 3. **End of session.** Shown when the player's government is eliminated, or when the player ends the game. It lists days played, peak and final population, areas held and treasury, and offers a new game. There is no score.
 
@@ -1283,13 +1283,19 @@ Areas are the Voronoi cells of their positions, with the water cells around them
 | Resources | The chosen good's maximum natural capacity, brighter for more, relative to the best area; grey where there is none |
 | Satisfaction | Necessity satisfaction, from red (0) to green (1) |
 | Average wage | Wage level (mean value added per private worker-hour) on a log scale |
-| Migration | Darkened realm colors, with an arrow per edge for the net migrants of the last tick |
-| Transport | Darkened realm colors, with an arrow per edge and direction for the goods carried in the last tick: every good in tonnes, or one good chosen in the legend in its own units |
 | Terrain | Terrain type |
+
+**Flows** are a separate choice, drawn over any layer:
+
+| Flows | Draws |
+| --- | --- |
+| None | Nothing (the default) |
+| Migration | An arrow per edge for the net migrants of the last tick |
+| Transport | An arrow per edge and direction for the goods carried in the last tick: every good in tonnes, or one good chosen in the legend in its own units |
 
 **Flow arrows** run from 20% to 80% of the segment between two area centers, with a dark outline. Their width grows from 1 to 6 px with the square root of the flow over the largest flow on the map. Transport arrows sit to the right of their direction, so the two directions of an edge stay apart. Flows under 3% of the largest are left out, as are arrows with less than 14 px of room on screen (they appear when zooming in), and at most the 2,500 largest flows are drawn. The legend shows sample arrows with their values.
 
-One layer is active at a time and has a legend. Every layer also shows:
+One layer and one flow choice are active at a time, each with its own legend, stacked bottom left. Every layer also shows:
 
 - **Routes:** sea routes dashed, air routes dotted; blocked edges red.
 - **Capitals:** a star.
@@ -1303,9 +1309,10 @@ Mouse or one finger pans and the wheel or a pinch zooms around the pointer. A cl
 
 | Panel | Shows | Actions |
 | --- | --- | --- |
-| Area | Owner, terrain, population, average wage, satisfaction, port, airport and fortification levels, siege; for own areas and their neighbors, savings per person and unemployed; natural resources (maximum capacity, and current capacity and extraction where detail is sent). For areas not the player's: militia or defending armies, defense power, the soldiers needed to win and the siege time. For own areas and their neighbors: price, stock, production, consumption and trade per good. For other areas: prices only | Sort the market table by any column |
+| Area | Owner, terrain, population, average wage, satisfaction, port, airport and fortification levels, siege; for own areas and their neighbors, savings per person and unemployed; natural resources (maximum capacity, and current capacity and extraction where detail is sent). Defense of every area: militia, the owner's army power, fortification and defense power; for areas not the player's, also the soldiers needed to win and the siege time. For own areas and their neighbors: price, stock, production, consumption and trade per good. For other areas: prices only | Sort the market table by any column |
 | Good | Lowest, median and highest price with their areas; a chart over time of the world's lowest, median and highest price and the selected area's price | Show the good on the price map |
-| Realm | Treasury and its change per day, realm population and areas, research level, charts of treasury and population; every tax and price control, realm-wide and per area | Set or remove a policy for all areas or one area, and for one good or all goods |
+| Realm | Treasury and its change per day, realm population and areas, research level, charts of treasury and population | End the game |
+| Policies | Every tax and price control, realm-wide and per area; the setting in force for the chosen area, policy and good | Set or remove a policy for all areas or one area, and for one good or all goods. The production tax is chosen first. Taxes and tariffs have a slider from −100% to +100% (the number field takes up to 500%), head tax one from 0 to 2 mh per person per day; ceilings and floors take a number. The value starts at the setting in force, and Set applies it |
 | Orders | Depot contents per area, open market orders, standing orders, depot transfers in transit | Place and cancel market orders in any own area; add and remove standing orders; transfer goods between depots |
 | Jobs | For one own area or the whole realm: the workforce split between private jobs, government jobs and unemployment, and private workers, output per day and output per worker by good. Per own area: each job's target and workers, and the wage offer | Set job targets and wage offers |
 | Armies | Soldier wage, realm average wage, soldiers and their pay per day; weapons in depots and being bought; each army's soldiers, equipment, power, stance, location and path | Set the soldier wage, recruit, buy weapons, set stance, move (then pick the destination on the map), disband |

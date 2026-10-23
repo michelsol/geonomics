@@ -119,16 +119,52 @@ describe("equipment and desertion", () => {
 });
 
 describe("combat and sieges", () => {
-  /** Government 0 at war with 1, with an attacking army of `soldiers`, half equipped, standing in March. */
-  function invasion(soldiers: number) {
+  /**
+   * Government 0 at war with 1, with an attacking army of `soldiers`, half equipped, standing in March. The March's
+   * militia is left out unless `militia` is set, so armies and sieges are tested alone.
+   */
+  function invasion(soldiers: number, militia = 0) {
     const world = realmWorld();
     send(world, { type: "declareWar", target: 1 });
     const attacker = raise(world, 1, soldiers);
     attacker.weapons = soldiers / 2;
     attacker.stance = "attack";
     attacker.location = { kind: "area", area: 3 };
+    areaOf(world, 3).militia = militia;
     return { world, attacker, march: areaOf(world, 3) };
   }
+
+  it("fights an owned area's militia beside its armies, and besieges only once both fall", () => {
+    const { world, attacker, march } = invasion(1000, 200);
+    const defender = raise(world, 3, 100, 1);
+    defender.weapons = 100;
+    const k = world.config.military.combatLethalityPerDay;
+    const population = march.population;
+    runMilitary(world);
+    // Defense: 200 militia (power 1) + 100 equipped soldiers (power 2) = 400 over 300 soldiers.
+    expect(attacker.soldiers).toBeCloseTo(1000 - (k * 400) / 1.5, 9);
+    const defendersLost = (k * 1500) / (400 / 300);
+    expect(march.militia).toBeCloseTo(200 - (defendersLost * 200) / 300, 9);
+    expect(defender.soldiers).toBeCloseTo(100 - (defendersLost * 100) / 300, 9);
+    expect(march.population).toBeLessThan(population);
+    expect(march.besiegingGovernment).toBeNull();
+
+    // Without armies, the militia alone holds the siege off until it falls.
+    defender.soldiers = 0.5;
+    runMilitary(world); // the army dissolves below one soldier
+    expect(march.besiegingGovernment).toBeNull();
+    march.militia = 0.5;
+    runMilitary(world);
+    expect(march.besiegingGovernment).toBe(0);
+  });
+
+  it("refills the militia of every area without attackers", () => {
+    const world = realmWorld();
+    for (const area of world.areas) area.militia = 0;
+    runMilitary(world);
+    for (const area of world.areas)
+      expect(area.militia).toBeCloseTo(area.population * world.config.military.militiaShare, 9);
+  });
 
   it("follows the Lanchester losses for one tick", () => {
     const { world, attacker } = invasion(1000);

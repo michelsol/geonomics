@@ -66,7 +66,7 @@ export function capacityMaximum(data: StaticData, area: number, good: number): n
 }
 
 export interface ConquestEstimate {
-  militia: number; // neutral areas only
+  militia: number; // the area's militia, unequipped (power 1 each)
   armyPower: number; // power of the owner's armies standing in the area
   fortification: number;
   defensePower: number; // (militia + army power) × (1 + fortification)
@@ -83,7 +83,7 @@ export interface ConquestEstimate {
 export function conquestEstimate(data: StaticData, snapshot: Snapshot, area: number): ConquestEstimate {
   const owner = snapshot.areas.owner[area] as number;
   const fortification = snapshot.areas.fortificationLevel[area] as number;
-  const militia = owner < 0 ? (snapshot.areas.militia[area] as number) : 0;
+  const militia = snapshot.areas.militia[area] as number;
   let armyPower = 0;
   for (const army of snapshot.armies) {
     if (army.owner !== owner || army.location.kind !== "area" || army.location.area !== area) continue;

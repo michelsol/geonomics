@@ -62,22 +62,10 @@ export function populationColor(population: number, smallest: number, largest: n
   return ramp(POPULATION, Math.log(population / smallest) / Math.log(largest / smallest));
 }
 
-/** Flow arrows, bright on the darkened cells of their layers, with a dark outline over any cell. */
+/** Flow arrows: bright colors with a dark outline, so they read over any area layer. */
 export const MIGRATION_ARROW = 0xf06fa0;
 export const TRANSPORT_ARROW = 0xffc94a;
 export const ARROW_OUTLINE = 0x0b111a;
-/** Under flow arrows, cells keep their realm color, darkened toward this grey so the arrows stand out. */
-const DIM = 0x262c36;
-
-/** Linear mix of two colors: t = 0 gives a, t = 1 gives b. */
-export function mix(a: number, b: number, t: number): number {
-  return ramp([a, b], t);
-}
-
-export function dimColor(color: number): number {
-  return mix(color, DIM, 0.6);
-}
-
 export function satisfactionColor(satisfaction: number): number {
   return ramp(SATISFACTION, satisfaction);
 }

@@ -327,10 +327,17 @@ td {
   cursor: pointer;
 }
 
-.legend {
+.legends {
   position: absolute;
   left: 10px;
   bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+.legend {
   padding: 8px 10px;
   background: rgb(14 20 29 / 0.85);
   border: 1px solid var(--line);
@@ -436,6 +443,10 @@ td {
   border-radius: 0 3px 3px 0;
   background: var(--accent);
 }
+.policy-slider {
+  width: 100%;
+  accent-color: var(--accent);
+}
 .hint {
   color: var(--muted);
   font-size: 12px;
@@ -528,6 +539,11 @@ th button.sort:hover {
   }
   .legend {
     bottom: 122px;
+  }
+  /* Above the peeking sheet, like the toasts. */
+  .legends {
+    bottom: 122px;
+    max-width: calc(100vw - 20px);
   }
   .toasts {
     bottom: 122px;

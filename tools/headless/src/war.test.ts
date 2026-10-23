@@ -148,11 +148,11 @@ describe("war between two realms", () => {
         { type: "setArmyStance", army: army.id, stance: "attack" },
         { type: "moveArmy", army: army.id, destination: 7 },
       );
-      for (let i = 0; i < 60; i++) runTick(world);
+      for (let i = 0; i < 90; i++) runTick(world);
       return { hash: hashWorld(world), owners: world.areas.map((area) => area.owner) };
     };
     const first = run();
-    expect(first.owners.slice(5, 7)).toEqual([0, 0]); // the march took at least two areas
+    expect(first.owners.slice(5, 7)).toEqual([0, 0]); // the march took at least two areas, militia and all
     expect(run()).toEqual(first);
   });
 });

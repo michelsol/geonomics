@@ -116,7 +116,7 @@ export interface Snapshot {
     fortificationLevel: Uint8Array;
     siegeProgress: Float32Array;
     besieger: Int16Array; // -1 when not besieged
-    militia: Float32Array; // militia defending a neutral area; 0 for owned areas
+    militia: Float32Array; // militia defending each area
   };
   detail: AreaDetail[];
   edges: {
@@ -209,7 +209,7 @@ export function buildSnapshot(
     areas.fortificationLevel[i] = area.fortificationLevel;
     areas.siegeProgress[i] = area.siegeProgress;
     areas.besieger[i] = area.besiegingGovernment ?? -1;
-    areas.militia[i] = area.owner === null ? area.militia : 0;
+    areas.militia[i] = area.militia;
   }
 
   const m = world.edges.length;

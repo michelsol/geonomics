@@ -73,7 +73,6 @@ export interface WorldConfig {
     maximumFortificationLevel: number; // highest fortification level
     researchWorkerDaysPerLevel: number; // work needed per research level
     researchProductivityBonus: number; // productivity added per research level
-    startingRealmRadius: number; // a starting realm is its capital plus land neighbors up to this many hops away
     startingTreasuryDays: number; // starting treasury, in days of the realm's income
     standingOrderShareOfDemandPerDay: number; // pacing of standing orders, as a share of the area's total demand per day
   };
@@ -87,7 +86,7 @@ export interface WorldConfig {
     desertionRatePerDay: number; // share of soldiers leaving per day per unit of wage shortfall or unpaid share
     soldierWage: number; // starting wage per soldier-hour of every government, in man-hours
     combatLethalityPerDay: number; // losses per day per unit of enemy power over own power per soldier
-    militiaShare: number; // share of a neutral area's population that defends it
+    militiaShare: number; // share of an area's population that defends it as militia
     siegeRatePerDay: number; // siege progress per day per unit of power per inhabitant
     siegeDecayRatePerDay: number; // speed at which siege progress decays once the attackers leave
     battleStockDestructionPerDay: number; // share of an area's stock destroyed per day of fighting
@@ -102,7 +101,7 @@ export interface WorldConfig {
     capacityHeadroom: number; // world natural capacity of a primary good, as a multiple of its reference demand
     presence: { common: number; regional: number; rare: number }; // share of eligible areas holding a primary good
     extractionLaborShare: number; // producing areas of a primary good could supply the world with this share of their labor
-    governmentCount: number; // capitals placed for the players
+    governmentCount: number; // realms founded on the map, which they split between them
     minimumIslandAreas: number; // smaller islands sink
   };
   warmupDays: number; // game days simulated with no players before the game opens
@@ -183,7 +182,6 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
     maximumFortificationLevel: 3,
     researchWorkerDaysPerLevel: 10000,
     researchProductivityBonus: 0.05,
-    startingRealmRadius: 1,
     startingTreasuryDays: 30,
     standingOrderShareOfDemandPerDay: 0.2,
   },

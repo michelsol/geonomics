@@ -15,7 +15,7 @@ import {
 } from "../map/colors";
 import { MapView } from "../map/MapView";
 import { flowMaximum, populationRange, transportFlows } from "../state/selectors";
-import type { Layer } from "../state/store";
+import type { Flows, Layer } from "../state/store";
 import { gameStore, useGame } from "../state/store";
 import { count, fmt, Select } from "./components";
 import { AreaPanel } from "./panels/AreaPanel";
@@ -26,11 +26,13 @@ import { GoodPanel } from "./panels/GoodPanel";
 import { GovernmentPanel } from "./panels/GovernmentPanel";
 import { JobsPanel } from "./panels/JobsPanel";
 import { OrdersPanel } from "./panels/OrdersPanel";
+import { PoliciesPanel } from "./panels/PoliciesPanel";
 
 const PANELS = {
   area: { label: "Area", view: AreaPanel },
   good: { label: "Goods", view: GoodPanel },
   government: { label: "Realm", view: GovernmentPanel },
+  policies: { label: "Policies", view: PoliciesPanel },
   orders: { label: "Orders", view: OrdersPanel },
   jobs: { label: "Jobs", view: JobsPanel },
   armies: { label: "Armies", view: ArmiesPanel },
@@ -44,9 +46,13 @@ const LAYERS: { value: Layer; label: string }[] = [
   { value: "resources", label: "Resources" },
   { value: "satisfaction", label: "Satisfaction" },
   { value: "wage", label: "Average wage" },
+  { value: "terrain", label: "Terrain" },
+];
+
+const FLOWS: { value: Flows; label: string }[] = [
+  { value: "none", label: "No flows" },
   { value: "migration", label: "Migration" },
   { value: "transport", label: "Transport" },
-  { value: "terrain", label: "Terrain" },
 ];
 
 type SheetHeight = "peek" | "half" | "full";
@@ -109,7 +115,7 @@ export function Game() {
       <TopBar />
       <div className="map-wrap">
         <MapView />
-        <Legend />
+        <Legends />
         <ModeBanner />
         <Toasts />
       </div>
@@ -190,7 +196,8 @@ function TopBar() {
   const day = useGame((state) => state.snapshot?.gameDay ?? 0);
   const treasury = useGame((state) => state.snapshot?.government?.treasury ?? 0);
   const layer = useGame((state) => state.layer);
-  const { setSpeed, togglePause, setLayer } = gameStore.getState();
+  const flows = useGame((state) => state.flows);
+  const { setSpeed, togglePause, setLayer, setFlows } = gameStore.getState();
   return (
     <header className="topbar">
       <div className="group">
@@ -219,6 +226,7 @@ function TopBar() {
       </span>
       <div className="group" style={{ marginLeft: "auto" }}>
         <Select label="Map layer" value={layer} options={LAYERS} onChange={setLayer} />
+        <Select label="Map flows" value={flows} options={FLOWS} onChange={setFlows} />
       </div>
     </header>
   );
@@ -254,9 +262,18 @@ function FlowScale({ color, maximum, unit }: { color: number; maximum: number; u
   );
 }
 
-function Legend() {
-  const layer = useGame((state) => state.layer);
-  const good = useGame((state) => state.data?.goods[state.selectedGood]?.name);
+/** The legends of the area layer and of the flows overlay, stacked bottom left. */
+function Legends() {
+  return (
+    <div className="legends">
+      <FlowLegend />
+      <AreaLegend />
+    </div>
+  );
+}
+
+function FlowLegend() {
+  const flows = useGame((state) => state.flows);
   const snapshot = useGame((state) => state.snapshot);
   const data = useGame((state) => state.data);
   const allGoods = useGame((state) => state.transportAllGoods);
@@ -264,26 +281,12 @@ function Legend() {
   // Derived here, not in the selector: a selector returning a fresh object would re-render forever.
   const transport = transportFlows({ snapshot, transportAllGoods: allGoods, selectedGood });
   const setTransportGood = useGame((state) => state.setTransportGood);
-  const gradient = (stops: readonly number[]) => `linear-gradient(to right, ${stops.map(cssColor).join(", ")})`;
-  switch (layer) {
-    case "realms":
+  switch (flows) {
+    case "none":
       return null;
-    case "population": {
-      const range = snapshot ? populationRange(snapshot) : { smallest: 0, largest: 0 };
-      return (
-        <div className="legend" data-testid="legend">
-          <div>Population per area</div>
-          <div className="bar" style={{ background: gradient(POPULATION) }} />
-          <div className="ends">
-            <span>{count(range.smallest)}</span>
-            <span>{count(range.largest)}</span>
-          </div>
-        </div>
-      );
-    }
     case "migration":
       return (
-        <div className="legend" data-testid="legend">
+        <div className="legend" data-testid="flow-legend">
           <div>People moving per day, net per edge</div>
           <FlowScale
             color={MIGRATION_ARROW}
@@ -300,7 +303,7 @@ function Legend() {
       ];
       const service = !allGoods && data?.goods[selectedGood]?.isService;
       return (
-        <div className="legend interactive" data-testid="legend">
+        <div className="legend interactive" data-testid="flow-legend">
           <div>Goods carried per day, each direction</div>
           <Select
             label="Transported good"
@@ -317,6 +320,30 @@ function Legend() {
           ) : (
             <div className="muted">Waiting for the next snapshot…</div>
           )}
+        </div>
+      );
+    }
+  }
+}
+
+function AreaLegend() {
+  const layer = useGame((state) => state.layer);
+  const good = useGame((state) => state.data?.goods[state.selectedGood]?.name);
+  const snapshot = useGame((state) => state.snapshot);
+  const gradient = (stops: readonly number[]) => `linear-gradient(to right, ${stops.map(cssColor).join(", ")})`;
+  switch (layer) {
+    case "realms":
+      return null;
+    case "population": {
+      const range = snapshot ? populationRange(snapshot) : { smallest: 0, largest: 0 };
+      return (
+        <div className="legend" data-testid="legend">
+          <div>Population per area</div>
+          <div className="bar" style={{ background: gradient(POPULATION) }} />
+          <div className="ends">
+            <span>{count(range.smallest)}</span>
+            <span>{count(range.largest)}</span>
+          </div>
         </div>
       );
     }

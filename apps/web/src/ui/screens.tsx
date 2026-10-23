@@ -15,6 +15,10 @@ const CATALOGS: { value: CatalogName; label: string }[] = [
   { value: "large", label: "Large — 54 goods" },
 ];
 
+const REALM_COUNTS = [4, 6, 8, 12, 16, 24, 32];
+/** Realms keep at least this many areas each on average. */
+const AREAS_PER_REALM = 8;
+
 /** Debug only: ?warmup=N shortens the warm-up, so end-to-end tests start quickly. */
 function warmupOverride(): number | undefined {
   const value = new URLSearchParams(location.search).get("warmup");
@@ -27,6 +31,12 @@ export function NewGame() {
   const [catalog, setCatalog] = useState<CatalogName>("medium");
   const [areas, setAreas] = useState<number>(1000);
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e6));
+  const [chosenRealms, setRealms] = useState(8);
+  const realmOptions = REALM_COUNTS.filter((n) => n * AREAS_PER_REALM <= areas).map((n) => ({
+    value: n,
+    label: `${n} realms`,
+  }));
+  const realms = Math.min(chosenRealms, (realmOptions.at(-1) as { value: number }).value);
 
   return (
     <main className="screen">
@@ -48,7 +58,7 @@ export function NewGame() {
             className="section"
             onSubmit={(event) => {
               event.preventDefault();
-              newGame({ catalog, areas, seed, warmupDays: warmupOverride() });
+              newGame({ catalog, areas, seed, realms, warmupDays: warmupOverride() });
             }}
           >
             <div className="form-grid">
@@ -56,6 +66,8 @@ export function NewGame() {
               <Select label="Goods catalog" value={catalog} options={CATALOGS} onChange={setCatalog} />
               <label htmlFor="size">Map</label>
               <Select label="Map size" value={areas} options={SIZES} onChange={setAreas} />
+              <label htmlFor="realms">Realms</label>
+              <Select label="Realms" value={realms} options={realmOptions} onChange={setRealms} />
               <label htmlFor="seed">Seed</label>
               <div className="row">
                 <input

@@ -81,11 +81,11 @@ export function runMilitary(world: World): void {
     const attackers = armies ? armies.filter((army) => attacks(world, army, area)) : undefined;
     if (!armies || !attackers || attackers.length === 0) {
       decaySiege(world, area);
-      if (area.owner === null) area.militia = area.population * m.militiaShare;
+      area.militia = area.population * m.militiaShare;
       continue;
     }
     const defenders = armies.filter((army) => army.owner === area.owner);
-    if (defenders.length > 0 || (area.owner === null && area.militia >= 1)) fight(world, area, attackers, defenders);
+    if (defenders.length > 0 || area.militia >= 1) fight(world, area, attackers, defenders);
     else besiege(world, area, attackers);
   }
   for (const army of [...world.armies.values()]) if (army.soldiers < 1) disbandArmy(world, army);
@@ -144,7 +144,7 @@ function bestEdge(world: World, owner: GovernmentId, from: number, to: number): 
 
 const powerPerSoldier = (army: Army) => 1 + Math.min(1, army.weapons / Math.max(army.soldiers, EPSILON));
 
-/** One tick of Lanchester combat between attackers and the area's defenders (armies of its owner, or militia). */
+/** One tick of Lanchester combat between attackers and the area's defenders: its militia and its owner's armies. */
 function fight(world: World, area: Area, attackers: Army[], defenders: Army[]): void {
   const m = world.config.military;
   const { gameDaysPerTick: days, militaryResponsiveness } = world.config.pace;
@@ -156,7 +156,7 @@ function fight(world: World, area: Area, attackers: Army[], defenders: Army[]): 
     attackSoldiers += army.soldiers;
     attackPower += army.soldiers * powerPerSoldier(army);
   }
-  const militia = area.owner === null ? area.militia : 0;
+  const militia = area.militia;
   let defendSoldiers = militia;
   let defendPower = militia; // militia has no equipment
   for (const army of defenders) {

@@ -11,7 +11,6 @@ import {
   BLOCKED,
   BORDER,
   CELL_LINE,
-  dimColor,
   MIGRATION_ARROW,
   NEUTRAL,
   PICKED,
@@ -78,7 +77,7 @@ export class MapRenderer {
     const { snapshot, layer, priceTable, selectedGood, governments } = state;
     const owners = snapshot ? this.owners(snapshot) : "";
     const cellInputs =
-      layer === "realms" || layer === "migration" || layer === "transport"
+      layer === "realms"
         ? [layer, owners, governments.length]
         : layer === "prices"
           ? [layer, priceTable, selectedGood]
@@ -121,7 +120,7 @@ export class MapRenderer {
       this.drawRoutes(state, px);
       this.drawn.routes = routeInputs;
     }
-    const flowInputs = [state.layer, state.snapshot, state.transportAllGoods, state.selectedGood, this.lineScale];
+    const flowInputs = [state.flows, state.snapshot, state.transportAllGoods, state.selectedGood, this.lineScale];
     if (changed(this.drawn.flows, flowInputs)) {
       this.drawFlows(state, px);
       this.drawn.flows = flowInputs;
@@ -145,9 +144,6 @@ export class MapRenderer {
         return TERRAIN_COLORS[(data.areas[area] as StaticData["areas"][number]).terrain];
       case "realms":
         return this.realmColor(state, area);
-      case "migration":
-      case "transport":
-        return dimColor(this.realmColor(state, area));
       case "population":
         return snapshot
           ? populationColor(
@@ -263,11 +259,11 @@ export class MapRenderer {
     if (blocked) g.stroke({ width: 2.5 * px, color: BLOCKED, alpha: 0.9 });
   }
 
-  /** Arrows of the migration layer (net migrants per edge) or the transport layer (each direction of trade). */
+  /** Flow arrows over the area layer: net migrants per edge, or the goods carried in each direction. */
   private drawFlows(state: GameState, px: number): void {
     const g = this.flows.clear();
     const edges = state.snapshot?.edges;
-    if (!edges || (state.layer !== "migration" && state.layer !== "transport")) return;
+    if (!edges || state.flows === "none") return;
     const position = (area: number) => this.data.areas[area] as StaticData["areas"][number];
     const candidates: { from: number; to: number; flow: number }[] = [];
     let maximum = 0;
@@ -276,7 +272,7 @@ export class MapRenderer {
       candidates.push({ from, to, flow });
       maximum = Math.max(maximum, flow);
     };
-    if (state.layer === "migration") {
+    if (state.flows === "migration") {
       for (const [id, edge] of state.edges.entries()) {
         const flow = edges.migration[id] ?? 0;
         if (flow > 0) add(edge.areaA, edge.areaB, flow);
@@ -292,7 +288,7 @@ export class MapRenderer {
     }
     const shown = candidates.filter((c) => c.flow >= ARROW_MIN_SHARE * maximum);
     if (shown.length > MAX_ARROWS) shown.sort((a, b) => b.flow - a.flow).length = MAX_ARROWS;
-    const sideways = state.layer === "transport"; // both directions of trade can share an edge
+    const sideways = state.flows === "transport"; // both directions of trade can share an edge
     const polygons: number[][] = [];
     const outlines: number[][] = [];
     for (const { from, to, flow } of shown) {
@@ -311,7 +307,7 @@ export class MapRenderer {
     for (const outline of outlines) g.poly(outline);
     g.fill({ color: ARROW_OUTLINE, alpha: 0.8 });
     for (const polygon of polygons) g.poly(polygon);
-    g.fill({ color: state.layer === "migration" ? MIGRATION_ARROW : TRANSPORT_ARROW });
+    g.fill({ color: state.flows === "migration" ? MIGRATION_ARROW : TRANSPORT_ARROW });
   }
 
   private drawMarkers(state: GameState, px: number): void {

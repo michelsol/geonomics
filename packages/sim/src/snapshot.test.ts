@@ -45,7 +45,8 @@ describe("snapshots", () => {
     neutral.militia = 200;
     neutral.naturalCapacity[0] = 1;
     const snapshot = buildSnapshot(world, 0);
-    expect(Array.from(snapshot.areas.militia)).toEqual([0, 0, 0, 200]);
+    expect(Array.from(snapshot.areas.militia)).toEqual(world.areas.map((area) => Math.fround(area.militia)));
+    expect(snapshot.areas.militia[0]).toBeGreaterThan(0); // owned areas have a militia too
     const goods = world.goods.length;
     const table = buildStaticData(world).naturalCapacityMaximum;
     expect(table.length).toBe(4 * goods);

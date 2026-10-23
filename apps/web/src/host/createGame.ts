@@ -19,7 +19,7 @@ const WARMUP_CHUNK_DAYS = 10;
 /** Generates, initializes and warms up a world, reporting progress in [0, 1] along the way. */
 export function createGame(options: GameOptions, progress: (stage: string, done: number) => void): World {
   const catalog = loadCatalog(CATALOGS[options.catalog]);
-  const config = createConfig(catalog, { map: { landAreaCount: options.areas } });
+  const config = createConfig(catalog, { map: { landAreaCount: options.areas, governmentCount: options.realms } });
   progress("Generating the map", 0);
   const { world, capitals } = generateMap(catalog, config, options.seed);
   progress("Settling the population", 0.1);

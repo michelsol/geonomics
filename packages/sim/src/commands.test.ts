@@ -284,14 +284,33 @@ describe("standing orders", () => {
 });
 
 describe("founding", () => {
-  it("gives each capital its unclaimed land neighbors and a treasury", () => {
+  function unowned() {
+    const world = realmWorld();
+    world.governments.length = 0;
+    world.relations.length = 0;
+    for (const area of world.areas) area.owner = null;
+    return world;
+  }
+
+  it("gives an area with no land or sea path to the capital nearest in a straight line", () => {
+    const world = unowned();
+    for (const edge of world.edges) if (edge.mode === "sea") edge.isActive = false; // the isle is cut off
+    const [, east] = foundGovernments(world, [1, 3]); // the isle (0, 500) is nearer the Valley (100, 0)
+    expect(world.areas.every((area) => area.owner !== null)).toBe(true);
+    expect(world.areas[2]?.owner).toBe(0);
+    expect(east?.ownedAreas).toEqual([3]);
+  });
+
+  it("splits every area between the nearest capitals, and gives each a treasury", () => {
     const world = realmWorld();
     world.governments.length = 0;
     world.relations.length = 0;
     for (const area of world.areas) area.owner = null;
     const [west, east] = foundGovernments(world, [0, 3]);
-    expect(west?.ownedAreas).toEqual([0, 1]); // the isle is reached by sea only
-    expect(east?.ownedAreas).toEqual([3]); // the valley was claimed first
+    // The valley is 100 away from both capitals: the tie goes to the first. The isle is reached by sea.
+    expect(west?.ownedAreas).toEqual([0, 1, 2]);
+    expect(east?.ownedAreas).toEqual([3]);
+    expect(west?.color).not.toBe(east?.color);
     expect(west?.treasury).toBeGreaterThan(0);
     expect(world.relations).toEqual([
       ["peace", "peace"],

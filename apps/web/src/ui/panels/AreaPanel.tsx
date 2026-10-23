@@ -72,14 +72,14 @@ export function AreaPanel({ onOpen }: PanelProps) {
         {own && headTax !== undefined && (
           <div className="row hint">
             Head tax here: {fmt(headTax)} mh per person per day.
-            <button type="button" className="link" onClick={() => onOpen("government")}>
-              Taxes are set in Realm
+            <button type="button" className="link" onClick={() => onOpen("policies")}>
+              Taxes are set in Policies
             </button>
           </div>
         )}
       </Section>
 
-      {!own && <Defense area={area} />}
+      <Defense area={area} own={own} />
 
       <Section title="Natural resources">
         {resources.length === 0 ? (
@@ -134,19 +134,30 @@ export function AreaPanel({ onOpen }: PanelProps) {
 }
 
 /** Defenders of an area that is not the player's, and the force it takes to win. */
-function Defense({ area }: { area: number }) {
+/** Who defends an area: militia, the owner's armies and fortifications, and for others' areas what it takes to win. */
+function Defense({ area, own }: { area: number; own: boolean }) {
   const view = useView();
   if (!view) return null;
   const estimate = conquestEstimate(view.data, view.snapshot, area);
-  const neutral = (view.snapshot.areas.owner[area] as number) < 0;
+  const militiaHint = `The militia is ${pct(view.data.config.military.militiaShare)} of the population, unequipped; it refills while no attacker is present.`;
+  const stats = (
+    <div className="stats">
+      <Stat label="Militia" value={count(estimate.militia)} testId="militia" />
+      <Stat label="Army power here" value={fmt(estimate.armyPower)} />
+      <Stat label="Fortification" value={`×${1 + estimate.fortification}`} />
+      <Stat label="Defense power" value={fmt(estimate.defensePower)} />
+    </div>
+  );
+  if (own)
+    return (
+      <Section title="Defense">
+        {stats}
+        <p className="hint">{militiaHint} Your armies standing here and fortifications add to it.</p>
+      </Section>
+    );
   return (
     <Section title="Defense">
-      <div className="stats">
-        {neutral && <Stat label="Militia" value={count(estimate.militia)} testId="militia" />}
-        {!neutral && <Stat label="Army power here" value={fmt(estimate.armyPower)} />}
-        <Stat label="Fortification" value={`×${1 + estimate.fortification}`} />
-        <Stat label="Defense power" value={fmt(estimate.defensePower)} />
-      </div>
+      {stats}
       {estimate.defensePower > 0 ? (
         <p data-testid="soldiers-needed">
           Win with more than <strong>{count(Math.ceil(estimate.equippedNeeded))}</strong> equipped soldiers, or{" "}
@@ -157,10 +168,7 @@ function Defense({ area }: { area: number }) {
       )}
       <p className="hint">
         Then the siege takes about {fmt(estimate.siegeDaysPer1000Equipped)} days with 1,000 equipped soldiers (twice as
-        long with half as many).
-        {neutral
-          ? ` The militia is ${pct(view.data.config.military.militiaShare)} of the population, unequipped; it refills while no attacker is present.`
-          : ""}
+        long with half as many). {militiaHint}
       </p>
     </Section>
   );

@@ -47,8 +47,16 @@ test("a solo game runs, pauses, and takes commands", async ({ page }) => {
   }
   expect(await page.getByTestId("area-name").textContent()).not.toBe(capital);
 
-  // A realm head tax, set for all areas from the Realm tab, shows up as the tax in force.
-  await openTab(page, "Realm");
+  // Policies open on the production tax; the slider sets a realm-wide rate.
+  await openTab(page, "Policies");
+  await expect(page.getByLabel("Policy", { exact: true })).toHaveValue("productionTaxRate");
+  await page.getByLabel("Policy level").fill("10");
+  await expect(page.getByLabel("Policy value")).toHaveValue("10");
+  await page.getByRole("button", { name: "Set", exact: true }).click();
+  await expect(page.getByTestId("policies")).toContainText("Production tax · all goods");
+  await expect(page.getByTestId("policies")).toContainText("10%");
+
+  // A realm head tax, set for all areas, shows up as the tax in force.
   await page.getByLabel("Policy area").selectOption("-1");
   await page.getByLabel("Policy", { exact: true }).selectOption("headTaxPerPersonPerDay");
   await page.getByLabel("Policy value").fill("0.25");
@@ -116,15 +124,26 @@ test("the market table sorts by column, and counts show no decimals", async ({ p
   await expect(market.getByRole("columnheader", { name: /Price/ })).toHaveAttribute("aria-sort", "ascending");
 });
 
-test("population, migration and transport layers show their legends", async ({ page }) => {
+test("the realm count is chosen at the start", async ({ page }) => {
+  await page.goto("/?warmup=10");
+  await page.getByLabel("Map size").selectOption("300");
+  await page.getByLabel("Goods catalog").selectOption("small");
+  await page.getByLabel("Realms").selectOption("12");
+  await page.getByRole("button", { name: "New game" }).click();
+  await expect(page.getByRole("heading", { name: "Choose your realm" })).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator(".realm-list button")).toHaveCount(12);
+});
+
+test("flows overlay any area layer, each with its legend", async ({ page }) => {
   await startGame(page);
-  const layer = page.getByLabel("Map layer");
-  await layer.selectOption("population");
+  const flows = page.getByLabel("Map flows");
+  await page.getByLabel("Map layer").selectOption("population");
   await expect(page.getByTestId("legend")).toContainText("Population per area");
-  await layer.selectOption("migration");
-  await expect(page.getByTestId("legend")).toContainText("People moving per day");
-  await layer.selectOption("transport");
-  const legend = page.getByTestId("legend");
+  await flows.selectOption("migration");
+  await expect(page.getByTestId("flow-legend")).toContainText("People moving per day");
+  await expect(page.getByTestId("legend")).toContainText("Population per area"); // both at once
+  await flows.selectOption("transport");
+  const legend = page.getByTestId("flow-legend");
   await expect(legend).toContainText("Goods carried per day");
   await expect(legend).toContainText("t/day");
   // One good, in its own unit, then back to every good.
@@ -134,6 +153,8 @@ test("population, migration and transport layers show their legends", async ({ p
   await expect(legend).not.toContainText("t/day", { timeout: 5000 });
   await good.selectOption("-1");
   await expect(legend).toContainText("t/day");
+  await flows.selectOption("none");
+  await expect(legend).toHaveCount(0);
 });
 
 test("rejected commands are explained", async ({ page }) => {

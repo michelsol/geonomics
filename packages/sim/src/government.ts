@@ -1,5 +1,6 @@
 // Governments: founding, ownership, captures and policy resolution (specifications §6 and §7).
 import { disbandArmy } from "./army";
+import { MinHeap } from "./heap";
 import type {
   Area,
   AreaId,
@@ -13,7 +14,20 @@ import type {
   World,
 } from "./types";
 
-const REALM_COLORS = ["#d1495b", "#2e86ab", "#edae49", "#66a182", "#8d6cab", "#e07a5f", "#3d5a80", "#a8763e"];
+const REALM_COLORS = [
+  "#d1495b",
+  "#2e86ab",
+  "#edae49",
+  "#66a182",
+  "#8d6cab",
+  "#e07a5f",
+  "#3d5a80",
+  "#a8763e",
+  "#4fb3bf",
+  "#c25b9e",
+  "#9bc53d",
+  "#e9d758",
+];
 
 export interface GovernmentInit {
   capital: AreaId;
@@ -55,31 +69,96 @@ export function createGovernment(world: World, init: GovernmentInit): Government
 }
 
 /**
- * Founds one government per capital. Each realm is its capital plus the areas within startingRealmRadius land hops
- * that no earlier government or other capital has claimed.
+ * Founds one government per capital and splits the whole map between them: each area joins the capital nearest by
+ * travel distance over active land and sea edges (ties to the earlier capital), and an area with no such path joins
+ * the capital nearest in a straight line. Neighboring realms get different colors where the palette allows.
  */
 export function foundGovernments(world: World, capitals: readonly AreaId[]): Government[] {
-  const claimed = new Set(capitals);
-  return capitals.map((capital) => {
-    const realm = [capital];
-    let frontier = [capital];
-    for (let hop = 0; hop < world.config.government.startingRealmRadius; hop++) {
-      const next: AreaId[] = [];
-      for (const id of frontier) {
-        for (const edgeId of (world.areas[id] as Area).edges) {
-          const edge = world.edges[edgeId] as Edge;
-          if (edge.mode !== "land") continue;
-          const other = edge.areaA === id ? edge.areaB : edge.areaA;
-          if (claimed.has(other)) continue;
-          claimed.add(other);
-          realm.push(other);
-          next.push(other);
-        }
-      }
-      frontier = next;
-    }
-    return createGovernment(world, { capital, areas: realm });
+  const realmOf = nearestCapitals(world, capitals);
+  const realms = capitals.map((): AreaId[] => []);
+  for (const area of world.areas) realms[realmOf[area.id] as number]?.push(area.id);
+  const colors = realmColors(world, realmOf, capitals.length);
+  return capitals.map((capital, i) =>
+    createGovernment(world, { capital, areas: realms[i] as AreaId[], color: colors[i] as string }),
+  );
+}
+
+/** For each area, the index in `capitals` of the capital it belongs to (see foundGovernments). */
+function nearestCapitals(world: World, capitals: readonly AreaId[]): Int32Array {
+  const n = world.areas.length;
+  const distance = new Float64Array(n).fill(Number.POSITIVE_INFINITY);
+  const realmOf = new Int32Array(n).fill(-1);
+  const heap = new MinHeap();
+  capitals.forEach((capital, i) => {
+    if (realmOf[capital] !== -1) return;
+    distance[capital] = 0;
+    realmOf[capital] = i;
+    heap.push(0, capital);
   });
+  while (heap.size > 0) {
+    const [d, current] = heap.pop();
+    if (d > (distance[current] as number)) continue;
+    const realm = realmOf[current] as number;
+    for (const id of (world.areas[current] as Area).edges) {
+      const edge = world.edges[id] as Edge;
+      if (!edge.isActive || edge.mode === "air") continue;
+      const other = edge.areaA === current ? edge.areaB : edge.areaA;
+      const next = d + edge.distance;
+      const known = distance[other] as number;
+      if (next < known || (next === known && realm < (realmOf[other] as number))) {
+        distance[other] = next;
+        realmOf[other] = realm;
+        heap.push(next, other);
+      }
+    }
+  }
+  for (const area of world.areas) {
+    if (realmOf[area.id] !== -1) continue;
+    let best = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    capitals.forEach((capital, i) => {
+      const c = world.areas[capital] as Area;
+      const d = Math.hypot(c.position.x - area.position.x, c.position.y - area.position.y);
+      if (d < bestDistance) {
+        best = i;
+        bestDistance = d;
+      }
+    });
+    realmOf[area.id] = best;
+  }
+  return realmOf;
+}
+
+/** Colors realms in order, each with the palette color least used by its neighbors, then least used overall. */
+function realmColors(world: World, realmOf: Int32Array, count: number): string[] {
+  const neighbors = Array.from({ length: count }, () => new Set<number>());
+  for (const edge of world.edges) {
+    if (!edge.isActive || edge.mode === "air") continue;
+    const a = realmOf[edge.areaA] as number;
+    const b = realmOf[edge.areaB] as number;
+    if (a === b) continue;
+    neighbors[a]?.add(b);
+    neighbors[b]?.add(a);
+  }
+  const chosen: number[] = [];
+  const uses = new Array<number>(REALM_COLORS.length).fill(0);
+  for (let realm = 0; realm < count; realm++) {
+    const nearby = new Array<number>(REALM_COLORS.length).fill(0);
+    for (const other of neighbors[realm] ?? []) {
+      const c = chosen[other];
+      if (other < realm && c !== undefined) nearby[c] = (nearby[c] as number) + 1;
+    }
+    let best = 0;
+    for (let c = 1; c < REALM_COLORS.length; c++) {
+      const better =
+        (nearby[c] as number) < (nearby[best] as number) ||
+        ((nearby[c] as number) === (nearby[best] as number) && (uses[c] as number) < (uses[best] as number));
+      if (better) best = c;
+    }
+    chosen.push(best);
+    uses[best] = (uses[best] as number) + 1;
+  }
+  return chosen.map((c) => REALM_COLORS[c] as string);
 }
 
 /** Income of a realm's inhabitants per game day, in man-hours. */

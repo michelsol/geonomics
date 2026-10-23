@@ -7,16 +7,8 @@ import { History } from "./history";
 import { priceExtremes, priceOf, realmPopulation } from "./selectors";
 
 export type Screen = "newGame" | "chooseRealm" | "game" | "ended";
-export type Layer =
-  | "realms"
-  | "population"
-  | "prices"
-  | "resources"
-  | "satisfaction"
-  | "wage"
-  | "migration"
-  | "transport"
-  | "terrain";
+export type Layer = "realms" | "population" | "prices" | "resources" | "satisfaction" | "wage" | "terrain";
+export type Flows = "none" | "migration" | "transport"; // arrows drawn over the area layer
 export type Mode = { kind: "select" } | { kind: "moveArmy"; army: number } | { kind: "pickPeaceAreas" };
 
 export interface Toast {
@@ -53,7 +45,8 @@ export interface GameState {
   selectedGood: number;
   selectedArmy: number | null;
   layer: Layer;
-  transportAllGoods: boolean; // the transport layer shows total tonnes, not the selected good
+  flows: Flows;
+  transportAllGoods: boolean; // transport flows show total tonnes, not the selected good
   mode: Mode;
   peaceAreas: number[]; // areas picked on the map for a peace proposal
   toasts: Toast[];
@@ -73,6 +66,7 @@ export interface GameState {
   selectGood(good: number): void;
   selectArmy(army: number | null): void;
   setLayer(layer: Layer): void;
+  setFlows(flows: Flows): void;
   setTransportGood(good: number | "all"): void;
   setMode(mode: Mode): void;
   togglePeaceArea(area: number): void;
@@ -102,6 +96,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     selectedGood: 0,
     selectedArmy: null,
     layer: "realms",
+    flows: "none",
     transportAllGoods: true,
     mode: { kind: "select" },
     peaceAreas: [],
@@ -160,6 +155,9 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     },
     setLayer(layer) {
       set({ layer });
+    },
+    setFlows(flows) {
+      set({ flows });
       watchFlows();
     },
     setTransportGood(good) {
@@ -198,6 +196,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
             historyVersion: 0,
             selectedGood: firstNecessityGood(message.data),
             layer: "realms",
+            flows: "none",
             transportAllGoods: true,
             mode: { kind: "select" },
             peaceAreas: [],
@@ -256,11 +255,11 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     },
   }));
 
-  // Snapshots carry one good's trade flows, only while the transport layer shows that good.
+  // Snapshots carry one good's trade flows, only while the transport flows show that good.
   let watched: number | null = null;
   function watchFlows(): void {
-    const { layer, transportAllGoods, selectedGood } = store.getState();
-    const good = layer === "transport" && !transportAllGoods ? selectedGood : null;
+    const { flows, transportAllGoods, selectedGood } = store.getState();
+    const good = flows === "transport" && !transportAllGoods ? selectedGood : null;
     if (good === watched) return;
     watched = good;
     port.postMessage({ type: "setFlowGood", good });

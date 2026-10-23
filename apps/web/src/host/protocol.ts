@@ -7,6 +7,7 @@ export interface GameOptions {
   catalog: CatalogName;
   areas: number; // land areas on the generated map
   seed: number;
+  realms: number; // governments founded; they split the whole map between them
   warmupDays?: number; // defaults to the config's warmupDays; shortened for tests
 }
 

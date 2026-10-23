@@ -4,7 +4,6 @@ import { useGame } from "../../state/store";
 import { Chart } from "../Chart";
 import { count, fmt, Section, Stat, Swatch } from "../components";
 import { AreaLink, useView } from "./common";
-import { PolicyEditor } from "./PolicyEditor";
 
 export function GovernmentPanel() {
   const view = useView();
@@ -58,10 +57,6 @@ export function GovernmentPanel() {
           <Chart x={days} height={140} series={[{ label: "population", color: "#3987e5", values: realm.channel(0) }]} />
         </Section>
       )}
-
-      <Section title="Taxes and price controls">
-        <PolicyEditor />
-      </Section>
 
       <Section title="Session">
         <button type="button" className="danger" onClick={endGame}>

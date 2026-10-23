@@ -7,7 +7,7 @@ import { conquestEstimate, employmentOf, priceExtremes, priceOf } from "./select
 import { createGameStore } from "./store";
 
 function setup() {
-  const world: World = createGame({ catalog: "small", areas: 60, seed: 5, warmupDays: 0 }, () => {});
+  const world: World = createGame({ catalog: "small", areas: 60, seed: 5, realms: 4, warmupDays: 0 }, () => {});
   const sent: ToWorker[] = [];
   const store = createGameStore({ postMessage: (message) => sent.push(message) });
   const state = () => store.getState();
@@ -46,18 +46,31 @@ describe("selectors", () => {
 });
 
 describe("conquest estimate", () => {
-  it("needs attack power above the militia's, and sieges for population over power", () => {
+  it("needs attack power above the militia's and armies', and sieges for population over power", () => {
     const { world } = setup();
-    const neutral = world.areas.find((area) => area.owner === null) as World["areas"][number];
-    neutral.militia = 300;
-    neutral.population = 15_000;
+    expect(world.areas.every((area) => area.owner !== null)).toBe(true); // the map is fully claimed
+    const enemy = world.areas.find((area) => area.owner === 1) as World["areas"][number];
+    enemy.militia = 300;
+    enemy.population = 15_000;
     const data = buildStaticData(world);
-    const estimate = conquestEstimate(data, buildSnapshot(world, 0), neutral.id);
+    const estimate = conquestEstimate(data, buildSnapshot(world, 0), enemy.id);
     expect(estimate).toMatchObject({ militia: 300, armyPower: 0, defensePower: 300 });
     expect(estimate.equippedNeeded).toBe(150);
     expect(estimate.unequippedNeeded).toBe(300);
     // siegeRatePerDay × power / population per day: 0.25 × 2,000 / 15,000 = 1/30 of the siege per day.
     expect(estimate.siegeDaysPer1000Equipped).toBeCloseTo(30, 1);
+
+    // An equipped army of the owner adds twice its soldiers.
+    world.armies.set(99, {
+      id: 99,
+      owner: 1,
+      location: { kind: "area", area: enemy.id },
+      path: [],
+      soldiers: 100,
+      weapons: 100,
+      stance: "hold",
+    });
+    expect(conquestEstimate(data, buildSnapshot(world, 0), enemy.id).defensePower).toBe(500);
   });
 });
 
@@ -105,18 +118,20 @@ describe("game store", () => {
     expect(median).toBeLessThanOrEqual(high as number);
   });
 
-  it("asks for one good's trade flows only while the transport layer shows it", () => {
+  it("asks for one good's trade flows only while the transport flows show it, whatever the area layer", () => {
     const { state, sent } = setup();
     state().chooseRealm(0);
     const flowGoods = () => sent.flatMap((m) => (m.type === "setFlowGood" ? [m.good] : []));
-    state().setLayer("transport");
+    state().setFlows("transport");
     expect(flowGoods()).toEqual([]); // all goods: tonnage needs no request
     state().setTransportGood(2);
     expect(state().selectedGood).toBe(2);
+    state().setLayer("population"); // the area layer does not change the flows
     state().selectGood(3);
-    state().setLayer("prices");
+    state().setFlows("migration");
     state().setTransportGood("all");
     expect(flowGoods()).toEqual([2, 3, null]);
+    expect(state().layer).toBe("population");
   });
 
   it("turns map clicks into army moves and peace picks by mode", () => {

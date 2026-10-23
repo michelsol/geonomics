@@ -259,15 +259,20 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
   for (const area of byPopulation.slice(0, airports)) area.airportLevel = 1;
   rebuildAirRoutes(world);
 
-  // 10. Capitals: the most populous area, then each next one far from the others and populous.
+  // 10. Capitals: the most populous area, then each next one far from the others and populous. An area no capital
+  // reaches over land or sea counts as one hop beyond the farthest reachable area, so islands come early but are
+  // still ranked by population.
   const capitals: AreaId[] = [];
   const hops = new Float64Array(world.areas.length).fill(Number.POSITIVE_INFINITY);
   for (let k = 0; k < Math.min(m.governmentCount, world.areas.length); k++) {
+    let farthest = 0;
+    for (const h of hops) if (Number.isFinite(h)) farthest = Math.max(farthest, h);
     let best = -1;
     let bestScore = -1;
     for (const area of world.areas) {
       if (capitals.includes(area.id)) continue;
-      const score = k === 0 ? area.population : (hops[area.id] as number) * Math.sqrt(area.population);
+      const h = hops[area.id] as number;
+      const score = k === 0 ? area.population : (Number.isFinite(h) ? h : farthest + 1) * Math.sqrt(area.population);
       if (score > bestScore) {
         best = area.id;
         bestScore = score;

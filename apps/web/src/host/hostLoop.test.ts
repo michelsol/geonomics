@@ -26,7 +26,7 @@ function fakeTime() {
 }
 
 function setup(speed: number | "max" = 5) {
-  const world = createGame({ catalog: "small", areas: 60, seed: 3, warmupDays: 0 }, () => {});
+  const world = createGame({ catalog: "small", areas: 60, seed: 3, realms: 4, warmupDays: 0 }, () => {});
   (world.governments[0] as (typeof world.governments)[number]).controller = { kind: "human", player: LOCAL_PLAYER };
   const time = fakeTime();
   const messages: FromWorker[] = [];
