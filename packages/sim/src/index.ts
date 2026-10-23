@@ -15,6 +15,7 @@ export * from "./mapgen";
 export * from "./math";
 export * from "./random";
 export * from "./routes";
+export * from "./save";
 export * from "./snapshot";
 export { purchasingPower } from "./tick/consumption";
 export { advanceInfrastructure, rebuildAirRoutes, updateRouteCapacities } from "./tick/infrastructure";
