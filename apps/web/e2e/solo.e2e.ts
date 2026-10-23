@@ -116,6 +116,26 @@ test("the market table sorts by column, and counts show no decimals", async ({ p
   await expect(market.getByRole("columnheader", { name: /Price/ })).toHaveAttribute("aria-sort", "ascending");
 });
 
+test("population, migration and transport layers show their legends", async ({ page }) => {
+  await startGame(page);
+  const layer = page.getByLabel("Map layer");
+  await layer.selectOption("population");
+  await expect(page.getByTestId("legend")).toContainText("Population per area");
+  await layer.selectOption("migration");
+  await expect(page.getByTestId("legend")).toContainText("People moving per day");
+  await layer.selectOption("transport");
+  const legend = page.getByTestId("legend");
+  await expect(legend).toContainText("Goods carried per day");
+  await expect(legend).toContainText("t/day");
+  // One good, in its own unit, then back to every good.
+  const good = page.getByLabel("Transported good");
+  const first = (await good.locator("option").nth(1).getAttribute("value")) as string;
+  await good.selectOption(first);
+  await expect(legend).not.toContainText("t/day", { timeout: 5000 });
+  await good.selectOption("-1");
+  await expect(legend).toContainText("t/day");
+});
+
 test("rejected commands are explained", async ({ page }) => {
   await startGame(page);
   await openTab(page, "Armies");

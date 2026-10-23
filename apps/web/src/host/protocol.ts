@@ -1,5 +1,5 @@
 // Messages between the main thread and the simulation worker (specification §9, Single player).
-import type { Command, GovernmentId, GovernmentSummary, Snapshot, StaticData } from "@geonomics/sim";
+import type { Command, GoodId, GovernmentId, GovernmentSummary, Snapshot, StaticData } from "@geonomics/sim";
 
 export type CatalogName = "small" | "medium" | "large";
 
@@ -26,6 +26,7 @@ export type ToWorker =
   | { type: "start"; government: GovernmentId } // the local player takes this government and the game runs
   | { type: "command"; command: Command }
   | { type: "setSpeed"; speed: Speed }
+  | { type: "setFlowGood"; good: GoodId | null } // the good whose trade flows snapshots carry; null for none
   | { type: "pause" }
   | { type: "resume" }
   | { type: "endGame" };

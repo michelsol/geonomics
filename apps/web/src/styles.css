@@ -345,6 +345,19 @@ td {
   height: 8px;
   border-radius: 4px;
 }
+.legend.interactive {
+  pointer-events: auto;
+}
+.flow-scale {
+  display: grid;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.flow-scale > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .legend .ends {
   display: flex;
   justify-content: space-between;

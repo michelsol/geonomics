@@ -1205,6 +1205,7 @@ The host broadcasts snapshots at `snapshotRate` (default 3 per second), independ
 - Per area, for the receiving player's owned areas and their direct neighbors: savings, unemployed workers, and the price, stock, produced, consumed, imported, exported, private worker and natural capacity arrays. Other areas' stocks and flows are not sent.
 - The static data sent once at the start also carries every area's maximum natural capacity per good.
 - Per edge: transport cost, capacity, active and blocked state, plus the full data of any route edge created since the last snapshot.
+- Per edge, the flows of the last tick, in units per game day: net migrants (positive from area A to area B) and tonnes carried in each direction. When the receiver watches one good, also that good's units carried in each direction. Flows are public, like prices.
 - All armies, relations and pending peace proposals.
 - The receiving player's full government state (treasury, depots, jobs, orders); other governments as a public summary.
 
@@ -1258,7 +1259,7 @@ A solo game uses the same data flow as a hosted one, without the network. The wo
 | `priceTable` | At `priceTableRate` | As in Price table |
 | `status` | With every snapshot, and on rejections | Running or paused, target and actual ticks per second, milliseconds per tick, and rejected commands with their reasons |
 
-The main thread sends `create`, `command`, `setSpeed`, `pause`, `resume` and `endGame`. The local player sends commands under the player id `local`.
+The main thread sends `create`, `command`, `setSpeed`, `pause`, `resume`, `endGame`, and `setFlowGood` to choose the good whose trade flows snapshots carry (none by default). While paused, `setFlowGood` is answered with a snapshot at once. The local player sends commands under the player id `local`.
 
 ## 10. Interface
 
@@ -1277,11 +1278,16 @@ Areas are the Voronoi cells of their positions, with the water cells around them
 | Layer | Colors each area by |
 | --- | --- |
 | Realms | Owner color; neutral areas in grey. Realm borders are drawn on every layer |
+| Population | Population, one hue on a log scale between the map's smallest and largest areas |
 | Prices | The chosen good's price over its labor value, on a log scale from blue (cheap) through white to red (dear) |
 | Resources | The chosen good's maximum natural capacity, brighter for more, relative to the best area; grey where there is none |
 | Satisfaction | Necessity satisfaction, from red (0) to green (1) |
 | Average wage | Wage level (mean value added per private worker-hour) on a log scale |
+| Migration | Darkened realm colors, with an arrow per edge for the net migrants of the last tick |
+| Transport | Darkened realm colors, with an arrow per edge and direction for the goods carried in the last tick: every good in tonnes, or one good chosen in the legend in its own units |
 | Terrain | Terrain type |
+
+**Flow arrows** run from 20% to 80% of the segment between two area centers, with a dark outline. Their width grows from 1 to 6 px with the square root of the flow over the largest flow on the map. Transport arrows sit to the right of their direction, so the two directions of an edge stay apart. Flows under 3% of the largest are left out, as are arrows with less than 14 px of room on screen (they appear when zooming in), and at most the 2,500 largest flows are drawn. The legend shows sample arrows with their values.
 
 One layer is active at a time and has a legend. Every layer also shows:
 

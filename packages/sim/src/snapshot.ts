@@ -2,12 +2,15 @@
 // snapshots of the dynamic state as seen by one government. Typed arrays are Float32Array, and every value is
 // structured-clone friendly, so snapshots cross a worker boundary as transferables or go through msgpack unchanged.
 import type { WorldConfig } from "./config";
+import { lastMigration } from "./tick/population";
+import { lastTradeFlows, lastTradeTonnage } from "./tick/trade";
 import type {
   AreaId,
   Army,
   DepotTransfer,
   EdgeMode,
   Good,
+  GoodId,
   GovernmentId,
   JobAssignment,
   MapLayout,
@@ -120,6 +123,9 @@ export interface Snapshot {
     transportCost: Float32Array;
     capacityPerDay: Float32Array;
     flags: Uint8Array; // bit 0: active, bit 1: blocked
+    tonnage: Float32Array; // per edge and direction (2 × edge for A→B, + 1 for B→A): tonnes carried per day
+    migration: Float32Array; // per edge: migrants per day, positive from A to B
+    goodFlow: Float32Array | null; // like tonnage, in units per day of the watched good; null when none is watched
   };
   newEdges: StaticEdge[]; // edges created since the receiver last knew, from index `knownEdges`
   armies: Army[];
@@ -163,8 +169,20 @@ function capacityTable(world: World): Float32Array {
   return table;
 }
 
-/** The dynamic state as seen by `viewer` (null for a spectator), for a receiver that knows `knownEdges` edges. */
-export function buildSnapshot(world: World, viewer: GovernmentId | null, knownEdges = world.edges.length): Snapshot {
+export interface SnapshotOptions {
+  flowGood?: GoodId | null; // the good whose trade flows the receiver watches on the map
+}
+
+/**
+ * The dynamic state as seen by `viewer` (null for a spectator), for a receiver that knows `knownEdges` edges. Trade
+ * and migration flows are public, like prices.
+ */
+export function buildSnapshot(
+  world: World,
+  viewer: GovernmentId | null,
+  knownEdges = world.edges.length,
+  options: SnapshotOptions = {},
+): Snapshot {
   const n = world.areas.length;
   const areas: Snapshot["areas"] = {
     owner: new Int16Array(n),
@@ -195,15 +213,33 @@ export function buildSnapshot(world: World, viewer: GovernmentId | null, knownEd
   }
 
   const m = world.edges.length;
+  const days = world.config.pace.gameDaysPerTick;
+  const tonnage = lastTradeTonnage(world);
+  const migration = lastMigration(world);
+  const flowGood = options.flowGood ?? null;
   const edges: Snapshot["edges"] = {
     transportCost: new Float32Array(m),
     capacityPerDay: new Float32Array(m),
     flags: new Uint8Array(m),
+    tonnage: new Float32Array(2 * m),
+    migration: new Float32Array(m),
+    goodFlow: flowGood !== null && flowGood >= 0 && flowGood < world.goods.length ? new Float32Array(2 * m) : null,
   };
   for (const edge of world.edges) {
-    edges.transportCost[edge.id] = edge.transportCost;
-    edges.capacityPerDay[edge.id] = edge.capacityPerDay;
-    edges.flags[edge.id] = (edge.isActive ? EDGE_ACTIVE : 0) | (edge.isBlocked ? EDGE_BLOCKED : 0);
+    const e = edge.id;
+    edges.transportCost[e] = edge.transportCost;
+    edges.capacityPerDay[e] = edge.capacityPerDay;
+    edges.flags[e] = (edge.isActive ? EDGE_ACTIVE : 0) | (edge.isBlocked ? EDGE_BLOCKED : 0);
+    edges.tonnage[2 * e] = (tonnage[2 * e] ?? 0) / days;
+    edges.tonnage[2 * e + 1] = (tonnage[2 * e + 1] ?? 0) / days;
+    edges.migration[e] = (migration[e] ?? 0) / days;
+  }
+  if (edges.goodFlow) {
+    for (const flow of lastTradeFlows(world)) {
+      if (flow.good !== flowGood) continue;
+      const slot = 2 * flow.edge + (world.edges[flow.edge]?.areaA === flow.seller ? 0 : 1);
+      edges.goodFlow[slot] = (edges.goodFlow[slot] as number) + flow.quantity / days;
+    }
   }
   const newEdges: StaticEdge[] = [];
   for (let id = knownEdges; id < m; id++) newEdges.push(staticEdge(world, id));
@@ -307,7 +343,7 @@ export function snapshotTransferables(snapshot: Snapshot): ArrayBuffer[] {
   const buffers: ArrayBuffer[] = [];
   const add = (view: ArrayBufferView) => buffers.push(view.buffer as ArrayBuffer);
   for (const view of Object.values(snapshot.areas)) add(view);
-  for (const view of Object.values(snapshot.edges)) add(view);
+  for (const view of Object.values(snapshot.edges)) if (view) add(view);
   for (const detail of snapshot.detail) {
     for (const view of [
       detail.price,

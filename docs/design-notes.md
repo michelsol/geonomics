@@ -184,3 +184,14 @@ Combat follows Lanchester's square law. With `A` attackers of power `a` each and
 The realm history used a second y axis for population. Treasury and population are now separate small charts, one measure each: two scales on one chart invite reading the crossing of the lines as meaningful. Employment is a part-to-whole, shown as one stacked bar (private, government, unemployed) with a legend, and the jobs by good as a table with inline bars rather than a pie, so a dozen goods stay readable.
 
 Population and average-wage charts per area were tried and removed after playtesting: the Area panel reads better as a snapshot of the present, with history left to the Realm and Good panels.
+
+## Flow layers
+
+### What the arrows show
+
+Migration and transport arrows show what moved in the last tick, scaled to a day, not a smoothed rate. Trade adjusts gradually and migration follows slow differences in attractiveness, so they hardly flicker. Snapshots always carry the per-edge migrants and tonnes (12 bytes per edge, about 100 KB per snapshot on a 3,000-area map). A table for every good would add 8 bytes per edge and good, about 4 MB per snapshot with the large catalog at 3 per second, so only the good the player watches on the Transport layer is sent.
+
+### Drawing cost
+
+On a 3,000-area map with the large catalog, about 8,000 directions carry trade. Pixi v8 builds geometry when it renders, and stroking 8,000 outlined arrows took about 100 ms per redraw, three times a second. That saturated the main thread, and a map drag slowed to a crawl. Drawing the outline as a slightly larger dark arrow under each one (fills tessellate much faster than strokes), keeping the 2,500 largest flows and skipping arrows with less than 14 px of room brought most redraws under 20 ms. Dragging the map with the Transport layer on stays at about 52 fps, against about 58 fps on the realm layer.
+

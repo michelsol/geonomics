@@ -85,6 +85,27 @@ describe("HostLoop", () => {
     });
   });
 
+  it("carries the trade flows of the chosen good, sending a snapshot at once while paused", () => {
+    const { time, messages, loop } = setup(5);
+    const snapshots = () => messages.flatMap((m) => (m.type === "snapshot" ? [m.snapshot] : []));
+    loop.setFlowGood(1);
+    expect(snapshots()).toHaveLength(1);
+    expect(snapshots().at(-1)?.edges.goodFlow).not.toBeNull();
+    loop.setFlowGood(1); // unchanged: nothing sent
+    expect(snapshots()).toHaveLength(1);
+    loop.setFlowGood(null);
+    expect(snapshots().at(-1)?.edges.goodFlow).toBeNull();
+    loop.setFlowGood(2);
+    loop.resume();
+    time.advance(1000);
+    expect(snapshots().length).toBeGreaterThan(3);
+    expect(
+      snapshots()
+        .slice(2)
+        .every((s) => s.edges.goodFlow !== null),
+    ).toBe(true);
+  });
+
   it("runs back to back at max speed, yielding through the scheduler", () => {
     const { world, time, loop } = setup("max");
     loop.resume();

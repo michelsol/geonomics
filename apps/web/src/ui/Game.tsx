@@ -1,10 +1,23 @@
 // The game screen: top bar, map and panels, as a sidebar on desktop or a bottom sheet on phones.
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
-import { cssColor, DIVERGING, PRICE_RANGE, RESOURCE, SATISFACTION, TERRAIN_COLORS, WAGE_RANGE } from "../map/colors";
+import { arrowWidth } from "../map/arrows";
+import {
+  cssColor,
+  DIVERGING,
+  MIGRATION_ARROW,
+  POPULATION,
+  PRICE_RANGE,
+  RESOURCE,
+  SATISFACTION,
+  TERRAIN_COLORS,
+  TRANSPORT_ARROW,
+  WAGE_RANGE,
+} from "../map/colors";
 import { MapView } from "../map/MapView";
+import { flowMaximum, populationRange, transportFlows } from "../state/selectors";
 import type { Layer } from "../state/store";
 import { gameStore, useGame } from "../state/store";
-import { fmt, Select } from "./components";
+import { count, fmt, Select } from "./components";
 import { AreaPanel } from "./panels/AreaPanel";
 import { ArmiesPanel } from "./panels/ArmiesPanel";
 import type { PanelName, PanelProps } from "./panels/common";
@@ -26,10 +39,13 @@ const PANELS = {
 
 const LAYERS: { value: Layer; label: string }[] = [
   { value: "realms", label: "Realms" },
+  { value: "population", label: "Population" },
   { value: "prices", label: "Prices" },
   { value: "resources", label: "Resources" },
   { value: "satisfaction", label: "Satisfaction" },
-  { value: "wage", label: "Wage level" },
+  { value: "wage", label: "Average wage" },
+  { value: "migration", label: "Migration" },
+  { value: "transport", label: "Transport" },
   { value: "terrain", label: "Terrain" },
 ];
 
@@ -208,13 +224,102 @@ function TopBar() {
   );
 }
 
+/** A legend arrow drawn at the width the map uses for `share` of the largest flow. */
+function SampleArrow({ color, share }: { color: number; share: number }) {
+  const width = arrowWidth(share, 1);
+  const head = Math.max(2 * width, 7);
+  return (
+    <svg width="44" height="16" viewBox="0 0 44 16" aria-hidden="true">
+      <polygon
+        points={`2,${8 - width / 2} ${42 - head},${8 - width / 2} ${42 - head},${8 - head / 2} 42,8 ${42 - head},${8 + head / 2} ${42 - head},${8 + width / 2} 2,${8 + width / 2}`}
+        fill={cssColor(color)}
+        stroke="#0b111a"
+        strokeWidth="1"
+      />
+    </svg>
+  );
+}
+
+function FlowScale({ color, maximum, unit }: { color: number; maximum: number; unit: string }) {
+  if (!(maximum > 0)) return <div className="muted">No flow right now</div>;
+  return (
+    <div className="flow-scale">
+      <span>
+        <SampleArrow color={color} share={0.05} /> {fmt(0.05 * maximum)}
+      </span>
+      <span>
+        <SampleArrow color={color} share={1} /> {fmt(maximum)} {unit}
+      </span>
+    </div>
+  );
+}
+
 function Legend() {
   const layer = useGame((state) => state.layer);
   const good = useGame((state) => state.data?.goods[state.selectedGood]?.name);
+  const snapshot = useGame((state) => state.snapshot);
+  const data = useGame((state) => state.data);
+  const allGoods = useGame((state) => state.transportAllGoods);
+  const selectedGood = useGame((state) => state.selectedGood);
+  // Derived here, not in the selector: a selector returning a fresh object would re-render forever.
+  const transport = transportFlows({ snapshot, transportAllGoods: allGoods, selectedGood });
+  const setTransportGood = useGame((state) => state.setTransportGood);
   const gradient = (stops: readonly number[]) => `linear-gradient(to right, ${stops.map(cssColor).join(", ")})`;
   switch (layer) {
     case "realms":
       return null;
+    case "population": {
+      const range = snapshot ? populationRange(snapshot) : { smallest: 0, largest: 0 };
+      return (
+        <div className="legend" data-testid="legend">
+          <div>Population per area</div>
+          <div className="bar" style={{ background: gradient(POPULATION) }} />
+          <div className="ends">
+            <span>{count(range.smallest)}</span>
+            <span>{count(range.largest)}</span>
+          </div>
+        </div>
+      );
+    }
+    case "migration":
+      return (
+        <div className="legend" data-testid="legend">
+          <div>People moving per day, net per edge</div>
+          <FlowScale
+            color={MIGRATION_ARROW}
+            maximum={snapshot ? flowMaximum(snapshot.edges.migration) : 0}
+            unit="people per day"
+          />
+        </div>
+      );
+    case "transport": {
+      const info = transport.good === null ? undefined : data?.goods[transport.good];
+      const options = [
+        { value: -1, label: "All goods (tonnes)" },
+        ...(data?.goods ?? []).filter((g) => !g.isService).map((g) => ({ value: g.id, label: g.name })),
+      ];
+      const service = !allGoods && data?.goods[selectedGood]?.isService;
+      return (
+        <div className="legend interactive" data-testid="legend">
+          <div>Goods carried per day, each direction</div>
+          <Select
+            label="Transported good"
+            value={allGoods || service ? -1 : selectedGood}
+            options={options}
+            onChange={(value) => setTransportGood(value < 0 ? "all" : value)}
+          />
+          {transport.flows ? (
+            <FlowScale
+              color={TRANSPORT_ARROW}
+              maximum={flowMaximum(transport.flows)}
+              unit={info ? `× ${info.unit} per day` : "t/day"}
+            />
+          ) : (
+            <div className="muted">Waiting for the next snapshot…</div>
+          )}
+        </div>
+      );
+    }
     case "terrain":
       return (
         <div className="legend">

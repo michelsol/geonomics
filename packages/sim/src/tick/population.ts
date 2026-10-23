@@ -21,7 +21,9 @@ export function runPopulation(world: World): void {
   // Migration reads populations and attractiveness after growth, then applies every edge together.
   const attractiveness = scratch.attractiveness;
   const delta = scratch.migrationDelta;
+  const perEdge = scratch.edgeMigration;
   delta.fill(0);
+  perEdge.fill(0);
   for (const area of world.areas) {
     const wage = Math.max(area.wageLevel, 0);
     attractiveness[area.id] =
@@ -40,8 +42,17 @@ export function runPopulation(world: World): void {
       (source.population * migration * Math.abs(difference) * modeFactor(world, edge)) / openEdgeCount(world, source);
     delta[source.id] = (delta[source.id] as number) - migrants;
     delta[destination.id] = (delta[destination.id] as number) + migrants;
+    perEdge[edge.id] = difference > 0 ? migrants : -migrants;
   }
   for (const area of world.areas) changePopulation(world, area, delta[area.id] as number);
+}
+
+/**
+ * Migrants who crossed each edge in the last population phase, positive from area A to area B. Recomputed every tick
+ * and not part of the saved world.
+ */
+export function lastMigration(world: World): Float64Array {
+  return scratchOf(world).edgeMigration;
 }
 
 function modeFactor(world: World, edge: Edge): number {

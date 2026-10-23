@@ -105,6 +105,20 @@ describe("game store", () => {
     expect(median).toBeLessThanOrEqual(high as number);
   });
 
+  it("asks for one good's trade flows only while the transport layer shows it", () => {
+    const { state, sent } = setup();
+    state().chooseRealm(0);
+    const flowGoods = () => sent.flatMap((m) => (m.type === "setFlowGood" ? [m.good] : []));
+    state().setLayer("transport");
+    expect(flowGoods()).toEqual([]); // all goods: tonnage needs no request
+    state().setTransportGood(2);
+    expect(state().selectedGood).toBe(2);
+    state().selectGood(3);
+    state().setLayer("prices");
+    state().setTransportGood("all");
+    expect(flowGoods()).toEqual([2, 3, null]);
+  });
+
   it("turns map clicks into army moves and peace picks by mode", () => {
     const { state, sent } = setup();
     state().chooseRealm(0);

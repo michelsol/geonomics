@@ -6,6 +6,7 @@ import {
   type Command,
   type CommandEnvelope,
   encodePriceTable,
+  type GoodId,
   type GovernmentId,
   runTick,
   snapshotTransferables,
@@ -40,6 +41,7 @@ export class HostLoop {
   private lastPriceTable = Number.NEGATIVE_INFINITY;
   private recentTicks: number[] = []; // wall times of the ticks in the last second
   private msPerTick = 0;
+  private flowGood: GoodId | null = null;
 
   constructor(options: HostLoopOptions) {
     this.world = options.world;
@@ -70,6 +72,13 @@ export class HostLoop {
     this.paused = false;
     this.emitStatus();
     this.wake(0);
+  }
+
+  /** Chooses the good whose trade flows snapshots carry; while paused the next snapshot goes out at once. */
+  setFlowGood(good: GoodId | null): void {
+    if (this.stopped || good === this.flowGood) return;
+    this.flowGood = good;
+    if (this.paused) this.emitSnapshot();
   }
 
   setSpeed(speed: Speed): void {
@@ -137,7 +146,7 @@ export class HostLoop {
   }
 
   private emitSnapshot(): void {
-    const snapshot = buildSnapshot(this.world, this.viewer, this.knownEdges);
+    const snapshot = buildSnapshot(this.world, this.viewer, this.knownEdges, { flowGood: this.flowGood });
     this.knownEdges = this.world.edges.length;
     this.lastSnapshot = this.now();
     this.post({ type: "snapshot", snapshot }, snapshotTransferables(snapshot));

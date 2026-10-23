@@ -27,6 +27,7 @@ export interface Scratch {
   migrationDelta: Float64Array; // per area: net migrants this tick
   attractiveness: Float64Array; // per area
   edgeTonnage: Float64Array; // per edge and direction (2 × edge + 0 for A→B, + 1 for B→A): tonnes this tick
+  edgeMigration: Float64Array; // per edge: migrants this tick, positive from A to B
   flows: TradeFlows; // trade flows computed this tick, applied together
   stateWorkers: (Float64Array | null)[]; // per area, per good: workers of government produce jobs; null when none
   taxDue: Float64Array; // per area: production and consumption taxes owed this tick
@@ -111,6 +112,7 @@ function createScratch(world: World, previous: Scratch | undefined): Scratch {
     migrationDelta: new Float64Array(areaCount),
     attractiveness: new Float64Array(areaCount),
     edgeTonnage: new Float64Array(world.edges.length * 2),
+    edgeMigration: new Float64Array(world.edges.length),
     flows: previous?.flows ?? createFlows(1024),
     stateWorkers: world.areas.map(() => null),
     taxDue: new Float64Array(areaCount),

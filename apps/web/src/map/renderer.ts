@@ -2,22 +2,28 @@
 // shows changes, and the scene is rendered on demand, so an idle map costs nothing per frame.
 import { EDGE_ACTIVE, EDGE_BLOCKED, type Snapshot, type StaticData } from "@geonomics/sim";
 import { type Application, Container, Graphics } from "pixi.js";
-import { priceOf } from "../state/selectors";
+import { populationRange, priceOf, transportFlows } from "../state/selectors";
 import type { GameState } from "../state/store";
+import { ARROW_MIN_SHARE, arrowPolygon, arrowWidth, MAX_ARROWS } from "./arrows";
 import {
   AIR_ROUTE,
+  ARROW_OUTLINE,
   BLOCKED,
   BORDER,
   CELL_LINE,
+  dimColor,
+  MIGRATION_ARROW,
   NEUTRAL,
   PICKED,
   parseColor,
+  populationColor,
   priceColor,
   resourceColor,
   SEA_ROUTE,
   SELECTION,
   satisfactionColor,
   TERRAIN_COLORS,
+  TRANSPORT_ARROW,
   WATER,
   wageColor,
 } from "./colors";
@@ -31,6 +37,7 @@ interface Drawn {
   cells: unknown[];
   lines: unknown[];
   routes: unknown[];
+  flows: unknown[];
   markers: unknown[];
   selection: unknown[];
 }
@@ -43,6 +50,7 @@ export class MapRenderer {
   private readonly cells = new Graphics();
   private readonly lines = new Graphics();
   private readonly routes = new Graphics();
+  private readonly flows = new Graphics();
   private readonly markers = new Graphics();
   private readonly selection = new Graphics();
   private drawn: Partial<Drawn> = {};
@@ -51,13 +59,14 @@ export class MapRenderer {
   private frame = 0;
   private state: GameState | null = null;
   private ownerKey = "";
+  private populations: { smallest: number; largest: number } = { smallest: 0, largest: 0 };
 
   constructor(
     private readonly app: Application,
     private readonly data: StaticData,
     private readonly geometry: MapGeometry,
   ) {
-    this.root.addChild(this.cells, this.lines, this.routes, this.markers, this.selection);
+    this.root.addChild(this.cells, this.lines, this.routes, this.flows, this.markers, this.selection);
     app.stage.addChild(this.root);
     app.renderer.background.color = WATER;
     this.fit();
@@ -69,7 +78,7 @@ export class MapRenderer {
     const { snapshot, layer, priceTable, selectedGood, governments } = state;
     const owners = snapshot ? this.owners(snapshot) : "";
     const cellInputs =
-      layer === "realms"
+      layer === "realms" || layer === "migration" || layer === "transport"
         ? [layer, owners, governments.length]
         : layer === "prices"
           ? [layer, priceTable, selectedGood]
@@ -112,6 +121,11 @@ export class MapRenderer {
       this.drawRoutes(state, px);
       this.drawn.routes = routeInputs;
     }
+    const flowInputs = [state.layer, state.snapshot, state.transportAllGoods, state.selectedGood, this.lineScale];
+    if (changed(this.drawn.flows, flowInputs)) {
+      this.drawFlows(state, px);
+      this.drawn.flows = flowInputs;
+    }
     const markerInputs = [state.snapshot, state.selectedArmy, this.lineScale];
     if (changed(this.drawn.markers, markerInputs)) {
       this.drawMarkers(state, px);
@@ -129,11 +143,19 @@ export class MapRenderer {
     switch (state.layer) {
       case "terrain":
         return TERRAIN_COLORS[(data.areas[area] as StaticData["areas"][number]).terrain];
-      case "realms": {
-        const owner = snapshot ? (snapshot.areas.owner[area] as number) : -1;
-        const color = owner >= 0 ? state.governments[owner]?.color : undefined;
-        return color ? parseColor(color) : NEUTRAL;
-      }
+      case "realms":
+        return this.realmColor(state, area);
+      case "migration":
+      case "transport":
+        return dimColor(this.realmColor(state, area));
+      case "population":
+        return snapshot
+          ? populationColor(
+              snapshot.areas.population[area] as number,
+              this.populations.smallest,
+              this.populations.largest,
+            )
+          : NEUTRAL;
       case "prices": {
         if (!state.priceTable) return NEUTRAL;
         const good = data.goods[state.selectedGood];
@@ -150,6 +172,12 @@ export class MapRenderer {
       case "wage":
         return snapshot ? wageColor(snapshot.areas.wageLevel[area] as number) : NEUTRAL;
     }
+  }
+
+  private realmColor(state: GameState, area: number): number {
+    const owner = state.snapshot ? (state.snapshot.areas.owner[area] as number) : -1;
+    const color = owner >= 0 ? state.governments[owner]?.color : undefined;
+    return color ? parseColor(color) : NEUTRAL;
   }
 
   private bestCapacities = new Map<number, number>();
@@ -169,6 +197,7 @@ export class MapRenderer {
 
   private drawCells(state: GameState): void {
     const g = this.cells.clear();
+    if (state.layer === "population" && state.snapshot) this.populations = populationRange(state.snapshot);
     for (let area = 0; area < this.geometry.cells.length; area++) {
       const polygon = this.geometry.cells[area] as number[];
       if (polygon.length < 6) continue;
@@ -232,6 +261,57 @@ export class MapRenderer {
       blocked = true;
     }
     if (blocked) g.stroke({ width: 2.5 * px, color: BLOCKED, alpha: 0.9 });
+  }
+
+  /** Arrows of the migration layer (net migrants per edge) or the transport layer (each direction of trade). */
+  private drawFlows(state: GameState, px: number): void {
+    const g = this.flows.clear();
+    const edges = state.snapshot?.edges;
+    if (!edges || (state.layer !== "migration" && state.layer !== "transport")) return;
+    const position = (area: number) => this.data.areas[area] as StaticData["areas"][number];
+    const candidates: { from: number; to: number; flow: number }[] = [];
+    let maximum = 0;
+    const add = (from: number, to: number, flow: number) => {
+      if (flow <= 0) return;
+      candidates.push({ from, to, flow });
+      maximum = Math.max(maximum, flow);
+    };
+    if (state.layer === "migration") {
+      for (const [id, edge] of state.edges.entries()) {
+        const flow = edges.migration[id] ?? 0;
+        if (flow > 0) add(edge.areaA, edge.areaB, flow);
+        else if (flow < 0) add(edge.areaB, edge.areaA, -flow);
+      }
+    } else {
+      const { flows } = transportFlows(state);
+      if (!flows) return;
+      for (const [id, edge] of state.edges.entries()) {
+        add(edge.areaA, edge.areaB, flows[2 * id] ?? 0);
+        add(edge.areaB, edge.areaA, flows[2 * id + 1] ?? 0);
+      }
+    }
+    const shown = candidates.filter((c) => c.flow >= ARROW_MIN_SHARE * maximum);
+    if (shown.length > MAX_ARROWS) shown.sort((a, b) => b.flow - a.flow).length = MAX_ARROWS;
+    const sideways = state.layer === "transport"; // both directions of trade can share an edge
+    const polygons: number[][] = [];
+    const outlines: number[][] = [];
+    for (const { from, to, flow } of shown) {
+      const a = position(from);
+      const b = position(to);
+      const width = arrowWidth(flow, maximum) * px;
+      const offset = sideways ? width / 2 + px : 0;
+      const polygon = arrowPolygon(a.x, a.y, b.x, b.y, width, offset, px);
+      if (!polygon) continue;
+      polygons.push(polygon);
+      outlines.push(arrowPolygon(a.x, a.y, b.x, b.y, width, offset, px, px) as number[]);
+    }
+    if (polygons.length === 0) return;
+    // The outline is a slightly larger dark arrow underneath: fills tessellate far faster than strokes, which matters
+    // with thousands of arrows redrawn with every snapshot.
+    for (const outline of outlines) g.poly(outline);
+    g.fill({ color: ARROW_OUTLINE, alpha: 0.8 });
+    for (const polygon of polygons) g.poly(polygon);
+    g.fill({ color: state.layer === "migration" ? MIGRATION_ARROW : TRANSPORT_ARROW });
   }
 
   private drawMarkers(state: GameState, px: number): void {

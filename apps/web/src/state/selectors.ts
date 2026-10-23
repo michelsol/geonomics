@@ -144,3 +144,34 @@ export function employmentOf(
   }
   return result;
 }
+
+/** Smallest and largest population of an inhabited area on the map. */
+export function populationRange(snapshot: Snapshot): { smallest: number; largest: number } {
+  let smallest = Number.POSITIVE_INFINITY;
+  let largest = 0;
+  for (const population of snapshot.areas.population) {
+    if (population <= 0) continue;
+    smallest = Math.min(smallest, population);
+    largest = Math.max(largest, population);
+  }
+  return { smallest: Number.isFinite(smallest) ? smallest : 0, largest };
+}
+
+/** Largest flow in an array of edge flows, whatever its sign. */
+export function flowMaximum(flows: ArrayLike<number>): number {
+  let maximum = 0;
+  for (let i = 0; i < flows.length; i++) maximum = Math.max(maximum, Math.abs(flows[i] as number));
+  return maximum;
+}
+
+/** What the transport layer shows: one good's units per day, or every good's tonnes per day. */
+export function transportFlows(state: {
+  snapshot: Snapshot | null;
+  transportAllGoods: boolean;
+  selectedGood: number;
+}): { flows: Float32Array | null; good: number | null } {
+  const edges = state.snapshot?.edges;
+  if (!edges) return { flows: null, good: null };
+  if (state.transportAllGoods) return { flows: edges.tonnage, good: null };
+  return { flows: edges.goodFlow, good: state.selectedGood };
+}

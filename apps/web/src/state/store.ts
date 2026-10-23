@@ -7,7 +7,16 @@ import { History } from "./history";
 import { priceExtremes, priceOf, realmPopulation } from "./selectors";
 
 export type Screen = "newGame" | "chooseRealm" | "game" | "ended";
-export type Layer = "realms" | "prices" | "resources" | "satisfaction" | "wage" | "terrain";
+export type Layer =
+  | "realms"
+  | "population"
+  | "prices"
+  | "resources"
+  | "satisfaction"
+  | "wage"
+  | "migration"
+  | "transport"
+  | "terrain";
 export type Mode = { kind: "select" } | { kind: "moveArmy"; army: number } | { kind: "pickPeaceAreas" };
 
 export interface Toast {
@@ -44,6 +53,7 @@ export interface GameState {
   selectedGood: number;
   selectedArmy: number | null;
   layer: Layer;
+  transportAllGoods: boolean; // the transport layer shows total tonnes, not the selected good
   mode: Mode;
   peaceAreas: number[]; // areas picked on the map for a peace proposal
   toasts: Toast[];
@@ -63,6 +73,7 @@ export interface GameState {
   selectGood(good: number): void;
   selectArmy(army: number | null): void;
   setLayer(layer: Layer): void;
+  setTransportGood(good: number | "all"): void;
   setMode(mode: Mode): void;
   togglePeaceArea(area: number): void;
   toast(text: string): void;
@@ -91,6 +102,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     selectedGood: 0,
     selectedArmy: null,
     layer: "realms",
+    transportAllGoods: true,
     mode: { kind: "select" },
     peaceAreas: [],
     toasts: [],
@@ -141,12 +153,18 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     },
     selectGood(good) {
       set({ selectedGood: good });
+      watchFlows();
     },
     selectArmy(army) {
       set({ selectedArmy: army });
     },
     setLayer(layer) {
       set({ layer });
+      watchFlows();
+    },
+    setTransportGood(good) {
+      set(good === "all" ? { transportAllGoods: true } : { transportAllGoods: false, selectedGood: good });
+      watchFlows();
     },
     setMode(mode) {
       // Picking peace areas starts from an empty selection; the picks stay for the proposal form afterwards.
@@ -180,9 +198,11 @@ export function createGameStore(port: Port): StoreApi<GameState> {
             historyVersion: 0,
             selectedGood: firstNecessityGood(message.data),
             layer: "realms",
+            transportAllGoods: true,
             mode: { kind: "select" },
             peaceAreas: [],
           });
+          watchFlows();
           return;
         case "snapshot": {
           if (state.screen !== "game") return;
@@ -235,6 +255,16 @@ export function createGameStore(port: Port): StoreApi<GameState> {
       }
     },
   }));
+
+  // Snapshots carry one good's trade flows, only while the transport layer shows that good.
+  let watched: number | null = null;
+  function watchFlows(): void {
+    const { layer, transportAllGoods, selectedGood } = store.getState();
+    const good = layer === "transport" && !transportAllGoods ? selectedGood : null;
+    if (good === watched) return;
+    watched = good;
+    port.postMessage({ type: "setFlowGood", good });
+  }
   return store;
 }
 

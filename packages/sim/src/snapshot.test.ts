@@ -8,7 +8,9 @@ import {
   snapshotTransferables,
 } from "./snapshot";
 import { realmWorld, send } from "./testing";
+import { lastMigration } from "./tick/population";
 import { runTick } from "./tick/tick";
+import { lastTradeFlows, lastTradeTonnage } from "./tick/trade";
 
 describe("snapshots", () => {
   it("send stocks and flows only for the viewer's areas and their neighbors", () => {
@@ -68,7 +70,44 @@ describe("snapshots", () => {
     const snapshot = buildSnapshot(realmWorld(), 0);
     const buffers = snapshotTransferables(snapshot);
     expect(new Set(buffers).size).toBe(buffers.length);
-    expect(buffers.length).toBe(11 + 3 + 4 * 8 + 3 * 7);
+    // Areas, edges (transport cost, capacity, flags, tonnage, migration), area details, area states.
+    expect(buffers.length).toBe(11 + 5 + 4 * 8 + 3 * 7);
+    expect(snapshotTransferables(buildSnapshot(realmWorld(), 0, undefined, { flowGood: 0 })).length).toBe(
+      buffers.length + 1,
+    );
+  });
+
+  it("carry the last tick's migration and trade per edge and day", () => {
+    const world = realmWorld({ pace: { gameDaysPerTick: 0.5 } });
+    // The Valley loses its primary goods and its stock: it imports, and people leave for better-supplied areas.
+    const valley = world.areas[1] as (typeof world.areas)[number];
+    valley.naturalCapacity.fill(0);
+    valley.naturalCapacityMaximum.fill(0);
+    valley.stock.fill(0);
+    for (let i = 0; i < 20; i++) runTick(world);
+    const flows = lastTradeFlows(world);
+    expect(flows.length).toBeGreaterThan(0);
+    const good = (flows[0] as (typeof flows)[number]).good;
+    const snapshot = buildSnapshot(world, null, undefined, { flowGood: good });
+    const migration = lastMigration(world);
+    const tonnage = lastTradeTonnage(world);
+    expect(Array.from(migration).some((v) => v !== 0)).toBe(true);
+    for (let e = 0; e < world.edges.length; e++) {
+      expect(snapshot.edges.migration[e]).toBeCloseTo((migration[e] as number) / 0.5, 3);
+      expect(snapshot.edges.tonnage[2 * e]).toBeCloseTo((tonnage[2 * e] as number) / 0.5, 3);
+      expect(snapshot.edges.tonnage[2 * e + 1]).toBeCloseTo((tonnage[2 * e + 1] as number) / 0.5, 3);
+    }
+    const expected = new Float64Array(2 * world.edges.length);
+    for (const flow of flows) {
+      if (flow.good !== good) continue;
+      const slot = 2 * flow.edge + (world.edges[flow.edge]?.areaA === flow.seller ? 0 : 1);
+      expected[slot] = (expected[slot] as number) + flow.quantity / 0.5;
+    }
+    expect(Array.from(snapshot.edges.goodFlow ?? []).map((v) => Math.round(v * 1000))).toEqual(
+      Array.from(expected).map((v) => Math.round(Math.fround(v) * 1000)),
+    );
+    expect(buildSnapshot(world, null).edges.goodFlow).toBeNull();
+    expect(buildSnapshot(world, null, undefined, { flowGood: 99 }).edges.goodFlow).toBeNull();
   });
 });
 

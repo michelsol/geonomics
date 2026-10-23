@@ -52,6 +52,9 @@ function handle(message: ToWorker): void {
     case "setSpeed":
       loop?.setSpeed(message.speed);
       return;
+    case "setFlowGood":
+      loop?.setFlowGood(message.good);
+      return;
     case "pause":
       loop?.pause();
       return;
