@@ -4,6 +4,8 @@
   "name": "geonomics-broker",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
+  // Served at https://geonomics-broker.<account subdomain>.workers.dev; the deploy prints the address.
+  "workers_dev": true,
   "durable_objects": {
     "bindings": [{ "name": "BROKER", "class_name": "Broker" }]
   },
