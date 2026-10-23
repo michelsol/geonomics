@@ -39,7 +39,9 @@ TURN_KEY_API_TOKEN=...
    If Wrangler asks whether to create the Worker `geonomics-broker`, answer yes. `wrangler secret list` shows the names stored, never the values.
 
 4. **Check the allowed origins.** `ALLOWED_ORIGINS` in [wrangler.jsonc](wrangler.jsonc) lists the pages that may use the broker. Add your GitHub Pages origin, or a custom domain, if it differs.
-5. **Deploy:** `pnpm --filter @geonomics/broker run deploy`. Wrangler prints the Worker's URL, such as `https://geonomics-broker.<account>.workers.dev`.
+5. **Deploy** from your machine: `pnpm --filter @geonomics/broker run deploy`. Wrangler prints the Worker's URL, such as `https://geonomics-broker.<account>.workers.dev`. Pushing to GitHub does not deploy the Worker; it only builds the game.
+
+   A new account first needs a `workers.dev` subdomain (error 10063): open Workers & Pages in the Cloudflare dashboard once, choose a subdomain if asked, then deploy again.
 6. **Point the game at it.** In the GitHub repository, go to Settings → Secrets and variables → Actions → Variables. Add `BROKER_URL` with the Worker's URL, then rerun the Pages workflow. Builds without the variable keep using the PeerJS cloud.
 7. **Check the relay.** Open the game with `?relay=1`, host a game, and join from another network, such as a phone on mobile data. `?relay=1` allows relayed connections only, so joining at all shows TURN works. In Chrome, `chrome://webrtc-internals` shows the selected candidate pair as `relay`.
 
