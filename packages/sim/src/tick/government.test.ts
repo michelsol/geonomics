@@ -179,7 +179,7 @@ describe("taxes, subsidies and wages (phase 5)", () => {
   it("scales wages down together when the treasury runs short", () => {
     const world = realmWorld();
     for (const id of [0, 1])
-      stateOf(world, id).jobs.push({ job: { kind: "research" }, targetWorkers: 100, workers: 100 });
+      stateOf(world, id).jobs.push({ job: { kind: "fortify" }, targetWorkers: 100, workers: 100 });
     const bill = 2 * 100 * world.config.economy.hoursPerWorkerDay;
     government(world).treasury = bill / 4;
     const savings = [areaOf(world, 0).savings, areaOf(world, 1).savings];
@@ -236,7 +236,7 @@ describe("hiring, quitting and firing (phase 7)", () => {
     const world = realmWorld();
     for (const id of [0, 1, 2]) {
       send(world, { type: "setWageOffer", area: id, wageOffer: 2 });
-      send(world, { type: "setJobTarget", area: id, job: { kind: "research" }, targetWorkers: 300 });
+      send(world, { type: "setJobTarget", area: id, job: { kind: "fortify" }, targetWorkers: 300 });
     }
     for (let i = 0; i < 100; i++) runTick(world);
     for (const id of [0, 1, 2]) {
@@ -305,7 +305,7 @@ describe("government jobs (phase 10)", () => {
     expect(costs.at(-1)).toBe(g.minimumTransportCostFactor);
   });
 
-  it("builds roads, fortifications, ports, airports and research with worker-days", () => {
+  it("builds roads, fortifications, ports and airports with worker-days", () => {
     const world = realmWorld();
     const g = world.config.government;
     const t = world.config.transport;
@@ -315,7 +315,6 @@ describe("government jobs (phase 10)", () => {
     assign(1, { kind: "fortify" }, g.fortificationWorkerDaysPerLevel);
     assign(0, { kind: "buildPort" }, t.portWorkerDaysPerLevel);
     assign(1, { kind: "buildAirport" }, t.airportWorkerDaysPerLevel);
-    assign(2, { kind: "research" }, g.researchWorkerDaysPerLevel);
     const sea = world.edges[2] as World["edges"][number];
     const seaCapacity = sea.capacityPerDay;
     runJobs(world);
@@ -329,7 +328,6 @@ describe("government jobs (phase 10)", () => {
     expect(sea.capacityPerDay).toBe(seaCapacity); // the isle's port is still level 1
     expect(areaOf(world, 1).airportLevel).toBe(1);
     expect(world.edges.some((edge) => edge.mode === "air" && (edge.areaA === 1 || edge.areaB === 1))).toBe(true);
-    expect(government(world).researchLevel).toBe(1);
   });
 });
 
@@ -342,7 +340,7 @@ describe("money", () => {
     send(world, { type: "setRealmPolicy", setting: { policy: "productionTaxRate", good: grain, value: -0.2 } });
     send(world, { type: "setRealmPolicy", setting: { policy: "exportTariffRate", good: grain, value: 0.2 } });
     send(world, { type: "setWageOffer", area: 1, wageOffer: 2 });
-    send(world, { type: "setJobTarget", area: 1, job: { kind: "research" }, targetWorkers: 300 });
+    send(world, { type: "setJobTarget", area: 1, job: { kind: "fortify" }, targetWorkers: 300 });
     send(world, {
       type: "addStandingOrder",
       order: {
@@ -358,6 +356,6 @@ describe("money", () => {
     ]);
     for (let i = 0; i < 20; i++) runTick(world);
     expect(totalMoney(world)).toBeCloseTo(money, 3);
-    expect(government(world).researchProgress).toBeGreaterThan(0);
+    expect(areaOf(world, 1).fortificationProgress).toBeGreaterThan(0); // the government workers were paid and worked
   });
 });

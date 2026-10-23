@@ -163,8 +163,7 @@ export type GovernmentJob =
   | { kind: "buildInfrastructure"; edge: EdgeId } // lowers the transport cost of an adjacent edge
   | { kind: "fortify" } // raises the area's fortification level
   | { kind: "buildPort" } // coastal areas only: raises the area's port level
-  | { kind: "buildAirport" } // raises the area's airport level
-  | { kind: "research" }; // raises the realm-wide productivity bonus
+  | { kind: "buildAirport" }; // raises the area's airport level
 
 export interface JobAssignment {
   job: GovernmentJob; // what these workers do
@@ -253,8 +252,6 @@ export interface Government {
   marketOrders: MarketOrder[]; // open buy and sell orders
   standingOrders: StandingOrder[]; // automation rules evaluated every tick
   depotTransfers: DepotTransfer[]; // goods travelling between the government's own depots
-  researchLevel: number; // realm-wide productivity bonus level
-  researchProgress: number; // worker-days accumulated toward the next research level
   soldierWage: number; // wage paid per soldier-hour, in man-hours
 }
 

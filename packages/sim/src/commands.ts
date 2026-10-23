@@ -253,7 +253,6 @@ function validateJob(world: World, area: Area, job: GovernmentJob): string | nul
       return area.isCoastal ? null : "ports can only be built in coastal areas";
     case "fortify":
     case "buildAirport":
-    case "research":
       return null;
     default:
       return "unknown job";

@@ -63,8 +63,6 @@ export interface GovernmentView {
   marketOrders: MarketOrder[];
   standingOrders: StandingOrder[];
   depotTransfers: DepotTransfer[];
-  researchLevel: number;
-  researchProgress: number;
   soldierWage: number;
 }
 
@@ -324,8 +322,6 @@ function governmentView(government: World["governments"][number]): GovernmentVie
       rule: { ...o.rule },
     })),
     depotTransfers: government.depotTransfers.map((t) => ({ ...t })),
-    researchLevel: government.researchLevel,
-    researchProgress: government.researchProgress,
     soldierWage: government.soldierWage,
   };
 }

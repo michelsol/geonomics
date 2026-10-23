@@ -1,4 +1,4 @@
-// The player's realm: treasury, population, research, realm-wide policies, and ending the session.
+// The player's realm: treasury, population, realm-wide policies, and ending the session.
 import { realmPopulation } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { Chart } from "../Chart";
@@ -13,7 +13,7 @@ export function GovernmentPanel() {
   const endGame = useGame((state) => state.endGame);
   const client = useGame((state) => state.session.role === "client");
   if (!view) return null;
-  const { data, snapshot, government } = view;
+  const { snapshot, government } = view;
   const summary = snapshot.governments[government.id];
   const realm = history?.realm;
   const days = realm?.xs() ?? [];
@@ -25,7 +25,6 @@ export function GovernmentPanel() {
       ? ((treasuries.at(-1) as number) - (treasuries.at(-1 - span) as number)) /
         Math.max((days.at(-1) as number) - (days.at(-1 - span) as number), 1e-9)
       : 0;
-  const research = data.config.government;
 
   return (
     <>
@@ -39,10 +38,6 @@ export function GovernmentPanel() {
           <Stat label="Per day" value={`${perDay >= 0 ? "+" : ""}${fmt(perDay)}`} />
           <Stat label="Population" value={count(realmPopulation(snapshot))} />
           <Stat label="Areas" value={government.ownedAreas.length} />
-          <Stat
-            label="Research"
-            value={`L${government.researchLevel} · ${Math.round((100 * government.researchProgress) / research.researchWorkerDaysPerLevel)}%`}
-          />
         </div>
         {government.capital !== null && (
           <div>

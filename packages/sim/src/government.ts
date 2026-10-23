@@ -62,8 +62,6 @@ export function createGovernment(world: World, init: GovernmentInit): Government
     marketOrders: [],
     standingOrders: [],
     depotTransfers: [],
-    researchLevel: 0,
-    researchProgress: 0,
     soldierWage: world.config.military.soldierWage,
   };
   world.governments.push(government);

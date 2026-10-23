@@ -71,8 +71,6 @@ export interface WorldConfig {
     minimumTransportCostFactor: number; // transport cost never falls below this share of base
     fortificationWorkerDaysPerLevel: number; // work needed per fortification level
     maximumFortificationLevel: number; // highest fortification level
-    researchWorkerDaysPerLevel: number; // work needed per research level
-    researchProductivityBonus: number; // productivity added per research level
     startingTreasuryDays: number; // starting treasury, in days of the realm's income
     standingOrderShareOfDemandPerDay: number; // pacing of standing orders, as a share of the area's total demand per day
   };
@@ -184,8 +182,6 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
     minimumTransportCostFactor: 0.3,
     fortificationWorkerDaysPerLevel: 3000,
     maximumFortificationLevel: 3,
-    researchWorkerDaysPerLevel: 10000,
-    researchProductivityBonus: 0.05,
     startingTreasuryDays: 30,
     standingOrderShareOfDemandPerDay: 0.2,
   },

@@ -19,7 +19,6 @@ const JOB_LABELS: Record<JobKind, string> = {
   fortify: "Fortify",
   buildPort: "Build port",
   buildAirport: "Build airport",
-  research: "Research",
 };
 
 export function JobsPanel() {
@@ -28,7 +27,7 @@ export function JobsPanel() {
   const selected = useGame((state) => state.selectedArea);
   const edges = useGame((state) => state.edges);
   const selectArea = useGame((state) => state.selectArea);
-  const [job, setJob] = useState({ kind: "research" as JobKind, good: 0, edge: -1, workers: 100 });
+  const [job, setJob] = useState({ kind: "fortify" as JobKind, good: 0, edge: -1, workers: 100 });
   if (!view) return null;
   const { data, government } = view;
   const area = selected !== null && government.ownedAreas.includes(selected) ? selected : government.capital;

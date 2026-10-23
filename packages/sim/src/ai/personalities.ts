@@ -7,7 +7,7 @@ export interface Traits {
   maximumTax: number; // nor above this
   reserveDays: number; // days of tax income the treasury should hold
   jobShare: number; // share of tax income, after soldiers' wages, spent on government jobs
-  jobWeights: { research: number; infrastructure: number; ports: number; fortify: number };
+  jobWeights: { infrastructure: number; ports: number; fortify: number };
   armyShare: number; // standing army as a share of the realm's population
   aggressive: boolean; // declares wars of conquest
   firstWarDelayDays: number; // days after its first decision before a first war
@@ -33,7 +33,7 @@ export const TRAITS: Record<Exclude<Personality, "idle">, Traits> = {
     maximumTax: 0.2,
     reserveDays: 60,
     jobShare: 0.4,
-    jobWeights: { research: 0.1, infrastructure: 0.45, ports: 0.4, fortify: 0.05 },
+    jobWeights: { infrastructure: 0.5, ports: 0.45, fortify: 0.05 },
     armyShare: 0.005,
     ...PEACEFUL,
   },
@@ -43,7 +43,7 @@ export const TRAITS: Record<Exclude<Personality, "idle">, Traits> = {
     maximumTax: 0.25,
     reserveDays: 60,
     jobShare: 0.6,
-    jobWeights: { research: 0.35, infrastructure: 0.35, ports: 0.1, fortify: 0.2 },
+    jobWeights: { infrastructure: 0.55, ports: 0.15, fortify: 0.3 },
     armyShare: 0.01,
     ...PEACEFUL,
   },
@@ -53,7 +53,7 @@ export const TRAITS: Record<Exclude<Personality, "idle">, Traits> = {
     maximumTax: 0.3,
     reserveDays: 45,
     jobShare: 0.25,
-    jobWeights: { research: 0.2, infrastructure: 0.2, ports: 0.05, fortify: 0.55 },
+    jobWeights: { infrastructure: 0.3, ports: 0.05, fortify: 0.65 },
     armyShare: 0.015,
     aggressive: true,
     firstWarDelayDays: 90,

@@ -170,7 +170,7 @@ Findings: [design-notes.md](design-notes.md#map-generation-roadmap-stage-5).
 - Phase 5: taxes, collection in kind, subsidies, wages, and payments scaled down when the treasury runs short.
 - Phase 2: market orders and depot transfers, including pathfinding over all edge modes.
 - Phase 7 additions: hiring, quitting, firing.
-- Government jobs: production, infrastructure, fortification, port, airport, research.
+- Government jobs: production, infrastructure, fortification, port, airport, research (research was removed after stage 10).
 - Standing orders evaluated each tick.
 
 **Exit:**
@@ -286,6 +286,6 @@ Findings: [design-notes.md](design-notes.md#ai-governments-roadmap-stage-10).
 | Meeting the tick budget at 3,000 areas with the large catalog (about 50 ms per tick in Node, 65 ms in the browser worker). The interface stays smooth because the simulation runs in a worker; only the top speed on large maps is limited | After stage 11, if players need faster large maps |
 | ~~Whether there is a soft goal (score, prosperity ranking) despite sandbox-first~~ | Settled in stage 8: none; the end-of-session screen only reports days, population, areas and treasury |
 | ~~Whether a dropped human player's government is handed to the AI~~ | Settled in stage 10: it stays reserved for the player while the AI runs it, and the host can release it |
-| Research leaves people hungrier past a few levels: higher productivity should never cause hunger (design notes, AI governments). The AI stops at level 5 meanwhile | Before stage 11 |
+| ~~Research leaves people hungrier past a few levels: higher productivity should never cause hunger~~ | Settled after stage 10: research is removed for now (design notes, AI governments) |
 | Naval combat and blockades on sea routes (listed as future work in §5) | After stage 11 |
-| Research gating modern recipes from the large catalog | After stage 11 |
+| Research, if it returns (with its effect on the economy fixed), and gating modern recipes from the large catalog | After stage 11 |

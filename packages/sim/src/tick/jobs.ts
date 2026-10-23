@@ -1,4 +1,4 @@
-// Phase 10, government part: progress of infrastructure, fortification, port, airport and research jobs
+// Phase 10, government part: progress of infrastructure, fortification, port and airport jobs
 // (specification §6, Government jobs). Port and airport levels are then applied by advanceInfrastructure.
 import type { Area, Edge, World } from "../types";
 
@@ -31,13 +31,6 @@ export function runJobs(world: World): void {
             break;
           case "buildAirport":
             area.airportProgress += workerDays;
-            break;
-          case "research":
-            government.researchProgress += workerDays;
-            while (government.researchProgress >= g.researchWorkerDaysPerLevel) {
-              government.researchProgress -= g.researchWorkerDaysPerLevel;
-              government.researchLevel += 1;
-            }
             break;
           case "produce":
             break; // produced in phase 1

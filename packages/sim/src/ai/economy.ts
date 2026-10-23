@@ -15,9 +15,6 @@ const RETARGET_SHARE = 0.1; // job targets change only when they move by more th
 const INFRASTRUCTURE_EDGES = 3;
 const PORT_AREAS = 2;
 const FORTIFIED_AREAS = 3;
-// Past a few levels, research hurts more than it helps: higher productivity leaves people hungrier (design notes, AI
-// governments), so the AI stops there.
-const RESEARCH_LEVEL_CAP = 5;
 const GRANARIES = 5; // a builder keeps staples in this many of its most populous areas
 
 export function decideEconomy(
@@ -95,10 +92,6 @@ function jobCandidates(view: AiView, realm: Realm): Record<keyof Traits["jobWeig
   if (capital !== null && (areas.airportLevel[capital] as number) < transport.maximumAirportLevel)
     ports.push({ area: capital, job: { kind: "buildAirport" } });
   return {
-    research:
-      capital === null || realm.government.researchLevel >= RESEARCH_LEVEL_CAP
-        ? []
-        : [{ area: capital, job: { kind: "research" } }],
     infrastructure: infrastructure.slice(0, INFRASTRUCTURE_EDGES).map((entry) => entry.candidate),
     ports,
     fortify: realm.border

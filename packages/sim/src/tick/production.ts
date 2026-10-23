@@ -3,14 +3,12 @@ import { EPSILON } from "../math";
 import type { Area, Good, GovernmentAreaState, World } from "../types";
 import { policiesOf, type Scratch, scratchOf } from "./scratch";
 
-/** Worker-hours per worker per game day at the area's productivity and its owner's research level. */
+/** Worker-hours per worker per game day at the area's productivity. */
 export function effectiveHoursPerWorkerDay(world: World, area: Area): number {
-  const owner = area.owner === null ? undefined : world.governments[area.owner];
-  const research = owner ? 1 + owner.researchLevel * world.config.government.researchProductivityBonus : 1;
-  return world.config.economy.hoursPerWorkerDay * area.productivity * research;
+  return world.config.economy.hoursPerWorkerDay * area.productivity;
 }
 
-/** Units one worker produces per game day at the area's productivity and its owner's research level. */
+/** Units one worker produces per game day at the area's productivity. */
 export function hourlyOutputPerWorker(world: World, area: Area, good: Good): number {
   return effectiveHoursPerWorkerDay(world, area) / good.laborHoursPerUnit;
 }

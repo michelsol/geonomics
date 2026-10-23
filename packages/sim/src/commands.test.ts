@@ -204,7 +204,6 @@ describe("jobs and wages", () => {
     ).toBeNull();
     expect(send(world, { type: "setJobTarget", area: 0, job: { kind: "buildPort" }, targetWorkers: 5 })).toBeNull();
     expect(send(world, { type: "setJobTarget", area: 1, job: { kind: "buildAirport" }, targetWorkers: 5 })).toBeNull();
-    expect(send(world, { type: "setJobTarget", area: 1, job: { kind: "research" }, targetWorkers: 5 })).toBeNull();
   });
 
   it("rejects ports inland, roads on routes or far edges, services, missing resources and bad numbers", () => {

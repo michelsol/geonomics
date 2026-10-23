@@ -238,8 +238,7 @@ type GovernmentJob =
   | { kind: "buildInfrastructure"; edge: EdgeId }   // lowers the transport cost of an adjacent edge
   | { kind: "fortify" }                             // raises the area's fortification level
   | { kind: "buildPort" }                           // coastal areas only: raises the area's port level
-  | { kind: "buildAirport" }                        // raises the area's airport level
-  | { kind: "research" };                           // raises the realm-wide productivity bonus
+  | { kind: "buildAirport" };                       // raises the area's airport level
 
 interface JobAssignment {
   job: GovernmentJob;                   // what these workers do
@@ -298,8 +297,6 @@ interface Government {
   marketOrders: MarketOrder[];          // open buy and sell orders
   standingOrders: StandingOrder[];      // automation rules evaluated every tick
   depotTransfers: DepotTransfer[];      // goods travelling between the government's own depots
-  researchLevel: number;                // realm-wide productivity bonus level
-  researchProgress: number;             // worker-days accumulated toward the next research level
   soldierWage: number;                  // wage paid per soldier-hour, in man-hours (starts at military.soldierWage)
 }
 
@@ -570,8 +567,6 @@ interface WorldConfig {
     minimumTransportCostFactor: number; // transport cost never falls below this share of base (default 0.3)
     fortificationWorkerDaysPerLevel: number;  // work needed per fortification level (default 3000)
     maximumFortificationLevel: number;  // highest fortification level (default 3)
-    researchWorkerDaysPerLevel: number; // work needed per research level (default 10000)
-    researchProductivityBonus: number;  // productivity added per research level (default 0.05)
     startingTreasuryDays: number;       // starting treasury, in days of the realm's income (default 30)
     standingOrderShareOfDemandPerDay: number; // pacing of standing orders, as a share of the area's daily demand (default 0.2)
   };
@@ -618,8 +613,7 @@ The private economy of every area is five steps: produce, consume, trade, repric
 workforce = area.population * config.economy.workforceShare
 // workforce = sum(privateWorkers) + government workers + unemployedWorkers
 hourlyOutputPerWorker(good) =
-  config.economy.hoursPerWorkerDay * area.productivity * (1 + researchLevel * researchProductivityBonus)
-  / good.laborHoursPerUnit                          // units per worker per day
+  config.economy.hoursPerWorkerDay * area.productivity / good.laborHoursPerUnit                          // units per worker per day
 ```
 
 ### Production
@@ -1012,7 +1006,6 @@ if (targetWorkers > workers && wageAttractiveness >= 1)
 | `fortify` | Adds worker-days toward the next fortification level of the area, up to `maximumFortificationLevel`. |
 | `buildPort` | Coastal areas only. Each `portWorkerDaysPerLevel` raises `portLevel` by one, up to `maximumPortLevel`, which raises the capacity of the area's sea routes. |
 | `buildAirport` | Each `airportWorkerDaysPerLevel` raises `airportLevel` by one, up to `maximumAirportLevel`. The first level opens air routes; the maximum level makes the airport a hub. |
-| `research` | Adds worker-days to the realm's research. Each `researchWorkerDaysPerLevel` adds `researchProductivityBonus` to productivity in every owned area. |
 
 Worker-days are `workers × days`, accumulated in phase 10.
 
@@ -1143,7 +1136,7 @@ function runTick(world: World, commands: CommandEnvelope[]): CommandRejection[] 
 7. **Labor.** Compute value added per job from smoothed prices and production taxes, and update `wageLevel`. Move private workers toward the labor each job needs, tilted by value added against the reservation wage, within `maxLaborShiftPerTick`. Then apply government hiring, quitting and firing, and soldier desertion.
 8. **Military.** Move marching armies. Resolve combat in contested areas and refill the militia of areas without attackers. Advance or decay sieges. Transfer captured areas, move capitals and eliminate governments with no area left.
 9. **Population.** Apply growth or starvation from `necessitySatisfaction`. Compute migration along active, non-blocked edges from the snapshot, scaled by each edge's mode, and apply it together.
-10. **Decay and progress.** Spoil stock, depots and transfers, and wear out carried weapons. Regenerate natural capacity: `capacity += (maximum - capacity) × (1 - exp(-regenerationRatePerDay × days))`. Apply infrastructure, fortification, port, airport and research progress. If any port or airport level changed, update the capacity of the routes touching it; if an airport level changed, also rebuild the air routes. Increment `tick` and add `gameDaysPerTick` to `gameDay`.
+10. **Decay and progress.** Spoil stock, depots and transfers, and wear out carried weapons. Regenerate natural capacity: `capacity += (maximum - capacity) × (1 - exp(-regenerationRatePerDay × days))`. Apply infrastructure, fortification, port and airport progress. If any port or airport level changed, update the capacity of the routes touching it; if an airport level changed, also rebuild the air routes. Increment `tick` and add `gameDaysPerTick` to `gameDay`.
 
 All randomness (AI choices, tie-breaks, future events) uses the seeded generator in `World.randomSeed`, so a saved game with the same command log replays identically on the same device.
 
@@ -1348,7 +1341,7 @@ Mouse or one finger pans and the wheel or a pinch zooms around the pointer. A cl
 | --- | --- | --- |
 | Area | Owner, terrain, population, average wage, satisfaction, port, airport and fortification levels, siege; for own areas and their neighbors, savings per person and unemployed; natural resources (maximum capacity, and current capacity and extraction where detail is sent). Defense of every area: militia, the owner's army power, fortification and defense power; for areas not the player's, also the soldiers needed to win and the siege time. For own areas and their neighbors: price, stock, production, consumption and trade per good. For other areas: prices only | Sort the market table by any column |
 | Good | Lowest, median and highest price with their areas; a chart over time of the world's lowest, median and highest price and the selected area's price | Show the good on the price map |
-| Realm | Treasury and its change per day, realm population and areas, research level, charts of treasury and population; the players and their realms | Invite players and release offline players' realms (host); end the game, or leave it (joined player) |
+| Realm | Treasury and its change per day, realm population and areas, charts of treasury and population; the players and their realms | Invite players and release offline players' realms (host); end the game, or leave it (joined player) |
 | Policies | Every tax and price control, realm-wide and per area; the setting in force for the chosen area, policy and good | Set or remove a policy for all areas or one area, and for one good or all goods. The production tax is chosen first. Taxes and tariffs have a slider from −100% to +100% (the number field takes up to 500%), head tax one from 0 to 2 mh per person per day; ceilings and floors take a number. The value starts at the setting in force, and Set applies it |
 | Orders | Depot contents per area, open market orders, standing orders, depot transfers in transit | Place and cancel market orders in any own area; add and remove standing orders; transfer goods between depots |
 | Jobs | For one own area or the whole realm: the workforce split between private jobs, government jobs and unemployment, and private workers, output per day and output per worker by good. Per own area: each job's target and workers, and the wage offer | Set job targets and wage offers |
@@ -1376,11 +1369,11 @@ Every realm no player holds, or whose player is offline, is run by the AI. The A
 
 ### Personalities
 
-| Personality | Plays | Tax (start, bounds) | Jobs: research, infrastructure, ports and airport, fortification | Standing orders | Army |
+| Personality | Plays | Tax (start, bounds) | Jobs: infrastructure, ports and airport, fortification | Standing orders | Army |
 | --- | --- | --- | --- | --- | --- |
-| Trader | Trade and transport | 4%, [2%, 20%] | 10%, 45%, 40%, 5% | In every area, for the six most consumed goods: buy below 0.8× labor value, up to 20 days of an area's consumption; sell above 1.3× | Defends only |
-| Builder | Growth and safety | 6%, [3%, 25%] | 35%, 35%, 10%, 20% | Granaries in the five most populous areas, for the three most consumed staples (necessity goods): keep 10 days of demand at up to 1.2× labor value, sell above 2× | Defends only |
-| Conqueror | Expansion by war | 8%, [5%, 30%] | 20%, 20%, 5%, 55% | Weapons bought at the capital below 3× labor value, up to one per soldier of its army | 1.5% of its population; wars of conquest |
+| Trader | Trade and transport | 4%, [2%, 20%] | 50%, 45%, 5% | In every area, for the six most consumed goods: buy below 0.8× labor value, up to 20 days of an area's consumption; sell above 1.3× | Defends only |
+| Builder | Growth and safety | 6%, [3%, 25%] | 55%, 15%, 30% | Granaries in the five most populous areas, for the three most consumed staples (necessity goods): keep 10 days of demand at up to 1.2× labor value, sell above 2× | Defends only |
+| Conqueror | Expansion by war | 8%, [5%, 30%] | 30%, 5%, 65% | Weapons bought at the capital below 3× labor value, up to one per soldier of its army | 1.5% of its population; wars of conquest |
 
 - **Mix.** Founding gives each realm a personality from the game's mix, in a seeded order: balanced (a third each), peaceful (half traders, half builders) or aggressive (half conquerors, a quarter traders, a quarter builders). "Idle" never acts; only test worlds use it.
 - **Shown.** Players see each realm's personality.
@@ -1431,7 +1424,6 @@ interface AiWar {
   - the rate stays within the personality's bounds, in steps of 0.5 points.
 - **Wages.** Wage offers and the soldier wage are 1.1× the area's (or the realm's population-weighted) wage level, within [0.1, 10], changed when they move by more than 5%.
 - **Jobs.** A share of income after soldiers' wages pays government workers (trader 40%, builder 60%, conqueror 25%), at most 1% of the realm's workforce. While the treasury falls and is below the reserve, it is cut to at most half of the current job wages. The workers are split by the personality's weights:
-  - research at the capital, up to level 5;
   - infrastructure on the three land edges between owned areas carrying the most tonnage;
   - ports in the two most populous coastal areas, and an airport at the capital, below their maximum levels;
   - fortification of the three most populous border areas, below the maximum level.

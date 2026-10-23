@@ -280,19 +280,23 @@ On 2026-10-23, Firefox 158 on Windows gathered no ICE candidates at all, not eve
 
 | Mix, seed | Realms alive | Population | Trade (t/day) | Wars declared, ended | Longest war | AI ms/tick (max) |
 | --- | --- | --- | --- | --- | --- | --- |
-| Balanced, 1 | 8/8 | +13.4% | 440k → 477k | 10, 10 | 362 days | 1.11 (5.7) |
-| Balanced, 2 | 8/8 | +12.5% | 397k → 471k | 10, 9 | 363 days | 1.11 (5.4) |
-| Balanced, 3 | 8/8 | +15.4% | 427k → 491k | 9, 8 | 356 days | 1.14 (5.3) |
-| Aggressive, 1 | 8/8 | +8.3% | 440k → 456k | 20, 19 | 368 days | 1.29 (8.2) |
-| Aggressive, 2 | 8/8 | +8.7% | 398k → 448k | 18, 17 | 310 days | 1.20 (6.4) |
-| Peaceful, 1 | 8/8 | +17.0% | 440k → 476k | 0, 0 | — | 0.99 (4.5) |
+| Balanced, 1 | 8/8 | +12.7% | 440k → 404k | 11, 9 | 362 days | 1.11 (5.0) |
+| Balanced, 2 | 8/8 | +11.9% | 397k → 392k | 10, 8 | 367 days | 1.13 (6.1) |
+| Balanced, 3 | 8/8 | +15.5% | 427k → 381k | 8, 8 | 366 days | 1.09 (5.4) |
+| Aggressive, 1 | 8/8 | +8.5% | 440k → 351k | 17, 14 | 368 days | 1.30 (5.9) |
+| Aggressive, 2 | 8/8 | +8.6% | 398k → 379k | 20, 17 | 365 days | 1.22 (7.7) |
+| Peaceful, 1 | 8/8 | +17.2% | 440k → 401k | 0, 0 | — | 0.99 (4.5) |
 
-No AI command was rejected in these runs. The tick itself takes about 10 ms, so the AI adds about a tenth. For comparison, the same map with idle realms grows about 17% over the 2,000 days. Conquerors gain areas, mostly from traders and builders, but no realm falls: a conqueror stops once it took a fifth of its enemy, or after a year. The vitest suite runs a shorter version (300 areas, the small catalog, 600 days).
+These runs are without research (removed after stage 10). No AI command was rejected. The tick itself takes about 10 ms, so the AI adds about a tenth.
+
+For comparison, the same map with idle realms grows about 17% over the 2,000 days, and its trade stays about level (440k → 435k t/day). AI realms trade 1–20% less than at the start, most likely because their production taxes lower value added and wars block edges. With research capped at level 5, its productivity gain more than offset this, and trade grew 4–19%.
+
+Conquerors gain areas, mostly from traders and builders, but no realm falls: a conqueror stops once it took a fifth of its enemy, or after a year. The vitest suite runs a shorter version (300 areas, the small catalog, 600 days).
 
 ### Tuning, and what it showed
 
 - **Spending the starting treasury.** A first version spent the treasury above its reserve on jobs over two years. The starting treasury is 30 days of the realm's whole private income, so that meant hiring several percent of the workforce. Research then climbed to hundreds of levels and people went hungry. Jobs are now paid from tax income only, up to 1% of the workforce.
-- **Research hurts past a few levels.** With idle realms and research fixed at a level for the whole run, the population grew 17% at level 0, 14% at level 10 and not at all at level 40, with necessity satisfaction falling in the larger realms. Higher productivity should never make people hungrier, so this is a fault in the economy, probably in how labor allocation or natural capacity reacts to higher output per worker. It affects human players too. Until it is fixed, the AI stops researching at level 5; the roadmap lists it.
+- **Research hurts past a few levels.** With idle realms and research fixed at a level for the whole run, the population grew 17% at level 0, 14% at level 10 and not at all at level 40, with necessity satisfaction falling in the larger realms. Higher productivity should never make people hungrier, so this is a fault in the economy, probably in how labor allocation or natural capacity reacts to higher output per worker. It affected human players too. Research was first capped at level 5 for the AI, then removed from the game to keep it simple; it can return once the economy handles higher productivity.
 - **Income.** The treasury trend mixes taxes with market trades, so a builder buying for its granaries saw its income as negative and staffed nothing. Income is now the production tax owed on the owned areas' output at their prices.
 - **Granaries in every area** cost a builder its treasury in spoiled food; they are now in its five most populous areas.
 - **Conquerors.** At 3% of the population, raised at the capital, the army emptied the capital. It is now 1.5%, raised a little at a time in the three most populous areas. Targets across the sea were unreachable for armies without a port, so war targets are land neighbors. Wars never ended while a conqueror kept capturing, until it got a conquest share and a maximum length.
