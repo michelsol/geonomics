@@ -18,8 +18,7 @@ function broker(host: string, port: number, path: string, secure: boolean): Brok
 
 /**
  * The broker: the game's own one, the PeerJS cloud without it, or `?peer=host:port[/path]` for another one (tests and
- * local play run one). `?relay=1` allows relayed connections only, to check TURN. The settings travel in the join link,
- * so joined players use the same broker.
+ * local play run one), which travels in the join link. `?relay=1` allows relayed connections only, to check TURN.
  */
 export function brokerOptions(search = location.search, builtIn = BUILT_IN_BROKER): BrokerOptions {
   const params = new URLSearchParams(search);
@@ -48,20 +47,18 @@ export function joinTarget(hash = location.hash): string | null {
   return match ? (match[1] as string) : null;
 }
 
-/** The `?peer=` setting for a broker: the PeerJS cloud when it has no host. */
-export function brokerSetting({ host, port, path }: BrokerOptions): string {
-  if (!host) return CLOUD_HOST;
-  return `${host}${port === undefined || port === 443 ? "" : `:${port}`}${path && path !== "/" ? path.replace(/\/$/, "") : ""}`;
-}
-
 /**
- * The link joining this host. It names the host's broker, so a joining page built with another broker (an older
- * cached version, a dev server restarted with another setting) still finds the host.
+ * The link joining this host: `#join=` alone, plus the host's `?peer=` when its page set one (a local broker), since a
+ * joining page otherwise uses the broker it was built with.
  */
-export function joinLink(peerId: string, broker = brokerOptions()): string {
-  const params = new URLSearchParams(location.search);
-  params.set("peer", brokerSetting(broker));
-  return `${location.origin}${location.pathname}?${params}#join=${peerId}`;
+export function joinLink(
+  peerId: string,
+  search = location.search,
+  page = `${location.origin}${location.pathname}`,
+): string {
+  const peer = new URLSearchParams(search).get("peer");
+  const query = peer ? `?${new URLSearchParams({ peer })}` : "";
+  return `${page}${query}#join=${peerId}`;
 }
 
 function stored(storage: () => Storage, key: string): string | null {

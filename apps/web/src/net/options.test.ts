@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brokerOptions, brokerSetting } from "./options";
+import { brokerOptions, joinLink } from "./options";
 
 describe("brokerOptions", () => {
   it("uses the PeerJS cloud without a built-in broker or setting", () => {
@@ -46,13 +46,7 @@ describe("brokerOptions", () => {
     });
   });
 
-  it("names the host's broker for the join link, the PeerJS cloud included", () => {
-    for (const setting of ["localhost:8787", "geonomics-broker.example.workers.dev", "signal.example/game"])
-      expect(brokerSetting(brokerOptions(`?peer=${setting}`, ""))).toBe(setting);
-    expect(brokerSetting(brokerOptions("", "https://geonomics-broker.example.workers.dev"))).toBe(
-      "geonomics-broker.example.workers.dev",
-    );
-    expect(brokerSetting(brokerOptions("", ""))).toBe("0.peerjs.com");
+  it("keeps the PeerJS cloud free of ICE requests", () => {
     expect(brokerOptions("?peer=0.peerjs.com", "")).toEqual({
       host: "0.peerjs.com",
       port: 443,
@@ -64,5 +58,14 @@ describe("brokerOptions", () => {
   it("forces relayed connections with ?relay=1", () => {
     expect(brokerOptions("?relay=1", "")).toEqual({ relayOnly: true });
     expect(brokerOptions("?peer=localhost&relay=1", "")).toMatchObject({ port: 8787, relayOnly: true });
+  });
+});
+
+describe("joinLink", () => {
+  const page = "https://michelsol.github.io/geonomics/";
+  it("carries only the host's peer id, and its broker setting when the page has one", () => {
+    expect(joinLink("abc", "", page)).toBe(`${page}#join=abc`);
+    expect(joinLink("abc", "?warmup=10&relay=1", page)).toBe(`${page}#join=abc`);
+    expect(joinLink("abc", "?peer=localhost:8787&warmup=10", page)).toBe(`${page}?peer=localhost%3A8787#join=abc`);
   });
 });

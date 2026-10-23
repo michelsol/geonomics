@@ -1253,7 +1253,7 @@ The interface uses the table in two places:
 
 ### Joining
 
-1. The host clicks Invite players. Its browser creates a PeerJS peer with a random id and shows the link `https://<site>/?<query>#join=<peer id>`. The query keeps the page's settings and always names the host's broker (`peer=`, below), so a joining page built with another broker still finds the host.
+1. The host clicks Invite players. Its browser creates a PeerJS peer with a random id and shows the link `https://<site>/#join=<peer id>`. When the host's page has a `?peer=` setting (below), the link keeps it; otherwise the joining page uses the broker it was built with, so pages built with different brokers do not meet.
 2. The joining player opens the link and gives a name; its browser opens a reliable data channel to the host and sends `hello`.
 3. The host answers `welcome`, and the player appears in the lobby. Players can join before the host starts and during the game.
 
@@ -1266,7 +1266,7 @@ The interface uses the table in two places:
 - **Protocol.** `GET /peerjs/id` gives a random id. The WebSocket `/peerjs?key=peerjs&id=&token=` answers `OPEN`, or `ID-TAKEN` when another token holds the id; the same token takes the id over. `OFFER`, `ANSWER`, `CANDIDATE`, `LEAVE` and `EXPIRE` go to the peer named by `dst`, with `src` set to the sender's id. Nothing is queued: an offer to an absent peer is answered at once with `EXPIRE`, and other messages to it are dropped. `HEARTBEAT` is ignored, and messages over 64 KB are dropped.
 - **Origins.** Pages from origins outside the Worker's `ALLOWED_ORIGINS` list are refused.
 - **ICE servers.** Before creating its peer, each browser asks the broker's `GET /ice` for ICE servers: Cloudflare STUN and TURN, with credentials minted by the Worker from its TURN key and valid for 24 hours, without port 53 URLs. A browser reuses them until an hour before they expire. When the broker has no TURN key, does not answer within 5 seconds, or the broker is the PeerJS cloud, PeerJS's default servers apply: Google's public STUN, without a working relay.
-- **Relay check.** `?relay=1` allows relayed connections only, to check that TURN works; it travels in the join link like `?peer=`.
+- **Relay check.** `?relay=1` allows relayed connections only, to check that TURN works. It applies to the page it is set on and does not travel in the join link.
 
 ### Hosting on mobile
 
