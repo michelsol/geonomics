@@ -60,6 +60,7 @@ export interface GameState {
   screen: Screen;
   progress: { stage: string; done: number } | null;
   menuError: string | null; // why the last new or loaded game failed, shown on the menu
+  updateReady: boolean; // a new version of the app is installed and waits for a reload
   data: StaticData | null;
   edges: StaticEdge[]; // static edges plus routes created during the game
   governments: GovernmentSummary[];
@@ -88,6 +89,7 @@ export interface GameState {
   /** Saves the game in its autosave slot now, as when the tab is hidden. */
   autosave(): void;
   exportSave(): void;
+  setUpdateReady(): void;
   chooseRealm(government: number | null): void; // null: watch as a spectator
   setSession(session: Partial<Session>): void;
   /** A joined player's role, from the host: in the game once it holds a realm or watches. */
@@ -121,6 +123,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     screen: "newGame",
     progress: null,
     menuError: null,
+    updateReady: false,
     data: null,
     edges: [],
     governments: [],
@@ -170,6 +173,9 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     },
     exportSave() {
       port.postMessage({ type: "export" });
+    },
+    setUpdateReady() {
+      set({ updateReady: true });
     },
     chooseRealm(government) {
       port.postMessage({ type: "start", government });

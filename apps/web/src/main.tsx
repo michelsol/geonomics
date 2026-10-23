@@ -7,6 +7,7 @@ import { App } from "./App";
 import type { FromWorker } from "./host/protocol";
 import { routeWorkerMessage } from "./net/host";
 import { joinTarget } from "./net/options";
+import { registerOffline } from "./pwa";
 import { connectWorker } from "./state/store";
 import "./styles.css";
 
@@ -33,6 +34,8 @@ function route(message: FromWorker): boolean {
 const host = joinTarget();
 if (host) void import("./net/client").then((client) => client.connectClient(host));
 else connectWorker(new Worker(new URL("./host/sim.worker.ts", import.meta.url), { type: "module" }), route);
+
+registerOffline();
 
 createRoot(root).render(
   <StrictMode>

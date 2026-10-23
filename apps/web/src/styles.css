@@ -185,6 +185,11 @@ input[type="number"] {
   background: var(--surface-2);
   border-radius: var(--radius);
 }
+.update {
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+}
 .error {
   margin: 0;
   color: var(--danger);

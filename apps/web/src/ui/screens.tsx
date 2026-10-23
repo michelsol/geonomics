@@ -6,6 +6,7 @@ import type { CatalogName } from "../host/protocol";
 import { deleteSave, listSaves } from "../host/saves";
 import { hostEntered, stopHosting } from "../net/host";
 import { joinTarget, savedName } from "../net/options";
+import { applyUpdate } from "../pwa";
 import { useGame } from "../state/store";
 import { count, fmt, Select, Swatch } from "./components";
 import { controllerLabel, Invite, Players } from "./Players";
@@ -41,6 +42,7 @@ export function NewGame() {
   const progress = useGame((state) => state.progress);
   const newGame = useGame((state) => state.newGame);
   const menuError = useGame((state) => state.menuError);
+  const updateReady = useGame((state) => state.updateReady);
   const [catalog, setCatalog] = useState<CatalogName>("medium");
   const [areas, setAreas] = useState<number>(1000);
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e6));
@@ -56,6 +58,14 @@ export function NewGame() {
     <main className="screen">
       <div className="card">
         <h1>Geonomics</h1>
+        {updateReady && (
+          <div className="row update" role="status">
+            A new version is ready.
+            <button type="button" onClick={applyUpdate}>
+              Reload
+            </button>
+          </div>
+        )}
         <p className="muted">
           Run a realm on a living map. Every area produces, trades and sets its own prices; you tax, trade, build and
           fight on top of it.
