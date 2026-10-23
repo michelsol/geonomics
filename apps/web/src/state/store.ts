@@ -8,7 +8,7 @@ import type { FromWorker, GameOptions, HostStatus, Speed, ToWorker } from "../ho
 import { History } from "./history";
 import { priceExtremes, priceOf, realmPopulation } from "./selectors";
 
-export type Screen = "newGame" | "join" | "chooseRealm" | "game" | "ended";
+export type Screen = "newGame" | "guide" | "join" | "chooseRealm" | "game" | "ended";
 export type Layer = "realms" | "population" | "prices" | "resources" | "satisfaction" | "wage" | "terrain";
 export type Flows = "none" | "migration" | "transport"; // arrows drawn over the area layer
 export type Mode = { kind: "select" } | { kind: "moveArmy"; army: number } | { kind: "pickPeaceAreas" };
@@ -90,6 +90,8 @@ export interface GameState {
   autosave(): void;
   exportSave(): void;
   setUpdateReady(): void;
+  openGuide(): void;
+  closeGuide(): void; // back to the new game screen
   chooseRealm(government: number | null): void; // null: watch as a spectator
   setSession(session: Partial<Session>): void;
   /** A joined player's role, from the host: in the game once it holds a realm or watches. */
@@ -176,6 +178,12 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     },
     setUpdateReady() {
       set({ updateReady: true });
+    },
+    openGuide() {
+      set({ screen: "guide" });
+    },
+    closeGuide() {
+      set({ screen: "newGame" });
     },
     chooseRealm(government) {
       port.postMessage({ type: "start", government, speed: startSpeed() });

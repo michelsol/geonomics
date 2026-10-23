@@ -1,6 +1,7 @@
 // Top-level screen switch (specification §10, Screens).
 import { lazy, Suspense } from "react";
 import { useGame } from "./state/store";
+import { Guide } from "./ui/Guide";
 import { ChooseRealm, EndOfSession, Join, NewGame } from "./ui/screens";
 
 // The game screen brings PixiJS and uPlot; loading it lazily keeps the first screen light on phones.
@@ -11,6 +12,8 @@ export function App() {
   switch (screen) {
     case "newGame":
       return <NewGame />;
+    case "guide":
+      return <Guide />;
     case "join":
       return <Join />;
     case "chooseRealm":

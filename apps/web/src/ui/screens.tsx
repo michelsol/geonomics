@@ -43,6 +43,7 @@ export function NewGame() {
   const newGame = useGame((state) => state.newGame);
   const menuError = useGame((state) => state.menuError);
   const updateReady = useGame((state) => state.updateReady);
+  const openGuide = useGame((state) => state.openGuide);
   const [catalog, setCatalog] = useState<CatalogName>("medium");
   const [areas, setAreas] = useState<number>(1000);
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e6));
@@ -68,7 +69,10 @@ export function NewGame() {
         )}
         <p className="muted">
           Run a realm on a living map. Every area produces, trades and sets its own prices; you tax, trade, build and
-          fight on top of it.
+          fight on top of it.{" "}
+          <button type="button" className="link" onClick={openGuide}>
+            How to play
+          </button>
         </p>
         {progress ? (
           <div className="section" role="status">

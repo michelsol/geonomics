@@ -189,6 +189,24 @@ input[type="number"] {
   background: var(--surface-2);
   border-radius: var(--radius);
 }
+.guide {
+  display: grid;
+  gap: 16px;
+  width: min(680px, 100%);
+}
+.guide section {
+  display: grid;
+  gap: 6px;
+}
+.guide p,
+.guide ul {
+  margin: 0;
+}
+.guide ul {
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}
 .update {
   padding: 8px 10px;
   background: var(--surface-2);
