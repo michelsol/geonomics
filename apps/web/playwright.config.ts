@@ -21,9 +21,9 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
     },
     {
-      // The multiplayer tests sign their connections through a local PeerServer, not the PeerJS cloud.
-      command: "node scripts/peer-server.mjs",
-      url: "http://localhost:9000",
+      // The multiplayer tests sign their connections through the game's broker run locally, not the PeerJS cloud.
+      command: "pnpm --filter @geonomics/broker dev",
+      url: "http://localhost:8787",
       reuseExistingServer: !process.env.CI,
     },
   ],

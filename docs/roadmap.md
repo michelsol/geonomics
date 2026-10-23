@@ -246,6 +246,8 @@ Findings: [design-notes.md](design-notes.md#web-app-roadmap-stage-8).
 
 Findings: [design-notes.md](design-notes.md#multiplayer-roadmap-stage-9).
 
+After the stage, the game got its own broker on Cloudflare, with a TURN relay for players on strict networks: [design-notes.md](design-notes.md#the-broker-and-turn-relay), deployment in [apps/broker/README.md](../apps/broker/README.md).
+
 ## Stage 10: AI governments
 
 **Spec first:** add an AI section to the specification. It covers:

@@ -1,0 +1,18 @@
+// The game's broker: PeerJS signaling and TURN credentials (apps/broker/README.md).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "geonomics-broker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "durable_objects": {
+    "bindings": [{ "name": "BROKER", "class_name": "Broker" }]
+  },
+  // The free plan runs SQLite-backed Durable Objects only.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Broker"] }],
+  "vars": {
+    // Pages allowed to use the broker; `:*` matches any port. Secrets TURN_KEY_ID and TURN_KEY_API_TOKEN are set
+    // with `wrangler secret put`.
+    "ALLOWED_ORIGINS": "https://michelsol.github.io, http://localhost:*, http://127.0.0.1:*"
+  },
+  "observability": { "enabled": true }
+}

@@ -2,7 +2,7 @@ import { type Browser, expect, type Page, test } from "@playwright/test";
 
 // Roadmap stage 9 exit: one browser hosts, another joins through the link, both command and see each other's realms.
 
-const BROKER = "?peer=localhost:9000";
+const BROKER = "?peer=localhost:8787";
 
 async function openTab(page: Page, name: string) {
   await page.getByRole("navigation").getByRole("button", { name, exact: true }).click();

@@ -1,23 +1,44 @@
 // Where the signaling broker is, the join link, and what a joining tab remembers (specification §9, Joining).
 import type { BrokerOptions } from "@geonomics/net";
 
+/** The game's own broker (apps/broker), set at build time; without it, the PeerJS cloud. */
+const BUILT_IN_BROKER: string | undefined = import.meta.env.VITE_BROKER_URL || undefined;
+
+const withSlash = (path: string) => (path.endsWith("/") ? path : `${path}/`);
+
+function broker(host: string, port: number, path: string, secure: boolean): BrokerOptions {
+  const base = withSlash(path);
+  // The game's broker hands out ICE servers; a plain PeerServer does not, and PeerJS's defaults apply.
+  return { host, port, path: base, secure, ice: `${secure ? "https" : "http"}://${host}:${port}${base}ice` };
+}
+
 /**
- * The broker: the PeerJS cloud by default, or `?peer=host:port[/path]` for a self-hosted PeerServer (tests and local
- * play run one). The setting travels in the join link, so joined players use the same broker.
+ * The broker: the game's own one, the PeerJS cloud without it, or `?peer=host:port[/path]` for another one (tests and
+ * local play run one). `?relay=1` allows relayed connections only, to check TURN. The settings travel in the join link,
+ * so joined players use the same broker.
  */
-export function brokerOptions(search = location.search): BrokerOptions {
-  const value = new URLSearchParams(search).get("peer");
-  if (!value) return {};
-  const match = /^([^:/]+)(?::(\d+))?(\/.*)?$/.exec(value);
-  if (!match) return {};
-  const host = match[1] as string;
-  const local = host === "localhost" || host === "127.0.0.1";
-  return {
-    host,
-    port: match[2] ? Number(match[2]) : local ? 9000 : 443,
-    path: match[3] ?? "/",
-    secure: !local && location.protocol === "https:",
-  };
+export function brokerOptions(
+  search = location.search,
+  builtIn = BUILT_IN_BROKER,
+  pageProtocol = location.protocol,
+): BrokerOptions {
+  const params = new URLSearchParams(search);
+  const relay: BrokerOptions = params.get("relay") === "1" ? { relayOnly: true } : {};
+  const value = params.get("peer");
+  if (value) {
+    const match = /^([^:/]+)(?::(\d+))?(\/.*)?$/.exec(value);
+    if (!match) return relay;
+    const host = match[1] as string;
+    const local = host === "localhost" || host === "127.0.0.1";
+    const port = match[2] ? Number(match[2]) : local ? 8787 : 443;
+    return { ...broker(host, port, match[3] ?? "/", !local && pageProtocol === "https:"), ...relay };
+  }
+  if (builtIn) {
+    const url = new URL(builtIn);
+    const secure = url.protocol === "https:";
+    return { ...broker(url.hostname, Number(url.port) || (secure ? 443 : 80), url.pathname, secure), ...relay };
+  }
+  return relay;
 }
 
 /** The host's peer id when this page was opened from a join link. */

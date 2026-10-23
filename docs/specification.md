@@ -1150,7 +1150,7 @@ Everything is TypeScript and runs in the browser. The host's browser runs the si
 
 &#91;embedded content: architecture · host browser, joining players, signaling\]
 
-Only the host simulates. The signaling broker is used only to set up connections; game traffic then flows directly between browsers.
+Only the host simulates. The signaling broker is used only to set up connections; game traffic then flows directly between browsers, or through a TURN relay when their networks keep them from reaching each other.
 
 ### Stack
 
@@ -1261,7 +1261,12 @@ The interface uses the table in two places:
 
 **Dropped connections.** A joining player whose connection drops retries after 1, 2, 4 and 8 seconds, then every 8 seconds, and gives up 2 minutes after the drop. A `hello` with the same token, from a reconnection or a reload of the same tab, restores the player's role and realm, and the host sends `welcome` again. While a player is offline, its realm stays reserved for it and idle; the host can release it, and another player can then take it.
 
-**Broker.** The free PeerJS cloud broker is the default. A `?peer=host:port[/path]` query setting points the game at a self-hosted PeerServer, which the end-to-end tests and local network play use (`pnpm peer`). STUN uses public servers by default, and a TURN relay can be added to the connection settings for players on strict networks.
+**Broker.** The game's own broker is a Cloudflare Worker (`apps/broker`) speaking the PeerServer protocol, with every peer's WebSocket in one Durable Object. A build setting (`VITE_BROKER_URL`) gives its address; a build without it uses the free PeerJS cloud broker. A `?peer=host:port[/path]` query setting points the game at another broker, such as the Worker run locally (`pnpm broker`, port 8787), which the end-to-end tests and local network play use.
+
+- **Protocol.** `GET /peerjs/id` gives a random id. The WebSocket `/peerjs?key=peerjs&id=&token=` answers `OPEN`, or `ID-TAKEN` when another token holds the id; the same token takes the id over. `OFFER`, `ANSWER`, `CANDIDATE`, `LEAVE` and `EXPIRE` go to the peer named by `dst`, with `src` set to the sender's id. Nothing is queued: an offer to an absent peer is answered at once with `EXPIRE`, and other messages to it are dropped. `HEARTBEAT` is ignored, and messages over 64 KB are dropped.
+- **Origins.** Pages from origins outside the Worker's `ALLOWED_ORIGINS` list are refused.
+- **ICE servers.** Before creating its peer, each browser asks the broker's `GET /ice` for ICE servers: Cloudflare STUN and TURN, with credentials minted by the Worker from its TURN key and valid for 24 hours, without port 53 URLs. A browser reuses them until an hour before they expire. When the broker has no TURN key, does not answer within 5 seconds, or the broker is the PeerJS cloud, PeerJS's default servers apply: Google's public STUN, without a working relay.
+- **Relay check.** `?relay=1` allows relayed connections only, to check that TURN works; it travels in the join link like `?peer=`.
 
 ### Hosting on mobile
 

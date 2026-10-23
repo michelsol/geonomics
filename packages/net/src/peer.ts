@@ -1,5 +1,5 @@
 // PeerJS links (specification §9, Joining): reliable, ordered data channels carrying raw binary frames.
-import { type DataConnection, Peer, type PeerOptions } from "peerjs";
+import { type DataConnection, Peer, type PeerOptions, util } from "peerjs";
 import type { Link } from "./link";
 
 /** Signaling broker settings; empty for the PeerJS cloud broker. */
@@ -8,9 +8,44 @@ export interface BrokerOptions {
   port?: number;
   path?: string;
   secure?: boolean;
+  /** Where the broker hands out ICE servers (STUN and TURN with credentials); PeerJS's defaults without it. */
+  ice?: string;
+  /** Relayed connections only, to check that TURN works. */
+  relayOnly?: boolean;
 }
 
 const CONNECT_TIMEOUT_MS = 15_000;
+const ICE_TIMEOUT_MS = 5_000;
+/** Fetched credentials are reused until this long before they expire. */
+const ICE_MARGIN_MS = 60 * 60 * 1000;
+
+let iceCache: { url: string; servers: RTCIceServer[]; until: number } | null = null;
+
+/** The broker's ICE servers, or null (PeerJS's defaults: public STUN and TURN) when it has none or does not answer. */
+async function fetchIce(url: string): Promise<RTCIceServer[] | null> {
+  if (iceCache?.url === url && Date.now() < iceCache.until) return iceCache.servers;
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(ICE_TIMEOUT_MS) });
+    if (!response.ok) return null;
+    const body = (await response.json()) as { iceServers?: RTCIceServer[]; ttl?: number };
+    if (!Array.isArray(body.iceServers) || body.iceServers.length === 0) return null;
+    const ttlMs = (body.ttl ?? 0) * 1000;
+    if (ttlMs > ICE_MARGIN_MS) iceCache = { url, servers: body.iceServers, until: Date.now() + ttlMs - ICE_MARGIN_MS };
+    return body.iceServers;
+  } catch {
+    return null;
+  }
+}
+
+/** Options for a new peer: the broker, and the ICE servers it hands out. */
+export async function peerOptions({ ice, relayOnly, ...broker }: BrokerOptions): Promise<PeerOptions> {
+  const iceServers = ice ? await fetchIce(ice) : null;
+  if (!iceServers && !relayOnly) return broker;
+  // Without the broker's servers, a relay-only check runs on PeerJS's defaults, and fails without a working relay.
+  const config: RTCConfiguration = { ...(iceServers ? { iceServers } : util.defaultConfig) };
+  if (relayOnly) config.iceTransportPolicy = "relay";
+  return { ...broker, config };
+}
 
 function linkOf(connection: DataConnection): Link {
   return {
@@ -70,7 +105,7 @@ export interface HostPeer {
 
 /** Opens the host's peer; every incoming data connection becomes a link once it opens. */
 export async function openHost(broker: BrokerOptions, onLink: (link: Link) => void): Promise<HostPeer> {
-  const peer = new Peer(broker as PeerOptions);
+  const peer = new Peer(await peerOptions(broker));
   const id = await whenOpen(peer);
   peer.on("connection", (connection) => {
     connection.on("open", () => onLink(linkOf(connection)));
@@ -86,7 +121,7 @@ export async function openHost(broker: BrokerOptions, onLink: (link: Link) => vo
 export function connector(hostId: string, broker: BrokerOptions): () => Promise<Link> {
   let peer: Peer | null = null;
   return async () => {
-    if (!peer || peer.destroyed) peer = new Peer(broker as PeerOptions);
+    if (!peer || peer.destroyed) peer = new Peer(await peerOptions(broker));
     else if (peer.disconnected) peer.reconnect();
     await whenOpen(peer);
     const connection = peer.connect(hostId, { reliable: true, serialization: "raw" });

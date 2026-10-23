@@ -1,0 +1,13 @@
+{
+  "name": "@geonomics/broker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --ip 0.0.0.0 --port 8787",
+    "deploy": "wrangler deploy",
+    "typecheck": "wrangler types && tsc -p ."
+  },
+  "devDependencies": {
+    "wrangler": "4.149.0"
+  }
+}

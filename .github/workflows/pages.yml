@@ -26,6 +26,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+        env:
+          # The game's broker (apps/broker); unset, games sign through the PeerJS cloud.
+          VITE_BROKER_URL: ${{ vars.BROKER_URL }}
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:

@@ -239,5 +239,32 @@ The host builds every command's envelope from the connection the command arrived
 
 ### Testing the network
 
-The tests never touch the PeerJS cloud. The session logic runs in Node over in-memory link pairs. The two-browser Playwright test uses a PeerServer that Playwright starts on port 9000, with `?peer=localhost:9000` in the URL; browser contexts on one machine connect over host candidates, without STUN.
+The tests never touch the PeerJS cloud or Cloudflare. The session logic runs in Node over in-memory link pairs. The two-browser Playwright test uses the game's broker, which Playwright starts with `wrangler dev` on port 8787, with `?peer=localhost:8787` in the URL; browser contexts on one machine connect over host candidates, without STUN. The local broker has no TURN key, so its `/ice` answers 503 and the test also runs the fallback to PeerJS's default servers. TURN itself is only checked against the deployed broker, with `?relay=1` (apps/broker/README.md).
+
+## The broker and TURN relay
+
+Two browsers behind strict networks (symmetric NATs, firewalls letting only web traffic out, some mobile carriers) cannot reach each other directly, and need a TURN server relaying their traffic. The game is a static site, so the relay comes from a provider. PeerJS's default configuration lists public TURN servers (`eu-0` and `us-0.turn.peerjs.com`, with fixed credentials), but on 2026-10-23 their names no longer resolved, so without the broker's TURN there is no relay at all; a relay-only connection over those defaults fails at the host lookup.
+
+### Why Cloudflare
+
+- **TURN.** Cloudflare Realtime TURN has a free monthly allowance that a hobby game will not exhaust, and serves from Cloudflare's network, near most players. Its credentials are minted with an API token that must stay on a server, so the broker's Worker mints them.
+- **Signaling.** Since a Worker exists anyway, it takes over signaling from the PeerJS cloud, which is free but has no guarantees. The Worker speaks PeerServer's protocol, so PeerJS in the browser is unchanged. SQLite-backed Durable Objects run on the free plan.
+
+### One Durable Object
+
+A host and its players must reach each other by id, so every peer's WebSocket lives in one Durable Object. One object holds many thousands of WebSockets, far more than this game will have; sharding by id would need cross-object forwarding for no gain.
+
+The object uses the WebSocket Hibernation API: between messages it is evicted from memory and costs nothing, and each socket carries its id and token as its attachment, so routing works after a wake-up (`getWebSockets(id)` by tag). Each PeerJS client sends a heartbeat every 5 seconds, which wakes the object. Billed at 20 WebSocket messages per request, that is about 860 requests per peer per day, against the free plan's 100,000.
+
+### No message queue
+
+PeerServer queues messages to a peer that is not connected and expires them later. In a hibernating object that queue would need storage and alarms. Instead, an offer to an absent peer is answered at once with `EXPIRE`, which PeerJS reports as an unavailable peer; the joining player's session already retries with backoff, so a host whose broker connection blinked is reached on the next try.
+
+### Origins and quota
+
+The Worker refuses pages from other origins, so another site cannot have its visitors' browsers spend the TURN allowance. A script outside a browser can still fake an Origin and fetch credentials: the check limits casual reuse, not determined abuse. If that ever matters, Cloudflare's rate limiting binding or a revocation of the TURN key are the next steps.
+
+### Credential lifetime
+
+Credentials last 24 hours, longer than a game session usually runs. The host's peer keeps the credentials it started with; a joining player brings fresh ones, and its own relay suffices for a connection, so a host running past a day still accepts players on strict networks unless both sides need relaying.
 

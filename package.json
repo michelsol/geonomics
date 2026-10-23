@@ -16,7 +16,7 @@
     "format": "biome check --write .",
     "headless": "pnpm --filter @geonomics/headless start",
     "e2e": "pnpm --filter @geonomics/web e2e",
-    "peer": "pnpm --filter @geonomics/web peer"
+    "broker": "pnpm --filter @geonomics/broker dev"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.2",
