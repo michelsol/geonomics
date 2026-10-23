@@ -268,3 +268,7 @@ The Worker refuses pages from other origins, so another site cannot have its vis
 
 Credentials last 24 hours, longer than a game session usually runs. The host's peer keeps the credentials it started with; a joining player brings fresh ones, and its own relay suffices for a connection, so a host running past a day still accepts players on strict networks unless both sides need relaying.
 
+### Firefox and IPv6 loopback
+
+On 2026-10-23, Firefox 158 on Windows gathered no ICE candidates at all, not even host ones, on pages loaded over IPv6 loopback (`http://[::1]:…`, or `localhost` when the server listens only on `::1`, as Vite does by default with Node on Windows). The same page over `127.0.0.1` gathered host and server-reflexive candidates, and so did public pages loaded over IPv4. Every join from Firefox then failed with "ICE failed, your TURN server appears to be broken", whatever the ICE servers. The dev and preview servers therefore listen on `127.0.0.1`. Pages loaded over public IPv6 were not tested: the machine had no IPv6 route.
+
