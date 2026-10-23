@@ -90,10 +90,10 @@ function StatusBanner() {
       ? "Connection lost — reconnecting…"
       : session.connection === "lost"
         ? "The host is unreachable."
-        : session.hostHidden
-          ? "Host paused: its tab is hidden"
-          : paused
-            ? "Host paused"
+        : paused
+          ? "Host paused"
+          : session.hostHidden
+            ? "The host's tab is in the background, which may slow the game"
             : null;
   if (!text) return null;
   return (
@@ -138,7 +138,7 @@ export function Game() {
   useWakeLock();
 
   useEffect(() => {
-    // Space toggles pause; the game pauses while the tab is hidden.
+    // Space toggles pause. A solo game pauses while its tab is hidden; a hosted one runs on for its players.
     const key = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (event.code !== "Space" || target?.closest("input, select, textarea, button")) return;
@@ -146,7 +146,8 @@ export function Game() {
       gameStore.getState().togglePause();
     };
     const visibility = () => {
-      if (document.hidden) gameStore.getState().setPaused(true);
+      const state = gameStore.getState();
+      if (document.hidden && state.session.role === "solo") state.setPaused(true);
     };
     window.addEventListener("keydown", key);
     document.addEventListener("visibilitychange", visibility);

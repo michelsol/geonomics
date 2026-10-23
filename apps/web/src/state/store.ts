@@ -39,7 +39,7 @@ export interface Session {
   me: LobbyPlayer | null; // a joined player's own entry
   started: boolean; // the host has chosen its realm and the game runs
   connection: ConnectionState | null; // a joined player's link to the host
-  hostHidden: boolean; // the host's tab is hidden, which pauses the game
+  hostHidden: boolean; // the host's tab is hidden: browsers may slow it down, and phones freeze it
   refused: string | null; // why the host refused a joined player
 }
 

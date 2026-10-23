@@ -4,10 +4,14 @@ import type { BrokerOptions } from "@geonomics/net";
 /** The game's own broker (apps/broker), set at build time; without it, the PeerJS cloud. */
 const BUILT_IN_BROKER: string | undefined = import.meta.env.VITE_BROKER_URL || undefined;
 
+/** PeerJS's own cloud broker, which hands out no ICE servers. */
+const CLOUD_HOST = "0.peerjs.com";
+
 const withSlash = (path: string) => (path.endsWith("/") ? path : `${path}/`);
 
 function broker(host: string, port: number, path: string, secure: boolean): BrokerOptions {
   const base = withSlash(path);
+  if (host === CLOUD_HOST) return { host, port, path: base, secure };
   // The game's broker hands out ICE servers; a plain PeerServer does not, and PeerJS's defaults apply.
   return { host, port, path: base, secure, ice: `${secure ? "https" : "http"}://${host}:${port}${base}ice` };
 }
@@ -44,8 +48,20 @@ export function joinTarget(hash = location.hash): string | null {
   return match ? (match[1] as string) : null;
 }
 
-export function joinLink(peerId: string): string {
-  return `${location.origin}${location.pathname}${location.search}#join=${peerId}`;
+/** The `?peer=` setting for a broker: the PeerJS cloud when it has no host. */
+export function brokerSetting({ host, port, path }: BrokerOptions): string {
+  if (!host) return CLOUD_HOST;
+  return `${host}${port === undefined || port === 443 ? "" : `:${port}`}${path && path !== "/" ? path.replace(/\/$/, "") : ""}`;
+}
+
+/**
+ * The link joining this host. It names the host's broker, so a joining page built with another broker (an older
+ * cached version, a dev server restarted with another setting) still finds the host.
+ */
+export function joinLink(peerId: string, broker = brokerOptions()): string {
+  const params = new URLSearchParams(location.search);
+  params.set("peer", brokerSetting(broker));
+  return `${location.origin}${location.pathname}?${params}#join=${peerId}`;
 }
 
 function stored(storage: () => Storage, key: string): string | null {

@@ -1253,7 +1253,7 @@ The interface uses the table in two places:
 
 ### Joining
 
-1. The host clicks Invite players. Its browser creates a PeerJS peer with a random id and shows the link `https://<site>/<query>#join=<peer id>`. The query keeps the broker setting (below).
+1. The host clicks Invite players. Its browser creates a PeerJS peer with a random id and shows the link `https://<site>/?<query>#join=<peer id>`. The query keeps the page's settings and always names the host's broker (`peer=`, below), so a joining page built with another broker still finds the host.
 2. The joining player opens the link and gives a name; its browser opens a reliable data channel to the host and sends `hello`.
 3. The host answers `welcome`, and the player appears in the lobby. Players can join before the host starts and during the game.
 
@@ -1270,7 +1270,7 @@ The interface uses the table in two places:
 
 ### Hosting on mobile
 
-- Browsers slow down or suspend hidden tabs. The host pauses when its tab is hidden and tells players through `hostStatus`, which says whether the tab is hidden.
+- A host keeps its game running while its tab is hidden: the simulation runs in a worker, which desktop browsers keep running. Phones freeze hidden tabs, so `hostStatus` tells players whether the host's tab is hidden.
 - The host requests a Screen Wake Lock while its game runs and its tab is visible, and releases it when paused or hidden.
 - The default `maxTicksPerSecond` is lower on mobile devices.
 
@@ -1354,13 +1354,13 @@ Mouse or one finger pans and the wheel or a pinch zooms around the pointer. A cl
 
 A rejected command is shown as a short message with its reason.
 
-**Joined players** see the host's time state (running at a speed, or paused) instead of the time controls, and a banner while the connection is down or the host has paused, saying when its tab is hidden. **Spectators** get the Area and Goods panels only.
+**Joined players** see the host's time state (running at a speed, or paused) instead of the time controls, and a banner while the connection is down, the host has paused, or the host's tab is hidden. **Spectators** get the Area and Goods panels only.
 
 Numbers show at most two decimals, and none from 100 up; from 10,000 they are compact (24.3k, 1.23M). A nonzero value too small to show reads "<0.01". Quantities that are whole by nature, such as people, workers, soldiers and days, show as whole numbers (24,312), compact only from a million.
 
 ### Time controls
 
-The top bar holds pause and four speeds: 1×, 2× and 5× (`maxTicksPerSecond` 2, 5 and 10) and max, which runs ticks back to back. It shows the game day, the treasury, the actual ticks per second and the milliseconds per tick. Space toggles pause. The game pauses while the tab is hidden.
+The top bar holds pause and four speeds: 1×, 2× and 5× (`maxTicksPerSecond` 2, 5 and 10) and max, which runs ticks back to back. It shows the game day, the treasury, the actual ticks per second and the milliseconds per tick. Space toggles pause. A solo game pauses while its tab is hidden; a hosted game keeps running.
 
 ### Layout
 

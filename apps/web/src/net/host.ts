@@ -103,7 +103,7 @@ export function routeWorkerMessage(message: FromWorker): boolean {
   return false;
 }
 
-// The hidden-tab pause sends a status; coming back does not, so tell the players the tab is visible again.
+// Hiding or showing the host's tab sends no status from the worker, so tell the players.
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
     if (hosting && lastStatus) hosting.session.broadcast({ type: "hostStatus", status: netStatus(lastStatus) });

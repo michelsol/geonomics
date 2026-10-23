@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { brokerOptions } from "./options";
+import { brokerOptions, brokerSetting } from "./options";
 
 describe("brokerOptions", () => {
   it("uses the PeerJS cloud without a built-in broker or setting", () => {
-    expect(brokerOptions("", undefined)).toEqual({});
+    expect(brokerOptions("", "")).toEqual({});
   });
 
   it("uses the built-in broker and its ICE servers", () => {
@@ -24,7 +24,7 @@ describe("brokerOptions", () => {
       secure: false,
       ice: "http://localhost:8787/ice",
     });
-    expect(brokerOptions("?peer=signal.example/game", undefined)).toMatchObject({
+    expect(brokerOptions("?peer=signal.example/game", "")).toMatchObject({
       port: 443,
       path: "/game/",
       secure: true,
@@ -33,21 +33,36 @@ describe("brokerOptions", () => {
   });
 
   it("reaches a broker on the web with TLS, even from a local page", () => {
-    expect(brokerOptions("?peer=geonomics-broker.example.workers.dev")).toEqual({
+    expect(brokerOptions("?peer=geonomics-broker.example.workers.dev", "")).toEqual({
       host: "geonomics-broker.example.workers.dev",
       port: 443,
       path: "/",
       secure: true,
       ice: "https://geonomics-broker.example.workers.dev:443/ice",
     });
-    expect(brokerOptions("?peer=192.168.1.20:8787")).toMatchObject({
+    expect(brokerOptions("?peer=192.168.1.20:8787", "")).toMatchObject({
       secure: false,
       ice: "http://192.168.1.20:8787/ice",
     });
   });
 
+  it("names the host's broker for the join link, the PeerJS cloud included", () => {
+    for (const setting of ["localhost:8787", "geonomics-broker.example.workers.dev", "signal.example/game"])
+      expect(brokerSetting(brokerOptions(`?peer=${setting}`, ""))).toBe(setting);
+    expect(brokerSetting(brokerOptions("", "https://geonomics-broker.example.workers.dev"))).toBe(
+      "geonomics-broker.example.workers.dev",
+    );
+    expect(brokerSetting(brokerOptions("", ""))).toBe("0.peerjs.com");
+    expect(brokerOptions("?peer=0.peerjs.com", "")).toEqual({
+      host: "0.peerjs.com",
+      port: 443,
+      path: "/",
+      secure: true,
+    });
+  });
+
   it("forces relayed connections with ?relay=1", () => {
-    expect(brokerOptions("?relay=1", undefined)).toEqual({ relayOnly: true });
-    expect(brokerOptions("?peer=localhost&relay=1", undefined)).toMatchObject({ port: 8787, relayOnly: true });
+    expect(brokerOptions("?relay=1", "")).toEqual({ relayOnly: true });
+    expect(brokerOptions("?peer=localhost&relay=1", "")).toMatchObject({ port: 8787, relayOnly: true });
   });
 });
