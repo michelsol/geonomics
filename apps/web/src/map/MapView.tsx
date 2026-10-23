@@ -30,13 +30,20 @@ export function MapView() {
         app.canvas.dataset.testid = "map-canvas";
         element.appendChild(app.canvas);
         const renderer = new MapRenderer(app, data, buildGeometry(data));
+        // On phones the panels are a sheet over the bottom of the map: centering keeps areas above it.
+        renderer.coveredBottom = () => {
+          const sheet = document.querySelector<HTMLElement>(".side");
+          if (!sheet || getComputedStyle(sheet).position !== "fixed") return 0;
+          return Math.max(0, element.getBoundingClientRect().bottom - sheet.getBoundingClientRect().top);
+        };
         mapControls.renderer = renderer;
         const capital = gameStore.getState().selectedArea;
         if (capital !== null) {
           // Open on the player's capital, closer in on larger maps.
           renderer.centerOn(capital);
           const zoom = Math.min(4, Math.max(1.5, Math.sqrt(data.areas.length / 100)));
-          renderer.zoomAt(app.screen.width / 2, app.screen.height / 2, zoom);
+          const center = renderer.viewCenter();
+          renderer.zoomAt(center.x, center.y, zoom);
         }
         renderer.update(gameStore.getState());
         const unsubscribe = gameStore.subscribe((state) => renderer.update(state));

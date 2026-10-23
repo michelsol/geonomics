@@ -125,6 +125,7 @@ function handle(message: ToWorker): void {
       if (!game) return;
       if (message.government !== null && !game.world.governments[message.government]) return;
       game.started = true;
+      if (message.speed !== undefined) game.loop.setSpeed(message.speed);
       game.loop.setPlayer(LOCAL_PLAYER, message.government, true);
       game.loop.publish();
       game.loop.resume();

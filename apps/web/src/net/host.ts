@@ -108,4 +108,8 @@ if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
     if (hosting && lastStatus) hosting.session.broadcast({ type: "hostStatus", status: netStatus(lastStatus) });
   });
+  // Closing the host's tab ends the game for every joined player: the browser asks first.
+  window.addEventListener("beforeunload", (event) => {
+    if (hosting) event.preventDefault();
+  });
 }

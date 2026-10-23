@@ -132,7 +132,7 @@ input[type="number"] {
   display: grid;
   place-items: center;
   min-height: 100%;
-  padding: 24px 16px;
+  padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
 }
 .card {
   width: min(520px, 100%);
@@ -166,10 +166,14 @@ input[type="number"] {
 }
 .realm-list button {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: 2px 12px;
   min-height: 44px;
+  padding: 6px 12px;
   text-align: left;
+  white-space: normal;
 }
 .save-list {
   display: grid;
@@ -518,9 +522,11 @@ th button.sort:hover {
   .divider {
     display: none;
   }
+  /* Clear of the status bar and the rounded corners of notched phones, once installed. */
   .topbar {
     font-size: 13px;
-    padding: 4px 8px;
+    padding: max(4px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) 4px
+      max(8px, env(safe-area-inset-left));
   }
   .topbar .hide-phone {
     display: none;
@@ -530,17 +536,32 @@ th button.sort:hover {
   select {
     min-height: 44px;
   }
+  /* iOS zooms into fields with smaller text on focus. */
+  input,
+  select {
+    font-size: 16px;
+  }
+  .tabs button {
+    min-height: 44px;
+  }
+  /* Inline links keep their line height, with a finger-sized hit area around them. */
+  .link {
+    padding: 14px 4px;
+    margin: -14px -4px;
+  }
   .topbar {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
+    gap: 6px 8px;
   }
   .topbar button {
     min-width: 40px;
     padding: 0 8px;
   }
-  .topbar select {
-    max-width: 112px;
+  /* The map layer and flows take a second row, rather than hide past the edge. */
+  .topbar > .group:last-child {
+    flex: 1 1 100%;
+  }
+  .topbar > .group:last-child select {
+    flex: 1;
   }
   th button.sort {
     min-height: 44px;
@@ -556,6 +577,7 @@ th button.sort:hover {
     box-shadow: 0 -8px 24px rgb(0 0 0 / 0.4);
     transition: height 0.2s;
     z-index: 5;
+    padding-bottom: env(safe-area-inset-bottom);
   }
   .side.peek {
     height: 112px;

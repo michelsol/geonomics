@@ -178,7 +178,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
       set({ updateReady: true });
     },
     chooseRealm(government) {
-      port.postMessage({ type: "start", government });
+      port.postMessage({ type: "start", government, speed: startSpeed() });
       // A joined player enters once the host accepts the choice (enterAs); the host enters at once.
       if (get().session.role === "client") return;
       const capital = government === null ? null : (get().governments[government]?.capital ?? null);
@@ -352,6 +352,11 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     port.postMessage({ type: "setFlowGood", good });
   }
   return store;
+}
+
+/** A game starts at 1× on phones, which heat up and drain their battery as hosts, and at 2× elsewhere. */
+function startSpeed(): Speed {
+  return typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 2 : 5;
 }
 
 /** The good shown first: the first one satisfying a necessity, such as food. */

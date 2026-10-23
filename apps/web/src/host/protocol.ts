@@ -40,7 +40,8 @@ export type ToWorker =
   | { type: "loadSaved"; gameId: string } // a game saved in this browser
   | { type: "save" } // autosave now, as when the tab is hidden
   | { type: "export" } // answered with `exported`
-  | { type: "start"; government: GovernmentId | null } // the local player takes this government (or watches) and the game runs
+  // the local player takes this government (or watches) and the game runs, at `speed` if given
+  | { type: "start"; government: GovernmentId | null; speed?: Speed }
   | { type: "command"; command: Command; player?: PlayerId } // from the local player unless a joined player is named
   | { type: "setSpeed"; speed: Speed }
   | { type: "setFlowGood"; good: GoodId | null; player?: PlayerId } // the good whose trade flows snapshots carry

@@ -57,6 +57,8 @@ export class MapRenderer {
   private fitScale = 1;
   private frame = 0;
   private state: GameState | null = null;
+  /** Screen pixels at the bottom of the map that the panels' bottom sheet covers on phones. */
+  coveredBottom: () => number = () => 0;
   private ownerKey = "";
   private populations: { smallest: number; largest: number } = { smallest: 0, largest: 0 };
 
@@ -378,11 +380,18 @@ export class MapRenderer {
     this.afterCameraMove();
   }
 
-  /** Centers the view on an area without changing the zoom. */
+  /** The middle of the part of the map not covered by the bottom sheet, in screen pixels. */
+  viewCenter(): { x: number; y: number } {
+    const { width, height } = this.app.screen;
+    return { x: width / 2, y: (height - Math.min(this.coveredBottom(), 0.8 * height)) / 2 };
+  }
+
+  /** Centers the visible part of the view on an area without changing the zoom. */
   centerOn(area: number): void {
     const { x, y } = this.data.areas[area] as StaticData["areas"][number];
     const scale = this.root.scale.x;
-    this.root.position.set(this.app.screen.width / 2 - x * scale, this.app.screen.height / 2 - y * scale);
+    const center = this.viewCenter();
+    this.root.position.set(center.x - x * scale, center.y - y * scale);
     this.afterCameraMove();
   }
 
