@@ -27,12 +27,16 @@ TURN_KEY_API_TOKEN=...
 
 1. **Create a TURN key.** In the Cloudflare dashboard, go to Realtime → TURN Server and create a key. Note its **Turn Token ID** and **API Token**.
 2. **Log in:** `pnpm --filter @geonomics/broker exec wrangler login`.
-3. **Set the secrets:**
+3. **Set the secrets.** Type each command as written: `TURN_KEY_ID` and `TURN_KEY_API_TOKEN` are the secrets' names, which the Worker reads. Wrangler then asks for each value; paste it there.
 
    ```sh
    pnpm --filter @geonomics/broker exec wrangler secret put TURN_KEY_ID
+   # Enter a secret value: <paste the key's Turn Token ID>
    pnpm --filter @geonomics/broker exec wrangler secret put TURN_KEY_API_TOKEN
+   # Enter a secret value: <paste the key's API Token>
    ```
+
+   If Wrangler asks whether to create the Worker `geonomics-broker`, answer yes. `wrangler secret list` shows the names stored, never the values.
 
 4. **Check the allowed origins.** `ALLOWED_ORIGINS` in [wrangler.jsonc](wrangler.jsonc) lists the pages that may use the broker. Add your GitHub Pages origin, or a custom domain, if it differs.
 5. **Deploy:** `pnpm --filter @geonomics/broker run deploy`. Wrangler prints the Worker's URL, such as `https://geonomics-broker.<account>.workers.dev`.
