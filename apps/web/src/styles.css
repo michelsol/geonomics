@@ -158,6 +158,17 @@ input[type="number"] {
   display: grid;
   gap: 16px;
 }
+.card.wide {
+  width: min(720px, 100%);
+}
+.card.wide > * {
+  min-width: 0;
+}
+/* A wide table scrolls within its card, so the page never scrolls sideways. */
+.table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
 .form-grid {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -410,6 +421,10 @@ th,
 td {
   padding: 3px 4px;
   border-bottom: 1px solid var(--line);
+}
+.table-scroll td,
+.table-scroll th {
+  white-space: nowrap;
 }
 tr.chosen td {
   background: var(--surface-2);

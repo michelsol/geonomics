@@ -11,6 +11,7 @@ import {
   employmentOf,
   priceExtremes,
   priceOf,
+  realmResults,
   selectionSummary,
 } from "./selectors";
 import { createGameStore } from "./store";
@@ -97,6 +98,43 @@ describe("cost of living and real income", () => {
     expect(summary.costOfLiving).toBeCloseTo(living, 6);
     expect(summary.realIncomeLevel).toBeCloseTo(summary.wageLevel / living, 6);
     expect(selectionSummary(data, buildSnapshot(world, 0), null, [0]).costOfLiving).toBeNull();
+  });
+});
+
+describe("realm results", () => {
+  it("give every realm's areas, population, peak and soldiers, fallen realms last", () => {
+    const { world } = setup();
+    const data = buildStaticData(world);
+    const snapshot = buildSnapshot(world, 0);
+    const before = snapshot.armies.filter((army) => army.owner === 1).reduce((sum, army) => sum + army.soldiers, 0);
+    snapshot.armies.push({ owner: 1, soldiers: 250 } as never);
+    const fallen = snapshot.governments[2] as (typeof snapshot.governments)[number];
+    snapshot.governments[2] = { ...fallen, isEliminated: true };
+    const results = realmResults(data, snapshot, encodePriceTable(world), [0, 1e9]);
+    expect(results).toHaveLength(world.governments.length);
+    for (const result of results) {
+      const government = snapshot.governments[result.id];
+      expect(result.areas).toBe(government?.areaCount);
+      expect(result.population).toBeCloseTo(government?.population ?? 0, -1);
+    }
+    expect(results.find((r) => r.id === 1)?.peakPopulation).toBe(1e9);
+    expect(results.find((r) => r.id === 1)?.soldiers).toBeCloseTo(before + 250, 6);
+    expect(results.at(-1)?.id).toBe(2);
+  });
+
+  it("are summed up at the end, with each realm's peak population", () => {
+    const { world, state } = setup();
+    state().chooseRealm(0);
+    state().receive({ type: "snapshot", snapshot: buildSnapshot(world, 0) });
+    const first = state().realmPeaks[1] as number;
+    for (const area of world.areas) if (area.owner === 1) area.population /= 2;
+    state().receive({ type: "snapshot", snapshot: buildSnapshot(world, 0) });
+    expect(state().realmPeaks[1]).toBe(first);
+    state().endGame();
+    const realms = state().summary?.realms ?? [];
+    expect(realms.find((r) => r.id === 1)?.peakPopulation).toBe(first);
+    expect(realms.find((r) => r.id === 0)?.ranBy).toBe("you");
+    expect(realms.find((r) => r.id === 1)?.ranBy).toMatch(/^AI · /);
   });
 });
 

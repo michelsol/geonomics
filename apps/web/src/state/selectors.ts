@@ -4,6 +4,7 @@ import {
   decodePrice,
   type GovernmentView,
   neutralPolicies,
+  type Personality,
   type ResolvedPolicies,
   resolveSettings,
   type Snapshot,
@@ -514,4 +515,64 @@ export function needsOf(
     }
   }
   return { rows, withDetail, detailPopulation };
+}
+
+/** One realm's public figures at the end of a session (specification §10, Screens). */
+export interface RealmResult {
+  id: number;
+  name: string;
+  color: string;
+  areas: number;
+  population: number;
+  peakPopulation: number;
+  realIncome: number; // income level over the cost of living, weighted by population; nominal without a price table
+  necessitySatisfaction: number; // weighted by population
+  soldiers: number; // in the realm's armies
+  eliminated: boolean;
+  ai: boolean;
+  personality: Personality;
+}
+
+/** Every realm's public figures, the largest population first and fallen realms last. */
+export function realmResults(
+  data: StaticData,
+  snapshot: Snapshot,
+  table: Uint16Array | null,
+  peaks: readonly number[],
+): RealmResult[] {
+  const living = table ? costsOfLiving(data, table) : null;
+  const results: RealmResult[] = snapshot.governments.map((government) => ({
+    id: government.id,
+    name: government.name,
+    color: government.color,
+    areas: 0,
+    population: 0,
+    peakPopulation: Math.max(peaks[government.id] ?? 0, government.population),
+    realIncome: 0,
+    necessitySatisfaction: 0,
+    soldiers: 0,
+    eliminated: government.isEliminated,
+    ai: government.ai,
+    personality: government.personality,
+  }));
+  const { owner, population, wageLevel, necessitySatisfaction } = snapshot.areas;
+  for (let area = 0; area < owner.length; area++) {
+    const result = results[owner[area] as number];
+    if (!result) continue;
+    const people = population[area] as number;
+    result.areas++;
+    result.population += people;
+    result.realIncome += (people * (wageLevel[area] as number)) / (living ? (living[area] as number) : 1);
+    result.necessitySatisfaction += people * (necessitySatisfaction[area] as number);
+  }
+  for (const army of snapshot.armies) {
+    const result = results[army.owner];
+    if (result) result.soldiers += army.soldiers;
+  }
+  for (const result of results) {
+    if (result.population <= 0) continue;
+    result.realIncome /= result.population;
+    result.necessitySatisfaction /= result.population;
+  }
+  return results.sort((a, b) => Number(a.eliminated) - Number(b.eliminated) || b.population - a.population);
 }

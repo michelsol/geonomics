@@ -97,6 +97,10 @@ test("a solo game runs, pauses, and takes commands", async ({ page }) => {
   await openTab(page, "Game");
   await page.getByRole("button", { name: "End game" }).click();
   await expect(page.getByRole("heading", { name: "Session over" })).toBeVisible();
+  // Every realm's public figures, the player's among them.
+  const results = page.getByTestId("realm-results");
+  await expect(results.locator("tbody tr")).toHaveCount(8);
+  await expect(results.locator("tr.chosen-row")).toContainText("you");
   await page.getByRole("button", { name: "New game" }).click();
   await expect(page.getByRole("heading", { name: "Geonomics" })).toBeVisible();
 });

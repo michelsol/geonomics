@@ -6,7 +6,16 @@ import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { FromWorker, GameOptions, HostStatus, Speed, ToWorker } from "../host/protocol";
 import { History } from "./history";
-import { DEMOGRAPHY_KEYS, demographyOf, meanPrices, priceExtremes, priceOf, realmPopulation } from "./selectors";
+import {
+  DEMOGRAPHY_KEYS,
+  demographyOf,
+  meanPrices,
+  priceExtremes,
+  priceOf,
+  type RealmResult,
+  realmPopulation,
+  realmResults,
+} from "./selectors";
 
 export type Screen = "newGame" | "guide" | "join" | "chooseRealm" | "game" | "ended";
 export type Layer = "realms" | "population" | "prices" | "resources" | "satisfaction" | "income" | "employment";
@@ -61,6 +70,8 @@ export interface Summary {
   areas: number;
   treasury: number;
   eliminated: boolean;
+  viewer: number | null; // the player's realm, null for a spectator
+  realms: (RealmResult & { ranBy: string })[]; // every realm's public figures, and who ran it
 }
 
 export interface Port {
@@ -121,6 +132,7 @@ export interface GameState {
   peaceAreas: number[]; // areas picked on the map for a peace proposal
   toasts: Toast[];
   peakPopulation: number;
+  realmPeaks: number[]; // per government: its largest population seen this session
   summary: Summary | null;
   session: Session;
 
@@ -202,6 +214,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     peaceAreas: [],
     toasts: [],
     peakPopulation: 0,
+    realmPeaks: [],
     summary: null,
     session: SOLO,
 
@@ -253,6 +266,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
         selectedArea: capital,
         selection: capital === null ? [] : [capital],
         peakPopulation: 0,
+        realmPeaks: [],
       });
     },
     setSession(session) {
@@ -272,6 +286,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
         selectedArea: capital,
         selection: capital === null ? [] : [capital],
         peakPopulation: 0,
+        realmPeaks: [],
       });
     },
     send(command) {
@@ -420,6 +435,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
             governments: snapshot.governments,
             edges,
             peakPopulation: Math.max(state.peakPopulation, population),
+            realmPeaks: snapshot.governments.map((g) => Math.max(state.realmPeaks[g.id] ?? 0, g.population)),
             historyVersion: state.historyVersion + 1,
           });
           if (snapshot.government?.isEliminated) {
@@ -524,6 +540,11 @@ function withDetailOf(snapshot: Snapshot, previous: Snapshot | null): Snapshot {
 
 function summarize(state: GameState, eliminated: boolean): Summary {
   const snapshot = state.snapshot;
+  const ranBy = (realm: RealmResult) =>
+    realm.id === state.viewer
+      ? "you"
+      : (state.session.players.find((player) => player.government === realm.id)?.name ??
+        (realm.ai ? `AI · ${realm.personality}` : "a player"));
   return {
     days: snapshot?.gameDay ?? 0,
     peakPopulation: state.peakPopulation,
@@ -531,6 +552,14 @@ function summarize(state: GameState, eliminated: boolean): Summary {
     areas: snapshot?.government?.ownedAreas.length ?? 0,
     treasury: snapshot?.government?.treasury ?? 0,
     eliminated,
+    viewer: state.viewer,
+    realms:
+      snapshot && state.data
+        ? realmResults(state.data, snapshot, state.priceTable, state.realmPeaks).map((realm) => ({
+            ...realm,
+            ranBy: ranBy(realm),
+          }))
+        : [],
   };
 }
 

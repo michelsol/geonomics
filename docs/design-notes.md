@@ -395,3 +395,7 @@ Actions first fell back to the whole realm whenever the selection held none of t
 ### One good's transport flows
 
 The transport flows first had their own good choice in the legend, with "all goods in tonnes" as the default, apart from the Goods panel's good. The flows now show the Goods panel's good, so the prices, their history and the arrows all describe the same good, and the legend no longer needs a control.
+
+### Every realm at the end
+
+The end screen compares every realm from the figures snapshots already carry, plus each realm's peak population recorded during the session. Treasuries and depots stay private even then: a joined player who leaves gets the same table as the host without a final message from the host's world, and nothing private ever leaves the host.

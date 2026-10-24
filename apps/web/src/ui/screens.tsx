@@ -9,7 +9,7 @@ import { hostEntered, stopHosting } from "../net/host";
 import { joinTarget, savedName } from "../net/options";
 import { applyUpdate } from "../pwa";
 import { useGame } from "../state/store";
-import { count, fmt, Select, Swatch } from "./components";
+import { count, fmt, pct, Select, Swatch } from "./components";
 import { controllerLabel, Invite, Players } from "./Players";
 
 const SIZES = [
@@ -347,6 +347,7 @@ export function Join() {
 
 export function EndOfSession() {
   const summary = useGame((state) => state.summary);
+  const hoursPerDay = useGame((state) => state.data?.config.economy.hoursPerWorkerDay ?? 1);
   const backToMenu = useGame((state) => state.backToMenu);
   const role = useGame((state) => state.session.role);
   // A joined player leaves the host's page behind: the menu is a solo game of its own.
@@ -360,7 +361,7 @@ export function EndOfSession() {
   if (!summary) return null;
   return (
     <main className="screen">
-      <div className="card">
+      <div className="card wide">
         <h2>{summary.eliminated ? "Your realm has fallen" : "Session over"}</h2>
         <table>
           <tbody>
@@ -386,6 +387,53 @@ export function EndOfSession() {
             </tr>
           </tbody>
         </table>
+        {summary.realms.length > 0 && (
+          <section className="section">
+            <h3>Every realm</h3>
+            <div className="table-scroll">
+              <table data-testid="realm-results">
+                <thead>
+                  <tr>
+                    <th>Realm</th>
+                    <th className="num">Areas</th>
+                    <th className="num">Population</th>
+                    <th className="num" title="The largest population the realm reached this session">
+                      Peak
+                    </th>
+                    <th className="num" title="Income per worker and day over the local cost of living, in man-hours">
+                      Real income, mh/day
+                    </th>
+                    <th className="num" title="Share of the need for necessities people could buy">
+                      Necessities
+                    </th>
+                    <th className="num">Soldiers</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.realms.map((realm) => (
+                    <tr key={realm.id} className={realm.id === summary.viewer ? "chosen-row" : undefined}>
+                      <td>
+                        <Swatch color={realm.color} />
+                        {realm.name}
+                        <div className="muted">
+                          {realm.ranBy}
+                          {realm.eliminated ? " · fallen" : ""}
+                        </div>
+                      </td>
+                      <td className="num">{count(realm.areas)}</td>
+                      <td className="num">{count(realm.population)}</td>
+                      <td className="num">{count(realm.peakPopulation)}</td>
+                      <td className="num">{realm.eliminated ? "—" : fmt(realm.realIncome * hoursPerDay)}</td>
+                      <td className="num">{realm.eliminated ? "—" : pct(realm.necessitySatisfaction)}</td>
+                      <td className="num">{count(realm.soldiers)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <span className="hint">Treasuries and depots stay private, as during the game.</span>
+          </section>
+        )}
         <button type="button" className="primary" onClick={leave}>
           New game
         </button>

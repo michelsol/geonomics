@@ -11,7 +11,7 @@ The interface is map-first: the map fills the screen and panels sit beside it on
    A loaded game skips generation and goes straight to the lobby.
 3. **How to play.** A short guide: the idea, the map, the economy, running the realm, war and peace, the AI realms, playing with friends, saving, and phones.
 4. **Game.** The map, the top bar and the panels.
-5. **End of session.** Shown when the player's government is eliminated, or when the player ends the game. It lists days played, peak and final population, areas held and treasury, and offers a new game. There is no score.
+5. **End of session.** Shown when the player's government is eliminated, or when the player ends the game. It lists days played, peak and final population, areas held and treasury, then every realm's public figures, the largest population first and fallen realms last: who ran it, areas, final and peak population, real income, necessities met and soldiers. Other realms' treasuries and depots stay private, as during the game. It offers a new game. There is no score.
 
 ### Map
 
