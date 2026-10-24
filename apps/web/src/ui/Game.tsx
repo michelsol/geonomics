@@ -283,17 +283,20 @@ function TopBar() {
           ))}
         </div>
       )}
-      <span className="stat" data-testid="game-day">
-        Day {Math.floor(day)}
-      </span>
-      <span className="stat" title="Treasury, in man-hours">
-        💰 {fmt(treasury)}
-      </span>
-      {population !== null && (
-        <span className="stat" title="Population of your realm" data-testid="realm-population">
-          👥 {fmt(population)}
+      {/* The day, treasury and population wrap as one: on a narrow screen they take a row of their own together. */}
+      <div className="group figures">
+        <span className="stat" data-testid="game-day">
+          Day {Math.floor(day)}
         </span>
-      )}
+        <span className="stat" title="Treasury, in man-hours">
+          💰 {fmt(treasury)}
+        </span>
+        {population !== null && (
+          <span className="stat" title="Population of your realm" data-testid="realm-population">
+            👥 {fmt(population)}
+          </span>
+        )}
+      </div>
       <span className="stat muted hide-phone" title="Ticks per second and milliseconds per tick">
         {status.ticksPerSecond} t/s · {status.msPerTick.toFixed(1)} ms
       </span>

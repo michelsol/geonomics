@@ -246,6 +246,9 @@ input[type="number"] {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.topbar .figures {
+  gap: 12px;
+}
 .map-wrap {
   grid-row: 2;
   grid-column: 1;
