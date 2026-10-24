@@ -80,9 +80,10 @@ export function Guide() {
         <section>
           <h2>Playing with friends</h2>
           <p>
-            In the lobby or the Game tab, Invite players gives a link to send. Your friends open it, pick a free realm
-            or watch, and play in the same world; your browser runs the game, so keep its tab open. If a friend drops
-            out, the AI runs their realm until they come back.
+            In the lobby or the Game tab, Invite players gives a link to send, and a six-letter code to read out:
+            friends type it under Join with a code. They pick a free realm or watch, and play in the same world; your
+            browser runs the game, so keep its tab open. If a friend drops out, the AI runs their realm until they come
+            back.
           </p>
         </section>
 

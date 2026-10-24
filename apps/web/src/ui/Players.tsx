@@ -4,6 +4,7 @@ import type { LobbyPlayer } from "@geonomics/net";
 import type { GovernmentSummary } from "@geonomics/sim";
 import { useState } from "react";
 import { releaseRealm, startHosting } from "../net/host";
+import { joinTarget } from "../net/options";
 import { useGame } from "../state/store";
 import { Swatch } from "./components";
 
@@ -34,8 +35,17 @@ export function Invite() {
         {opening ? "Opening…" : "Invite players"}
       </button>
     );
+  const code = joinTarget(new URL(session.link).hash);
   return (
     <div className="section">
+      {code && (
+        <div className="row">
+          <span className="muted">Code</span>
+          <span className="invite-code" data-testid="invite-code">
+            {code}
+          </span>
+        </div>
+      )}
       <div className="row">
         <input readOnly aria-label="Join link" data-testid="join-link" value={session.link} style={{ flex: 1 }} />
         <button
@@ -50,7 +60,9 @@ export function Invite() {
           Copy
         </button>
       </div>
-      <span className="hint">Anyone opening this link joins your game while this tab stays open.</span>
+      <span className="hint">
+        Anyone opening this link, or typing the code under Join with a code, joins your game while this tab stays open.
+      </span>
     </div>
   );
 }

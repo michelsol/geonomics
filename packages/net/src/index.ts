@@ -1,5 +1,6 @@
 // Networking: PeerJS host and client, message types, snapshot and price table encoding (specification §9).
 export { type ClientOptions, ClientSession, type ConnectionState } from "./client";
+export { CODE_ALPHABET, CODE_LENGTH, inviteCode, readCode } from "./code";
 export { decode, encode } from "./codec";
 export { DETAIL_BATCH, DetailRotation } from "./detail";
 export { MAX_FRAME, pack, Reassembler, toFrames, unpack } from "./frames";

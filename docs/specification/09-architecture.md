@@ -109,7 +109,7 @@ The interface uses the table in two places:
 
 ### Joining
 
-1. The host clicks Invite players. Its browser creates a PeerJS peer with a random id and shows the link `https://<site>/#join=<peer id>`. When the host's page has a `?peer=` setting (below), the link keeps it; otherwise the joining page uses the broker it was built with, so pages built with different brokers do not meet.
+1. The host clicks Invite players. Its browser creates a PeerJS peer whose id is a random 6-symbol **code** from `abcdefghjkmnpqrstuvwxyz23456789` (no 0, o, 1, l or i; about 900 million codes), trying another code up to five times when the broker says one is taken. It shows the code and the link `https://<site>/#join=<code>`. A player can also type the code (or paste the link) under Join with a code on the new game screen; codes are matched in lowercase, so capitals typed on a phone work. When the host's page has a `?peer=` setting (below), the link keeps it; otherwise the joining page uses the broker it was built with, so pages built with different brokers do not meet.
 2. The joining player opens the link and gives a name; its browser opens a reliable data channel to the host and sends `hello`.
 3. The host answers `welcome`, and the player appears in the lobby. Players can join before the host starts and during the game.
 

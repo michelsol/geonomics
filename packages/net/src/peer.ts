@@ -1,5 +1,6 @@
 // PeerJS links (specification §9, Joining): reliable, ordered data channels carrying raw binary frames.
 import { type DataConnection, Peer, type PeerOptions, util } from "peerjs";
+import { inviteCode } from "./code";
 import type { Link } from "./link";
 
 /** Signaling broker settings; empty for the PeerJS cloud broker. */
@@ -93,7 +94,7 @@ function explain(error: unknown): Error {
     "browser-incompatible": "this browser cannot open WebRTC connections",
   };
   const reason = type ? reasons[type] : undefined;
-  return new Error(reason ?? (error instanceof Error ? error.message : String(error)));
+  return Object.assign(new Error(reason ?? (error instanceof Error ? error.message : String(error))), { type });
 }
 
 function whenOpen(peer: Peer): Promise<string> {
@@ -119,10 +120,27 @@ export interface HostPeer {
   close(): void;
 }
 
-/** Opens the host's peer; every incoming data connection becomes a link once it opens. */
+/** Tries this many codes when the broker says one is taken. */
+const CODE_ATTEMPTS = 5;
+
+/**
+ * Opens the host's peer under a short invite code, trying another when one is taken; every incoming data connection
+ * becomes a link once it opens.
+ */
 export async function openHost(broker: BrokerOptions, onLink: (link: Link) => void): Promise<HostPeer> {
-  const peer = new Peer(await peerOptions(broker));
-  const id = await whenOpen(peer);
+  const options = await peerOptions(broker);
+  let peer: Peer;
+  let id: string;
+  for (let attempt = 1; ; attempt++) {
+    peer = new Peer(inviteCode(), options);
+    try {
+      id = await whenOpen(peer);
+      break;
+    } catch (error) {
+      peer.destroy();
+      if ((error as { type?: string }).type !== "unavailable-id" || attempt >= CODE_ATTEMPTS) throw error;
+    }
+  }
   peer.on("connection", (connection) => {
     connection.on("open", () => onLink(linkOf(connection)));
   });

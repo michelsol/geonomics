@@ -207,6 +207,11 @@ input[type="number"] {
   display: grid;
   gap: 6px;
 }
+.invite-code {
+  font: 600 22px / 1.2 var(--mono);
+  letter-spacing: 0.12em;
+  user-select: all;
+}
 .update {
   padding: 8px 10px;
   background: var(--surface-2);

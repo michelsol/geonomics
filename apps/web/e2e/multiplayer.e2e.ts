@@ -1,6 +1,6 @@
 import { type Browser, expect, type Page, test } from "@playwright/test";
 
-// Roadmap stage 9 exit: one browser hosts, another joins through the link, both command and see each other's realms.
+// Roadmap stage 9 exit: one browser hosts, another joins with its code, both command and see each other's realms.
 
 const BROKER = "?peer=localhost:8787";
 
@@ -18,19 +18,23 @@ async function host(browser: Browser) {
   await expect(page.getByRole("heading", { name: "Choose your realm" })).toBeVisible({ timeout: 60_000 });
   await page.getByRole("button", { name: "Invite players" }).click();
   const link = await page.getByTestId("join-link").inputValue({ timeout: 20_000 });
-  expect(link).toContain("#join=");
+  const code = (await page.getByTestId("invite-code").textContent()) ?? "";
+  expect(code).toMatch(/^[a-z2-9]{6}$/); // a short code, to type from one device into another
+  expect(link).toMatch(new RegExp(`#join=${code}$`));
   expect(link).toContain("peer=localhost");
-  return { page, link };
+  return { page, link, code };
 }
 
 test("a host and a joined player share a game", async ({ browser }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "two-browser session on desktop only");
   test.setTimeout(180_000);
-  const { page: hostPage, link } = await host(browser);
+  const { page: hostPage, code } = await host(browser);
 
-  // The guest opens the link, names itself and joins the lobby.
+  // The guest types the code, as read from another screen (capitals included), names itself and joins the lobby.
   const guest = await (await browser.newContext()).newPage();
-  await guest.goto(link);
+  await guest.goto(`/${BROKER}`);
+  await guest.getByLabel("Game code").fill(code.toUpperCase());
+  await guest.getByRole("button", { name: "Join", exact: true }).click();
   await guest.getByLabel("Your name").fill("Bob");
   await guest.getByRole("button", { name: "Join" }).click();
   await expect(guest.getByRole("heading", { name: "Choose your realm" })).toBeVisible({ timeout: 30_000 });

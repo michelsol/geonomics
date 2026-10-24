@@ -44,7 +44,7 @@ export function brokerOptions(search = location.search, builtIn = BUILT_IN_BROKE
 /** The host's peer id when this page was opened from a join link. */
 export function joinTarget(hash = location.hash): string | null {
   const match = /^#join=([\w-]+)$/.exec(hash);
-  return match ? (match[1] as string) : null;
+  return match ? (match[1] as string).toLowerCase() : null; // a phone keyboard may capitalize a typed code
 }
 
 /**

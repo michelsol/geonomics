@@ -42,33 +42,15 @@ export function ArmiesPanel() {
     });
   };
   const soldiers = own.reduce((sum, army) => sum + army.soldiers, 0);
-  const averageWage = realmWageLevel(snapshot);
-  const bill = soldiers * government.soldierWage * data.config.economy.hoursPerWorkerDay;
+  // Wages are stored per soldier-hour and shown per day.
+  const hoursPerDay = data.config.economy.hoursPerWorkerDay;
+  const averageWage = realmWageLevel(snapshot) * hoursPerDay;
+  const wage = government.soldierWage * hoursPerDay;
+  const bill = soldiers * wage;
 
   return (
     <>
-      <Section title="Pay">
-        <div className="row">
-          <span>Soldier wage</span>
-          <NumberField
-            label="Soldier wage"
-            value={government.soldierWage}
-            min={0}
-            onChange={(wage) => send({ type: "setSoldierWage", wage })}
-          />
-          <span className="muted">mh per hour</span>
-        </div>
-        <div className="stats">
-          <Stat label="Realm average wage" value={fmt(averageWage)} />
-          <Stat label="Soldiers" value={count(soldiers)} />
-          <Stat label="Pay per day" value={`${fmt(bill)} mh`} testId="army-bill" />
-        </div>
-        <span className="hint">
-          Soldiers desert when paid less than the realm's average wage, or when the treasury cannot pay them.
-        </span>
-      </Section>
-
-      <Section title="Recruit">
+      <Section title="Soldiers">
         <div className="row">
           <Select
             label="Recruit in"
@@ -85,14 +67,37 @@ export function ArmiesPanel() {
             min={1}
             onChange={(soldiers) => setRecruit({ ...recruit, soldiers })}
           />
-          <button type="button" className="primary" onClick={() => recruitIn(recruit.soldiers)}>
+          <span className="muted">soldiers at</span>
+          <span
+            className="row"
+            title="Paid to every soldier of the realm. Soldiers desert when paid less than the realm's average wage, or when the treasury cannot pay them."
+          >
+            <NumberField
+              label="Soldier wage"
+              value={Math.round(wage * 100) / 100}
+              min={0}
+              onChange={(perDay) => send({ type: "setSoldierWage", wage: perDay / hoursPerDay })}
+            />
+            <span className="muted">mh/day</span>
+          </span>
+          <button
+            type="button"
+            className="primary"
+            title={`Recruits leave the workforce of the area.${recruitArea === SELECTED ? " The total is split over the selection by population, one army per area." : ""}`}
+            onClick={() => recruitIn(recruit.soldiers)}
+          >
             Recruit
           </button>
         </div>
-        <span className="hint">
-          Recruits leave the workforce of the area.
-          {recruitArea === SELECTED ? " The total is split over the selection by population, one army per area." : ""}
-        </span>
+        <div className="stats">
+          <Stat label="Soldiers" value={count(soldiers)} />
+          <Stat label="Pay per day" value={`${fmt(bill)} mh`} testId="army-bill" />
+          <Stat
+            label="Realm average wage"
+            value={`${fmt(averageWage)} mh/day`}
+            title="Weighted by population. Soldiers paid less than this desert."
+          />
+        </div>
       </Section>
 
       <Weapons />

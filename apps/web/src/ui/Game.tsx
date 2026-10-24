@@ -293,7 +293,7 @@ function TopBar() {
         </span>
         {population !== null && (
           <span className="stat" title="Population of your realm" data-testid="realm-population">
-            👥 {fmt(population)}
+            👥 {count(population)}
           </span>
         )}
       </div>

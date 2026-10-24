@@ -145,6 +145,8 @@ export function JobsPanel() {
     weighted += offer * (population[area] as number);
     people += population[area] as number;
   }
+  // Wages are stored per worker-hour and shown per worker-day.
+  const hoursPerDay = data.config.economy.hoursPerWorkerDay;
   const wageOffer = people > 0 ? weighted / people : 0;
   const averageWage =
     areas.reduce((sum, area) => sum + (snapshot.areas.wageLevel[area] as number) * (population[area] as number), 0) /
@@ -171,12 +173,14 @@ export function JobsPanel() {
           <span>Wage offer</span>
           <NumberField
             label="Jobs wage offer"
-            value={Math.round(wageOffer * 100) / 100}
+            value={Math.round(wageOffer * hoursPerDay * 100) / 100}
             min={0}
-            onChange={(offer) => sendAll(areas.map((area) => ({ type: "setWageOffer", area, wageOffer: offer })))}
+            onChange={(offer) =>
+              sendAll(areas.map((area) => ({ type: "setWageOffer", area, wageOffer: offer / hoursPerDay })))
+            }
           />
           <span className="muted">
-            average wage {region ? "in the selection" : "here"} {fmt(averageWage)}
+            mh/day · average wage {region ? "in the selection" : "here"} {fmt(averageWage * hoursPerDay)} mh/day
           </span>
         </div>
         <span className="muted">

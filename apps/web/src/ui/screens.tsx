@@ -1,5 +1,6 @@
 // New game, realm choice and end-of-session screens (specification §10, Screens).
 
+import { readCode } from "@geonomics/net/code"; // the code helpers alone: PeerJS loads when joining
 import type { AiMix, SaveInfo } from "@geonomics/sim";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CatalogName } from "../host/protocol";
@@ -124,8 +125,44 @@ export function NewGame() {
           </p>
         )}
         {!progress && <SavedGames />}
+        {!progress && <JoinWithCode />}
       </div>
     </main>
+  );
+}
+
+/** Joining a friend's game by typing its code, or pasting its link. */
+function JoinWithCode() {
+  const [text, setText] = useState("");
+  const code = readCode(text);
+  return (
+    <form
+      className="section"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!code) return;
+        // The page decides at load whether it hosts or joins: reload it on the join link.
+        location.hash = `join=${code}`;
+        location.reload();
+      }}
+    >
+      <h3>Join with a code</h3>
+      <div className="row">
+        <input
+          aria-label="Game code"
+          placeholder="k7m3qx"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          style={{ flex: 1 }}
+        />
+        <button type="submit" disabled={!code}>
+          Join
+        </button>
+      </div>
+    </form>
   );
 }
 

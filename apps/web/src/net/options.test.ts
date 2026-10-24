@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brokerOptions, joinLink } from "./options";
+import { brokerOptions, joinLink, joinTarget } from "./options";
 
 describe("brokerOptions", () => {
   it("uses the PeerJS cloud without a built-in broker or setting", () => {
@@ -67,5 +67,12 @@ describe("joinLink", () => {
     expect(joinLink("abc", "", page)).toBe(`${page}#join=abc`);
     expect(joinLink("abc", "?warmup=10&relay=1", page)).toBe(`${page}#join=abc`);
     expect(joinLink("abc", "?peer=localhost:8787&warmup=10", page)).toBe(`${page}?peer=localhost%3A8787#join=abc`);
+  });
+});
+
+describe("joinTarget", () => {
+  it("reads the host's code from the link, whatever its case", () => {
+    expect(joinTarget("#join=K7m3qx")).toBe("k7m3qx");
+    expect(joinTarget("#other")).toBeNull();
   });
 });
