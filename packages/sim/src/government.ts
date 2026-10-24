@@ -61,7 +61,6 @@ export function createGovernment(world: World, init: GovernmentInit): Government
     realmPolicies: [],
     marketOrders: [],
     standingOrders: [],
-    depotTransfers: [],
     soldierWage: world.config.military.soldierWage,
   };
   world.governments.push(government);
@@ -338,6 +337,5 @@ export function eliminate(world: World, government: Government): void {
   for (const army of [...world.armies.values()]) if (army.owner === government.id) disbandArmy(world, army);
   government.marketOrders = [];
   government.standingOrders = [];
-  government.depotTransfers = [];
   world.peaceProposals = world.peaceProposals.filter((p) => p.from !== government.id && p.to !== government.id);
 }

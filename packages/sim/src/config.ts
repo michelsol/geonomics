@@ -54,7 +54,6 @@ export interface WorldConfig {
     seaTravelDaysPerDistance: number; // game days an army needs per unit of sea distance
     migrationFactorBySea: number; // migration over a sea route, relative to a land edge
     migrationFactorByAir: number; // migration over an air route, relative to a land edge
-    airFreightDays: number; // game days a depot transfer takes over an air route
   };
   population: {
     growthRatePerDay: number; // relative growth per day at full necessity satisfaction
@@ -165,7 +164,6 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
     seaTravelDaysPerDistance: 0.01,
     migrationFactorBySea: 0.5,
     migrationFactorByAir: 0.25,
-    airFreightDays: 1,
   },
   population: {
     growthRatePerDay: 0.0001,

@@ -78,7 +78,7 @@ From the host to a joining player:
 The host broadcasts snapshots at `snapshotRate` (default 3 per second), independent of the tick rate. A snapshot contains:
 
 - `tick` and `gameDay`.
-- Per area, for every area: owner, population, its natural change of the last tick per game day (growth, or starvation when negative), wage level, satisfaction, port, airport and fortification levels, siege progress and besieger, and militia.
+- Per area, for every area: owner, population, its natural change of the last tick per game day (growth, or starvation when negative), wage level, employment rate (the share of the workforce, `population × workforceShare`, not unemployed), satisfaction, port, airport and fortification levels, siege progress and besieger, and militia.
 - The receiving player's **visible areas**, its owned areas and their direct neighbors, and for them savings, unemployed workers, and the price, stock, produced, consumed, imported, exported, private worker and natural capacity arrays, and per need the need units demanded and consumed. Other areas' stocks and flows are not sent. A joined player receives this detail in turns: each snapshot carries its focused area and the next 48 visible areas, and its interface keeps the last detail of each visible area. The local player receives all of it every time.
 - The static data sent once at the start also carries every area's maximum natural capacity per good.
 - Per edge: transport cost, capacity, active and blocked state, plus the full data of any route edge created since the last snapshot.

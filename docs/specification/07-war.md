@@ -8,7 +8,7 @@ War is an economic activity: soldiers are withdrawn from the workforce and paid 
 
 Every pair of governments is at `peace` or `war`. A `declareWar` command takes effect immediately, on both sides. Peace needs a `proposePeace` command accepted by the other side; a proposal can transfer areas and include a money payment.
 
-An edge is **blocked** when its two areas belong to governments at war, or when either area is under siege. Blocked edges carry no trade, migration or depot transfers. Armies still cross them.
+An edge is **blocked** when its two areas belong to governments at war, or when either area is under siege. Blocked edges carry no trade or migration. Armies still cross them.
 
 ### Militia
 
@@ -84,7 +84,7 @@ When `siegeProgress` reaches 1, the area changes owner. The same rules apply to 
 - If it was the old owner's capital, the capital moves to its most populous remaining area.
 - A government with no area left is eliminated:
   - its armies disband where they stand;
-  - its orders, standing orders, depot transfers and peace proposals are dropped;
+  - its orders, standing orders and peace proposals are dropped;
   - its `capital` becomes null.
 
 ### Peace

@@ -35,14 +35,6 @@ export function ramp(stops: readonly number[], t: number): number {
   return fromRgb([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]);
 }
 
-/** A color part way from `a` to `b`, t in [0, 1]. */
-export function mix(a: number, b: number, t: number): number {
-  return ramp([a, b], t);
-}
-
-/** The Area layer: terrain, tinted this much toward the owner's color. */
-export const REALM_TINT = 0.45;
-
 export const DIVERGING = [0x2c6bb0, 0x8db8e0, 0xf2f2f2, 0xeba07e, 0xc0392b];
 export const SATISFACTION = [0xc0392b, 0xe6a03c, 0xe8d85a, 0x6fbf5a, 0x2e8b57];
 
@@ -58,10 +50,24 @@ export function wageColor(wageLevel: number): number {
   return ramp(DIVERGING, 0.5 + Math.log(Math.max(wageLevel, 1e-3)) / (2 * Math.log(WAGE_RANGE)));
 }
 
-/** Natural capacity of one good: one hue, brighter for more, relative to the best area on the map. */
-export const RESOURCE = [0x1f3d2e, 0x2f6b43, 0x4f9e57, 0x8fd07a, 0xd2f2a8];
-export function resourceColor(capacity: number, best: number): number {
-  return capacity > 0 && best > 0 ? ramp(RESOURCE, Math.sqrt(capacity / best)) : NEUTRAL;
+/**
+ * Natural capacity of one good, drawn as diagonal stripes over the terrain: thicker for more, in RESOURCE_LEVELS steps
+ * of the square root of the capacity over the best area's. Widths are in pixels of a STRIPE_TILE-pixel tile.
+ */
+export const STRIPE_TILE = 32;
+export const STRIPE_WIDTHS = [2, 5, 10, 17] as const;
+export const RESOURCE_LEVELS = STRIPE_WIDTHS.length;
+export const STRIPE_COLOR = "rgba(11, 17, 26, 0.7)";
+/** The stripe level of an area, or -1 where the good cannot be extracted. */
+export function resourceLevel(capacity: number, best: number): number {
+  if (!(capacity > 0) || !(best > 0)) return -1;
+  return Math.min(RESOURCE_LEVELS - 1, Math.floor(Math.sqrt(capacity / best) * RESOURCE_LEVELS));
+}
+
+/** Employment rate: one hue, brighter for more, from nobody to everyone in work. */
+export const EMPLOYMENT = [0x1a2340, 0x24477a, 0x2f74b5, 0x63a9e0, 0xc4e4fa];
+export function employmentColor(rate: number): number {
+  return Number.isFinite(rate) ? ramp(EMPLOYMENT, rate) : NEUTRAL;
 }
 
 /** Population: one hue, brighter for more, on a log scale between the map's smallest and largest areas. */

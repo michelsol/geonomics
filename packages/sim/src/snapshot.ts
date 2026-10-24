@@ -7,7 +7,6 @@ import { lastTradeFlows, lastTradeTonnage } from "./tick/trade";
 import type {
   AreaId,
   Army,
-  DepotTransfer,
   EdgeMode,
   Good,
   GoodId,
@@ -62,7 +61,6 @@ export interface GovernmentView {
   realmPolicies: PolicySetting[];
   marketOrders: MarketOrder[];
   standingOrders: StandingOrder[];
-  depotTransfers: DepotTransfer[];
   soldierWage: number;
 }
 
@@ -104,6 +102,7 @@ export interface Snapshot {
     population: Float32Array;
     naturalChange: Float32Array; // people per day gained by growth, or lost to starvation when negative
     wageLevel: Float32Array;
+    employmentRate: Float32Array; // share of the workforce with a private or government job; NaN when empty
     satisfaction: Float32Array;
     necessitySatisfaction: Float32Array;
     portLevel: Uint8Array;
@@ -187,6 +186,7 @@ export function buildSnapshot(
     population: new Float32Array(n),
     naturalChange: new Float32Array(n),
     wageLevel: new Float32Array(n),
+    employmentRate: new Float32Array(n),
     satisfaction: new Float32Array(n),
     necessitySatisfaction: new Float32Array(n),
     portLevel: new Uint8Array(n),
@@ -198,12 +198,16 @@ export function buildSnapshot(
   };
   const natural = lastNaturalChange(world);
   const days = world.config.pace.gameDaysPerTick;
+  const { workforceShare } = world.config.economy;
   for (const area of world.areas) {
     const i = area.id;
     areas.owner[i] = area.owner ?? -1;
     areas.population[i] = area.population;
     areas.naturalChange[i] = (natural[i] ?? 0) / days;
     areas.wageLevel[i] = area.wageLevel;
+    const workforce = area.population * workforceShare;
+    areas.employmentRate[i] =
+      workforce > 0 ? Math.min(1, Math.max(0, 1 - area.unemployedWorkers / workforce)) : Number.NaN;
     areas.satisfaction[i] = area.satisfaction;
     areas.necessitySatisfaction[i] = area.necessitySatisfaction;
     areas.portLevel[i] = area.portLevel;
@@ -329,7 +333,6 @@ function governmentView(government: World["governments"][number]): GovernmentVie
       areas: o.areas === "all" ? "all" : [...o.areas],
       rule: { ...o.rule },
     })),
-    depotTransfers: government.depotTransfers.map((t) => ({ ...t })),
     soldierWage: government.soldierWage,
   };
 }

@@ -138,7 +138,6 @@ interface WorldConfig {
     seaTravelDaysPerDistance: number;   // game days an army needs per unit of sea distance (default 0.01)
     migrationFactorBySea: number;       // migration over a sea route, relative to a land edge (default 0.5)
     migrationFactorByAir: number;       // migration over an air route, relative to a land edge (default 0.25)
-    airFreightDays: number;             // game days a depot transfer takes over an air route (default 1)
   };
   population: {
     growthRatePerDay: number;           // relative growth per day at full necessity satisfaction (default 0.0001)

@@ -1,6 +1,6 @@
-// The government's depots in the chosen areas, and goods on their way to them.
+// The government's depots in the chosen areas.
 import { fmt, Section } from "../components";
-import { AreaLink, useView } from "./common";
+import { useView } from "./common";
 
 /** Depot contents summed over the player's areas among `areas`; nothing when it holds none of them. */
 export function Depots({ areas }: { areas: number[] }) {
@@ -15,8 +15,6 @@ export function Depots({ areas }: { areas: number[] }) {
     for (let g = 0; g < held.length; g++) held[g] = (held[g] as number) + (state.depot[g] as number);
   }
   const goods = data.goods.filter((good) => (held[good.id] as number) > 0.01);
-  const arriving = government.depotTransfers.filter((t) => own.includes(t.destination));
-  const goodName = (g: number) => data.goods[g]?.name ?? "?";
 
   return (
     <Section title={own.length === 1 ? "Depot" : `Depots (${own.length} areas)`}>
@@ -37,12 +35,6 @@ export function Depots({ areas }: { areas: number[] }) {
       <span className="hint">
         The government's goods here: bought, produced by government jobs or taken as taxes in kind.
       </span>
-      {arriving.map((t) => (
-        <div className="list-item" key={`${t.destination}-${t.good}-${t.daysRemaining}`}>
-          {fmt(t.quantity)} {goodName(t.good)} arriving in <AreaLink area={t.destination} /> in{" "}
-          {fmt(Math.max(0, t.daysRemaining))} days
-        </div>
-      ))}
     </Section>
   );
 }

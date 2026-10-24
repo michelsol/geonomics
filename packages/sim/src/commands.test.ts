@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AI_PLAYER, MAXIMUM_MARKET_ORDERS, MAXIMUM_STANDING_ORDERS, transferPath } from "./commands";
+import { AI_PLAYER, MAXIMUM_MARKET_ORDERS, MAXIMUM_STANDING_ORDERS } from "./commands";
 import { foundGovernments } from "./government";
 import { goodId, PLAYER, realmWorld, send } from "./testing";
 import { runTick } from "./tick/tick";
@@ -77,7 +77,7 @@ describe("policies", () => {
     expect(set("importTariffRate", grain, -1.5)).toMatch(/within/);
     expect(set("consumptionTaxRate", grain, Number.NaN)).toMatch(/finite/);
     expect(set("headTaxPerPersonPerDay", grain, 1)).toMatch(/not a good/);
-    expect(set("headTaxPerPersonPerDay", null, -1)).toMatch(/non-negative/);
+    expect(set("headTaxPerPersonPerDay", null, Number.NaN)).toMatch(/finite/);
     expect(set("priceFloor", grain, -1)).toMatch(/non-negative/);
     expect(set("priceFloor", 99, 1)).toMatch(/unknown good/);
     expect(set("lowerTaxes", grain, 0)).toMatch(/unknown policy/);
@@ -88,6 +88,8 @@ describe("policies", () => {
       /unknown area/,
     );
     expect(world.governments[0]?.realmPolicies).toEqual([]);
+    const allowance = { policy: "headTaxPerPersonPerDay", good: null, value: -1 } as const;
+    expect(send(realmWorld(), { type: "setRealmPolicy", setting: allowance })).toBeNull(); // paid to every inhabitant
   });
 });
 
@@ -136,51 +138,6 @@ describe("market orders", () => {
         maximumQuantityPerDay: 1,
       });
     expect(send(world, order())).toMatch(/too many/);
-  });
-});
-
-describe("depot transfers", () => {
-  const grain = 0;
-
-  it("finds the cheapest open path across land, sea and air", () => {
-    const world = realmWorld();
-    expect(transferPath(world, 1, 2)?.steps.map((s) => world.edges[s.edge]?.mode)).toEqual(["land", "sea"]);
-    (world.edges[2] as World["edges"][number]).isBlocked = true; // the sea route
-    expect(transferPath(world, 1, 2)?.steps.map((s) => world.edges[s.edge]?.mode)).toEqual(["land", "air"]);
-    (world.edges[3] as World["edges"][number]).isActive = false; // the air route
-    expect(transferPath(world, 1, 2)).toBeNull();
-  });
-
-  it("takes goods from the source depot, pays transport upfront and schedules the arrival", () => {
-    const world = realmWorld();
-    stateOf(world, 1).depot[grain] = 100;
-    const treasury = world.governments[0]?.treasury as number;
-    expect(send(world, { type: "transferGoods", from: 1, to: 2, good: grain, quantity: 60 })).toBeNull();
-    expect(stateOf(world, 1).depot[grain]).toBe(40);
-    const land = world.edges[0] as World["edges"][number];
-    const sea = world.edges[2] as World["edges"][number];
-    const cost = (land.transportCost + sea.transportCost) * (world.goods[grain]?.transportWeight as number) * 60;
-    expect(world.governments[0]?.treasury).toBeCloseTo(treasury - cost, 9);
-    expect(world.governments[0]?.depotTransfers).toEqual([
-      { good: grain, quantity: 60, destination: 2, daysRemaining: land.travelDays + sea.travelDays },
-    ]);
-  });
-
-  it("rejects transfers beyond the depot, without a path, to the same or foreign areas, or unpaid", () => {
-    const world = realmWorld();
-    stateOf(world, 1).depot[grain] = 10;
-    const transfer = (overrides: object) =>
-      send(world, { type: "transferGoods", from: 1, to: 2, good: grain, quantity: 5, ...overrides } as Command);
-    expect(transfer({ quantity: 11 })).toMatch(/not enough/);
-    expect(transfer({ quantity: -1 })).toMatch(/non-negative/);
-    expect(transfer({ to: 1 })).toMatch(/same area/);
-    expect(transfer({ to: 3 })).toMatch(/not owned/);
-    (world.governments[0] as World["governments"][number]).treasury = 0;
-    expect(transfer({})).toMatch(/treasury/);
-    (world.governments[0] as World["governments"][number]).treasury = 1e6;
-    for (const edge of world.edges) edge.isBlocked = true;
-    expect(transfer({})).toMatch(/no open path/);
-    expect(stateOf(world, 1).depot[grain]).toBe(10);
   });
 });
 

@@ -4,12 +4,15 @@ import { arrowWidth } from "../map/arrows";
 import {
   cssColor,
   DIVERGING,
+  EMPLOYMENT,
   MIGRATION_ARROW,
   POPULATION,
   POPULATION_DECADES,
   PRICE_RANGE,
-  RESOURCE,
   SATISFACTION,
+  STRIPE_COLOR,
+  STRIPE_TILE,
+  STRIPE_WIDTHS,
   TERRAIN_COLORS,
   TRANSPORT_ARROW,
   WAGE_RANGE,
@@ -421,18 +424,6 @@ function AreaLegend() {
         </div>
       );
     }
-    case "area":
-      return (
-        <div className="legend" data-testid="legend">
-          <div>Terrain, tinted by realm</div>
-          {Object.entries(TERRAIN_COLORS).map(([name, color]) => (
-            <div key={name}>
-              <span className="swatch" style={{ background: cssColor(color) }} />
-              {name}
-            </div>
-          ))}
-        </div>
-      );
     case "prices":
       return (
         <div className="legend" data-testid="legend">
@@ -449,10 +440,22 @@ function AreaLegend() {
       return (
         <div className="legend" data-testid="legend">
           <div>Natural capacity of {resource}</div>
-          <div className="bar" style={{ background: gradient(RESOURCE) }} />
+          <div className="stripes">
+            {STRIPE_WIDTHS.map((width) => (
+              <span key={width} className="stripe-swatch" style={{ background: stripes(width) }} />
+            ))}
+          </div>
           <div className="ends">
             <span>little</span>
             <span>most on the map</span>
+          </div>
+          <div className="terrains">
+            {Object.entries(TERRAIN_COLORS).map(([name, color]) => (
+              <span key={name}>
+                <span className="swatch" style={{ background: cssColor(color) }} />
+                {name}
+              </span>
+            ))}
           </div>
         </div>
       );
@@ -479,7 +482,26 @@ function AreaLegend() {
           </div>
         </div>
       );
+    case "employment":
+      return (
+        <div className="legend" data-testid="legend">
+          <div>Employment rate: workers with a job</div>
+          <div className="bar" style={{ background: gradient(EMPLOYMENT) }} />
+          <div className="ends">
+            <span>0%</span>
+            <span>100%</span>
+          </div>
+        </div>
+      );
   }
+}
+
+/** A legend sample of the resources layer's stripes, at half their size on the map tile. */
+function stripes(width: number): string {
+  const scale = 0.5;
+  const period = (STRIPE_TILE / Math.SQRT2) * scale;
+  const line = width * scale;
+  return `repeating-linear-gradient(-45deg, ${STRIPE_COLOR} 0 ${line}px, transparent ${line}px ${period}px), ${cssColor(TERRAIN_COLORS.plains)}`;
 }
 
 function ModeBanner() {

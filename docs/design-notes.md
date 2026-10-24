@@ -92,7 +92,7 @@ The first version followed the specification literally: a buy order takes only t
 
 ### Money stays conserved
 
-Depot transfers originally paid their transport into nothing. It now goes to the source area's carriers, as in private trade, so money only moves between savings and treasuries. A unit test checks this under taxes, tariffs, subsidies, wages, market orders and transfers together.
+Depot transfers originally paid their transport into nothing. It now goes to the source area's carriers, as in private trade, so money only moves between savings and treasuries. A unit test checks this under taxes, tariffs, subsidies, wages, market orders and transfers together. Transfers were later removed (see Panels and map layers).
 
 ### How fast policies bite
 
@@ -358,12 +358,24 @@ Recruits and weapon purchases for the whole realm go to the capital. Split by po
 
 ### Layers follow the panels
 
-The map layer and the flows used to be two menus in the top bar, chosen apart from the panels. Reading the Jobs panel over the realm colors, or prices over the population, meant two choices that the player had to keep in step, and on phones the menus took a second row of the top bar. Each panel now shows the layer its figures come from: prices for Goods, wages for Jobs, population for Population, necessities met for Needs. Flows are checkboxes in the panel they explain, migration in Population and transport in Goods, so arrows never cover a layer they have nothing to do with.
+The map layer and the flows used to be two menus in the top bar, chosen apart from the panels. Reading the Jobs panel over the realm colors, or prices over the population, meant two choices that the player had to keep in step, and on phones the menus took a second row of the top bar. Each panel now shows the layer its figures come from: prices for Goods, population for Population, necessities met for Needs, employment for Jobs, and wages for Policies, whose taxes act on them. Flows are checkboxes in the panel they explain, migration in Population and transport in Goods, so arrows never cover a layer they have nothing to do with.
 
-The Area panel shows terrain tinted by realm rather than the plain realm colors: terrain explains much of what an area produces, and the tint keeps borders and owners readable. The tint is a color mix per cell, not a second translucent layer, so it costs nothing more to draw.
+Resources are stripes over the terrain rather than a color scale of their own. Where a good can be extracted depends on terrain, so seeing both at once explains the pattern, and a color ramp over the terrain colors would have been unreadable. Stripe thickness takes four steps, which the eye tells apart where a continuous scale of widths would not. The employment rate gets its own layer for Jobs; it is public like wages, since it is visible from the street.
 
 The Resources panel keeps its own good, apart from the good of the Goods panel. Crafted goods have no natural capacity, so sharing one choice would show an empty resources map after looking at the price of tools.
 
-### Births and deaths
+### Births & deaths
 
-The model has one net rate of natural change per area (section 5, Population): an area whose necessities are met grows, and one short of them starves. It never has births and deaths at the same time. The Population panel shows the growth of the areas that grow as births and the starvation of the others as deaths, which is what a player wants to know (where people are dying), without a birth rate and a death rate the model would have to add. Over several areas both can be nonzero, since some grow while others starve.
+The model has one net rate of natural change per area (section 5, Population): an area whose necessities are met grows, and one short of them starves. Showing births and deaths apart would have meant inventing a split the model does not have, so the Population panel shows one signed figure, "Births & deaths", next to migration in and out.
+
+### No depot transfers
+
+Players could send goods between their own depots, paying transport and waiting for the goods to travel. The form took room in the Area panel and needed a pair of areas, while the panels now act on one selection, so its controls went first. Transfers were removed from the simulation as well; moving stock between depots may come back as a standing order.
+
+### Negative head tax
+
+A negative head tax is an allowance per inhabitant. It joins the government's bill with subsidies and wages, so a short treasury scales it down with them, and it reuses the head tax rather than adding a policy.
+
+### Flows after a new route
+
+The jobs phase can open an air route after the population and trade phases, and the per-tick buffers were then rebuilt empty before the next snapshot, which showed no migration, no trade and no births or deaths for one sample. The rebuilt buffers now keep the last tick's values.

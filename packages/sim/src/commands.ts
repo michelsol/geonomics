@@ -1,7 +1,7 @@
 // Phase 0: command validation and application (specification §3, Commands and Command validation).
 import { armyPath, disbandArmy, planningOrigin, returnSoldiers } from "./army";
 import { resolvePolicies, settleRealm, transferArea, upsertSetting } from "./government";
-import { type Path, shortestPath } from "./graph";
+import type { Path } from "./graph";
 import { EPSILON } from "./math";
 import { takeWorkers } from "./tick/population";
 import type {
@@ -109,8 +109,6 @@ function validate(world: World, government: Government, command: Command): strin
     }
     case "cancelMarketOrder":
       return government.marketOrders.some((order) => order.id === command.orderId) ? null : "no such market order";
-    case "transferGoods":
-      return validateTransfer(world, government, command);
     case "setJobTarget": {
       const { state, reason } = ownedState(world, government, command.area);
       if (!state) return reason;
@@ -217,7 +215,8 @@ function validateSetting(world: World, setting: PolicySetting): string | null {
   const { policy, good, value } = setting;
   if (policy === "headTaxPerPersonPerDay") {
     if (good !== null) return "head tax applies to an area, not a good";
-    if (value !== null && !isAmount(value)) return "head tax must be finite and non-negative";
+    // A negative head tax is an allowance the treasury pays every inhabitant.
+    if (value !== null && (typeof value !== "number" || !Number.isFinite(value))) return "head tax must be finite";
     return null;
   }
   if (!PER_GOOD_POLICIES.includes(policy)) return "unknown policy";
@@ -282,27 +281,6 @@ function validateRule(world: World, rule: StandingRule): string | null {
   }
 }
 
-function validateTransfer(
-  world: World,
-  government: Government,
-  command: Extract<Command, { type: "transferGoods" }>,
-): string | null {
-  const source = ownedState(world, government, command.from);
-  if (!source.state) return source.reason;
-  const destination = ownedState(world, government, command.to);
-  if (!destination.state) return destination.reason;
-  if (command.from === command.to) return "source and destination are the same area";
-  const reason = validateGood(world, command.good);
-  if (reason) return reason;
-  if (!isAmount(command.quantity)) return "quantity must be finite and non-negative";
-  if (command.quantity > (source.state.depot[command.good] as number)) return "not enough goods in the depot";
-  const path = transferPath(world, command.from, command.to);
-  if (!path) return "no open path between the two depots";
-  if (transferCost(world, path, command.good, command.quantity) > government.treasury)
-    return "the treasury cannot pay the transport";
-  return null;
-}
-
 function ownArmy(
   world: World,
   government: Government,
@@ -344,27 +322,6 @@ function validateTransfers(world: World, proposal: Omit<PeaceProposal, "id">): s
 /** Phase 0: drops peace proposals past their expiry day. */
 export function expireProposals(world: World): void {
   world.peaceProposals = world.peaceProposals.filter((proposal) => proposal.expiresAtDay >= world.gameDay);
-}
-
-// Depot transfers (specification §6, Depots and transfers)
-
-/** Cheapest path by transport cost through active, non-blocked edges of every mode. */
-export function transferPath(world: World, from: AreaId, to: AreaId): Path | null {
-  return shortestPath(world, from, to, (edge) => (edge.isActive && !edge.isBlocked ? edge.transportCost : null));
-}
-
-export function transferCost(world: World, path: Path, good: number, quantity: number): number {
-  return path.cost * (world.goods[good]?.transportWeight ?? 0) * quantity;
-}
-
-/** Game days goods take along a path: each edge's travel days, and airFreightDays on air routes. */
-export function transferDays(world: World, path: Path): number {
-  let days = 0;
-  for (const step of path.steps) {
-    const edge = world.edges[step.edge] as Edge;
-    days += edge.mode === "air" ? world.config.transport.airFreightDays : edge.travelDays;
-  }
-  return days;
 }
 
 // Application
@@ -413,22 +370,6 @@ function execute(world: World, government: Government, command: Command): void {
     case "cancelMarketOrder":
       government.marketOrders = government.marketOrders.filter((order) => order.id !== command.orderId);
       return;
-    case "transferGoods": {
-      const path = transferPath(world, command.from, command.to) as Path;
-      const source = stateOf(government, command.from);
-      source.depot[command.good] = (source.depot[command.good] as number) - command.quantity;
-      // Transport is paid to the carriers of the source area, as in private trade.
-      const cost = transferCost(world, path, command.good, command.quantity);
-      government.treasury -= cost;
-      (world.areas[command.from] as Area).savings += cost;
-      government.depotTransfers.push({
-        good: command.good,
-        quantity: command.quantity,
-        destination: command.to,
-        daysRemaining: transferDays(world, path),
-      });
-      return;
-    }
     case "setJobTarget": {
       const state = stateOf(government, command.area);
       const assignment = state.jobs.find((job) => sameJob(job.job, command.job));

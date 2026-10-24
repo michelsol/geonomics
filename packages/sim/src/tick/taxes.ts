@@ -43,12 +43,14 @@ export function runTaxes(world: World): void {
 
 /**
  * Collects an area's taxes: production and consumption taxes accumulated this tick plus the head tax. What savings
- * cannot cover is taken in kind, most valuable goods first, into the depot. Returns the money collected.
+ * cannot cover is taken in kind, most valuable goods first, into the depot. Returns the money collected. A negative
+ * head tax is an allowance instead, added to what the treasury owes the area.
  */
 function collect(world: World, scratch: Scratch, area: Area, state: GovernmentAreaState): number {
   const days = world.config.pace.gameDaysPerTick;
-  const headTax = policiesOf(world, area, scratch).headTaxPerPersonPerDay;
-  const due = (scratch.taxDue[area.id] as number) + headTax * area.population * days;
+  const headTax = policiesOf(world, area, scratch).headTaxPerPersonPerDay * area.population * days;
+  if (headTax < 0) scratch.paymentDue[area.id] = (scratch.paymentDue[area.id] as number) - headTax;
+  const due = (scratch.taxDue[area.id] as number) + Math.max(0, headTax);
   if (due <= 0) return 0;
   const paid = Math.min(due, area.savings);
   area.savings -= paid;

@@ -1,7 +1,7 @@
 // Draws the map with PixiJS (specification §10, Map). Every layer is cached geometry, redrawn only when what it
 // shows changes, and the scene is rendered on demand, so an idle map costs nothing per frame.
 import { EDGE_ACTIVE, EDGE_BLOCKED, type Snapshot, type StaticData } from "@geonomics/sim";
-import { type Application, Container, Graphics } from "pixi.js";
+import { type Application, Container, FillPattern, Graphics, Matrix, Texture } from "pixi.js";
 import { largestPopulation, priceOf, transportFlows } from "../state/selectors";
 import type { GameState } from "../state/store";
 import { ARROW_MIN_SHARE, arrowPolygon, arrowWidth, MAX_ARROWS } from "./arrows";
@@ -12,17 +12,20 @@ import {
   BORDER,
   CELL_LINE,
   ERASE,
+  employmentColor,
   MIGRATION_ARROW,
-  mix,
   NEUTRAL,
   PICKED,
   parseColor,
   populationColor,
   priceColor,
-  REALM_TINT,
-  resourceColor,
+  RESOURCE_LEVELS,
+  resourceLevel,
   SEA_ROUTE,
   SELECTION,
+  STRIPE_COLOR,
+  STRIPE_TILE,
+  STRIPE_WIDTHS,
   satisfactionColor,
   TERRAIN_COLORS,
   TRANSPORT_ARROW,
@@ -50,6 +53,8 @@ const changed = (previous: unknown[] | undefined, next: unknown[]) =>
 export class MapRenderer {
   private readonly root = new Container();
   private readonly cells = new Graphics();
+  private readonly stripes = new Graphics(); // the resources layer's stripes, over the terrain cells
+  private stripePatterns: FillPattern[] | null = null;
   private readonly lines = new Graphics();
   private readonly routes = new Graphics();
   private readonly flows = new Graphics();
@@ -71,7 +76,16 @@ export class MapRenderer {
     private readonly data: StaticData,
     private readonly geometry: MapGeometry,
   ) {
-    this.root.addChild(this.cells, this.lines, this.routes, this.flows, this.markers, this.selection, this.brush);
+    this.root.addChild(
+      this.cells,
+      this.stripes,
+      this.lines,
+      this.routes,
+      this.flows,
+      this.markers,
+      this.selection,
+      this.brush,
+    );
     app.stage.addChild(this.root);
     app.renderer.background.color = WATER;
     this.fit();
@@ -83,7 +97,7 @@ export class MapRenderer {
     const { snapshot, layer, priceTable, selectedGood, selectedResource, governments } = state;
     const owners = snapshot ? this.owners(snapshot) : "";
     const cellInputs =
-      layer === "realms" || layer === "area"
+      layer === "realms"
         ? [layer, owners, governments.length]
         : layer === "prices"
           ? [layer, priceTable, selectedGood]
@@ -144,11 +158,8 @@ export class MapRenderer {
   private cellColor(state: GameState, area: number): number {
     const { snapshot, data } = { snapshot: state.snapshot, data: this.data };
     switch (state.layer) {
-      case "area": {
-        const terrain = TERRAIN_COLORS[(data.areas[area] as StaticData["areas"][number]).terrain];
-        const owner = state.snapshot ? (state.snapshot.areas.owner[area] as number) : -1;
-        return owner >= 0 ? mix(terrain, this.realmColor(state, area), REALM_TINT) : terrain;
-      }
+      case "resources": // terrain under the stripes
+        return TERRAIN_COLORS[(data.areas[area] as StaticData["areas"][number]).terrain];
       case "realms":
         return this.realmColor(state, area);
       case "population":
@@ -159,16 +170,12 @@ export class MapRenderer {
         if (!good) return NEUTRAL;
         return priceColor(priceOf(data, state.priceTable, area, good.id), good.laborValue);
       }
-      case "resources": {
-        const goods = data.goods.length;
-        const table = data.naturalCapacityMaximum;
-        const good = state.selectedResource;
-        return resourceColor(table[area * goods + good] as number, this.bestCapacity(good));
-      }
       case "satisfaction":
         return snapshot ? satisfactionColor(snapshot.areas.necessitySatisfaction[area] as number) : NEUTRAL;
       case "wage":
         return snapshot ? wageColor(snapshot.areas.wageLevel[area] as number) : NEUTRAL;
+      case "employment":
+        return snapshot ? employmentColor(snapshot.areas.employmentRate[area] as number) : NEUTRAL;
     }
   }
 
@@ -201,6 +208,50 @@ export class MapRenderer {
       if (polygon.length < 6) continue;
       g.poly(polygon).fill({ color: this.cellColor(state, area) });
     }
+    this.drawStripes(state);
+  }
+
+  /** The resources layer: stripes over each area that has the chosen good, thicker for more. */
+  private drawStripes(state: GameState): void {
+    const g = this.stripes.clear();
+    if (state.layer !== "resources") return;
+    const patterns = this.patterns();
+    const good = state.selectedResource;
+    const goods = this.data.goods.length;
+    const best = this.bestCapacity(good);
+    for (let area = 0; area < this.geometry.cells.length; area++) {
+      const polygon = this.geometry.cells[area] as number[];
+      const level = resourceLevel(this.data.naturalCapacityMaximum[area * goods + good] as number, best);
+      if (level < 0 || polygon.length < 6) continue;
+      g.poly(polygon).fill(patterns[level] as FillPattern);
+    }
+  }
+
+  /** One stripe pattern per level, tiled across the map so that neighbors' stripes line up. */
+  private patterns(): FillPattern[] {
+    if (this.stripePatterns) return this.stripePatterns;
+    // About two and a half stripes across a typical cell, whatever the map's size.
+    const cell = Math.sqrt((this.geometry.width * this.geometry.height) / Math.max(this.data.areas.length, 1));
+    const transform = new Matrix().scale(cell / 2.5 / STRIPE_TILE, cell / 2.5 / STRIPE_TILE);
+    this.stripePatterns = Array.from({ length: RESOURCE_LEVELS }, (_, level) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = STRIPE_TILE;
+      canvas.height = STRIPE_TILE;
+      const context = canvas.getContext("2d") as CanvasRenderingContext2D;
+      context.strokeStyle = STRIPE_COLOR;
+      context.lineWidth = STRIPE_WIDTHS[level] as number;
+      // A diagonal through the tile, and its neighbors' ends in the corners, so tiles join seamlessly.
+      for (const offset of [-STRIPE_TILE, 0, STRIPE_TILE]) {
+        context.beginPath();
+        context.moveTo(offset - 1, STRIPE_TILE + 1);
+        context.lineTo(offset + STRIPE_TILE + 1, -1);
+        context.stroke();
+      }
+      const pattern = new FillPattern(Texture.from(canvas), "repeat");
+      pattern.setTransform(transform);
+      return pattern;
+    });
+    return this.stripePatterns;
   }
 
   private drawLines(snapshot: Snapshot | null, px: number): void {
@@ -482,6 +533,7 @@ export class MapRenderer {
   destroy(): void {
     if (this.frame) cancelAnimationFrame(this.frame);
     this.root.destroy({ children: true });
+    for (const pattern of this.stripePatterns ?? []) pattern.destroy();
   }
 }
 

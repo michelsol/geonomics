@@ -71,21 +71,6 @@ describe("market orders (phase 2)", () => {
     expect(government(world).marketOrders).toHaveLength(0);
   });
 
-  it("delivers a depot transfer after the summed travel days, spoiled on the way", () => {
-    const world = realmWorld();
-    const bread = goodId(world, "bread");
-    stateOf(world, 1).depot[bread] = 50;
-    expect(send(world, { type: "transferGoods", from: 1, to: 2, good: bread, quantity: 50 })).toBeNull();
-    const days = government(world).depotTransfers[0]?.daysRemaining as number;
-    expect(days).toBe(9); // 4 days over land, 5 by sea
-    for (let i = 0; i < days - 1; i++) runTick(world);
-    expect(stateOf(world, 2).depot[bread]).toBe(0);
-    runTick(world);
-    const spoilage = world.goods[bread]?.spoilageRatePerDay as number;
-    expect(stateOf(world, 2).depot[bread]).toBeCloseTo(50 * Math.exp(-spoilage * days), 6);
-    expect(government(world).depotTransfers).toHaveLength(0);
-  });
-
   it("standing orders keep a depot stocked from the market", () => {
     const world = realmWorld();
     const grain = goodId(world, "grain");
@@ -150,6 +135,23 @@ describe("taxes, subsidies and wages (phase 5)", () => {
     scratchOf(world);
     runTaxes(world);
     expect(government(world).treasury).toBeCloseTo(treasury + 3 * 0.1 * 10_000, 6);
+  });
+
+  it("pays a negative head tax to every inhabitant from the treasury, as far as it goes", () => {
+    const world = realmWorld();
+    send(world, { type: "setRealmPolicy", setting: { policy: "headTaxPerPersonPerDay", good: null, value: -0.1 } });
+    const treasury = government(world).treasury;
+    const savings = areaOf(world, 1).savings;
+    scratchOf(world).paymentDue.fill(0);
+    runTaxes(world);
+    expect(government(world).treasury).toBeCloseTo(treasury - 3 * 0.1 * 10_000, 6);
+    expect(areaOf(world, 1).savings).toBeCloseTo(savings + 0.1 * 10_000, 6);
+
+    government(world).treasury = 0;
+    const before = areaOf(world, 1).savings;
+    scratchOf(world).paymentDue.fill(0);
+    runTaxes(world);
+    expect(areaOf(world, 1).savings).toBe(before);
   });
 
   it("takes what savings cannot pay in kind, most valuable goods first", () => {
@@ -332,7 +334,7 @@ describe("government jobs (phase 10)", () => {
 });
 
 describe("money", () => {
-  it("is conserved between savings and treasuries under taxes, tariffs, wages, orders and transfers", () => {
+  it("is conserved between savings and treasuries under taxes, allowances, tariffs, wages and orders", () => {
     const world = realmWorld();
     const grain = goodId(world, "grain");
     send(world, { type: "setRealmPolicy", setting: { policy: "headTaxPerPersonPerDay", good: null, value: 0.2 } });
@@ -350,10 +352,12 @@ describe("money", () => {
     });
     const money = totalMoney(world);
     for (let i = 0; i < 50; i++) runTick(world);
-    stateOf(world, 1).depot[grain] = 10;
-    runTick(world, [
-      { player: "p1", government: 0, command: { type: "transferGoods", from: 1, to: 2, good: grain, quantity: 10 } },
-    ]);
+    // A negative head tax in one area: the treasury pays each inhabitant.
+    send(world, {
+      type: "setAreaPolicy",
+      area: 2,
+      setting: { policy: "headTaxPerPersonPerDay", good: null, value: -0.5 },
+    });
     for (let i = 0; i < 20; i++) runTick(world);
     expect(totalMoney(world)).toBeCloseTo(money, 3);
     expect(areaOf(world, 1).fortificationProgress).toBeGreaterThan(0); // the government workers were paid and worked

@@ -1,5 +1,5 @@
 // Population of the selection, or of the realm when nothing is selected (specification §10, Panels): people, births
-// and deaths, migrants in and out, and their history. The map shows population, with migration flows on request.
+// & deaths, migrants in and out, and their history. The map shows population, with migration flows on request.
 import { demographyOf } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { Chart } from "../Chart";
@@ -7,6 +7,7 @@ import { Checkbox, count, fmt, Section, Stat } from "../components";
 import { shownAreas, usePublicView } from "./common";
 
 const perDay = (value: number) => `${fmt(value)}/day`;
+const signedPerDay = (value: number) => `${value > 0 ? "+" : ""}${perDay(value)}`;
 
 export function PopulationPanel() {
   const view = usePublicView();
@@ -21,7 +22,7 @@ export function PopulationPanel() {
   const { areas, heading } = shownAreas(data, government, selection);
   const now = demographyOf(snapshot, edges, areas);
   const series = history?.demographyOf(selection);
-  const net = now.births - now.deaths + now.immigration - now.emigration;
+  const net = now.naturalChange + now.immigration - now.emigration;
 
   return (
     <>
@@ -29,22 +30,12 @@ export function PopulationPanel() {
         <h2 data-testid="population-of">{heading}</h2>
         <div className="stats">
           <Stat label="Population" value={count(now.population)} testId="population-total" />
+          <Stat label="Change" value={signedPerDay(net)} title="Births & deaths, plus immigration less emigration." />
           <Stat
-            label="Change"
-            value={`${net >= 0 ? "+" : ""}${perDay(net)}`}
-            title="Births less deaths, plus immigration less emigration."
-          />
-          <Stat
-            label="Births"
-            value={perDay(now.births)}
-            testId="births"
-            title="People gained per day where necessities are met. Each area has one net rate: it grows where necessities are met and starves where they run short, never both at once."
-          />
-          <Stat
-            label="Deaths"
-            value={perDay(now.deaths)}
-            testId="deaths"
-            title="People lost per day to starvation, where necessities run short."
+            label="Births & deaths"
+            value={signedPerDay(now.naturalChange)}
+            testId="births-deaths"
+            title="People gained per day where necessities are met, less those lost to starvation where they run short. The model keeps one net rate per area, not births and deaths apart."
           />
           <Stat
             label="Immigration"
@@ -86,10 +77,9 @@ export function PopulationPanel() {
               testId="demography-chart"
               x={series.xs()}
               series={[
-                { label: "births", color: "#6fbf5a", values: series.channel(1) },
-                { label: "deaths", color: "#ef5d5d", values: series.channel(2) },
-                { label: "immigration", color: "#5fa8f0", values: series.channel(3) },
-                { label: "emigration", color: "#f06fa0", values: series.channel(4) },
+                { label: "births & deaths", color: "#6fbf5a", values: series.channel(1) },
+                { label: "immigration", color: "#5fa8f0", values: series.channel(2) },
+                { label: "emigration", color: "#f06fa0", values: series.channel(3) },
               ]}
             />
           </Section>

@@ -78,7 +78,6 @@ export function runMarket(world: World): void {
     const state = government.areaStates.get(trade.area);
     if (state) execute(world, government, state, { ...trade, remainingQuantity: trade.quantity });
   }
-  advanceTransfers(world);
 }
 
 type Order = Pick<StandingTrade, "area" | "good" | "side" | "limitPrice" | "maximumQuantityPerDay"> & {
@@ -119,19 +118,4 @@ function execute(world: World, government: Government, state: GovernmentAreaStat
     government.treasury += quantity * price;
   }
   return quantity;
-}
-
-/** Moves goods in transit closer to their depot and delivers those that arrive; goods for a lost area are lost. */
-function advanceTransfers(world: World): void {
-  const days = world.config.pace.gameDaysPerTick;
-  for (const government of world.governments) {
-    if (government.depotTransfers.length === 0) continue;
-    government.depotTransfers = government.depotTransfers.filter((transfer) => {
-      transfer.daysRemaining -= days;
-      if (transfer.daysRemaining > EPSILON) return true;
-      const state = government.areaStates.get(transfer.destination);
-      if (state) state.depot[transfer.good] = (state.depot[transfer.good] as number) + transfer.quantity;
-      return false;
-    });
-  }
 }

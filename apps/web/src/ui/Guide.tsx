@@ -24,10 +24,10 @@ export function Guide() {
             whole region, turn on the Brush in the bar above the panels and paint over its areas; Erase takes some out,
             and two fingers or a right-button drag move the map meanwhile. Shift-click adds or removes one area. Taxes,
             jobs, recruits and standing orders apply to your areas in the selection, shown in the bar, or to your whole
-            realm when it holds none of them. Each panel colors the map with what it is about: terrain and realms for
-            Area, the price of a good for Goods, population, necessities met, natural resources, wages for Jobs, and
-            realms for the rest. Goods and Population can also draw goods and people on the move. Dashed lines are sea
-            routes, dotted lines air routes.
+            realm when it holds none of them. Each panel colors the map with what it is about: realms for Area, Armies,
+            Diplomacy and Game; the price of a good for Goods; population; necessities met for Needs; terrain striped
+            where a resource is found for Resources; wages for Policies; employment for Jobs. Goods and Population can
+            also draw goods and people on the move. Dashed lines are sea routes, dotted lines air routes.
           </p>
         </section>
 
@@ -46,9 +46,9 @@ export function Guide() {
           <h2>Running your realm</h2>
           <ul>
             <li>
-              <b>Policies</b>: taxes and tariffs (a negative tax is a subsidy), head tax, price ceilings and floors, for
-              the selection or the whole realm. Taxes fill your treasury but slow the economy down. Standing orders buy
-              cheap and sell dear for your depots on their own.
+              <b>Policies</b>: taxes and tariffs (a negative tax is a subsidy), head tax (negative: an allowance for
+              everyone), price ceilings and floors, for the selection or the whole realm. Taxes fill your treasury but
+              slow the economy down. Standing orders buy cheap and sell dear for your depots on their own.
             </li>
             <li>
               <b>Depots</b>: the Area panel shows what your government holds in the selected areas, bought on the

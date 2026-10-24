@@ -9,7 +9,7 @@ import { History } from "./history";
 import { DEMOGRAPHY_KEYS, demographyOf, meanPrices, priceExtremes, priceOf, realmPopulation } from "./selectors";
 
 export type Screen = "newGame" | "guide" | "join" | "chooseRealm" | "game" | "ended";
-export type Layer = "area" | "realms" | "population" | "prices" | "resources" | "satisfaction" | "wage";
+export type Layer = "realms" | "population" | "prices" | "resources" | "satisfaction" | "wage" | "employment";
 export type Flows = "none" | "migration" | "transport"; // arrows drawn over the area layer
 export type PanelName =
   | "area"
@@ -24,13 +24,13 @@ export type PanelName =
   | "game";
 /** The map layer each panel shows (specification §10, Map). */
 export const PANEL_LAYERS: Record<PanelName, Layer> = {
-  area: "area",
+  area: "realms",
   goods: "prices",
   population: "population",
   needs: "satisfaction",
   resources: "resources",
-  policies: "realms",
-  jobs: "wage",
+  policies: "wage",
+  jobs: "employment",
   armies: "realms",
   diplomacy: "realms",
   game: "realms",
@@ -195,7 +195,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     selectedArmy: null,
     selectedResource: 0,
     panel: "area",
-    layer: "area",
+    layer: "realms",
     flows: "none",
     showTransport: false,
     showMigration: false,
@@ -406,7 +406,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
             selectedGood: firstNecessityGood(message.data),
             selectedResource: message.data.goods.find((good) => good.isPrimary)?.id ?? 0,
             panel: "area",
-            layer: "area",
+            layer: "realms",
             flows: "none",
             transportAllGoods: true,
             mode: { kind: "select" },

@@ -49,7 +49,7 @@ describe("selectors", () => {
 });
 
 describe("demography", () => {
-  it("splits growth and starvation into births and deaths, and counts only migrants crossing the edge", () => {
+  it("nets growth and starvation into births & deaths, and counts only migrants crossing the edge", () => {
     const { world } = setup();
     const data = buildStaticData(world);
     const snapshot = buildSnapshot(world, 0);
@@ -65,9 +65,9 @@ describe("demography", () => {
     snapshot.edges.migration[0] = 10; // from a to b: inside the selection
     snapshot.edges.migration[outward] = out.areaA === a ? 4 : -4; // from a, out of the selection
     const both = demographyOf(snapshot, data.edges, [a, b]);
-    expect(both).toMatchObject({ births: 5, deaths: 3, immigration: 0, emigration: 4 });
+    expect(both).toMatchObject({ naturalChange: 2, immigration: 0, emigration: 4 });
     expect(both.population).toBeCloseTo((world.areas[a]?.population ?? 0) + (world.areas[b]?.population ?? 0), -1);
-    expect(demographyOf(snapshot, data.edges, [b])).toMatchObject({ births: 0, deaths: 3, immigration: 10 });
+    expect(demographyOf(snapshot, data.edges, [b])).toMatchObject({ naturalChange: -3, immigration: 10 });
   });
 });
 
@@ -162,8 +162,10 @@ describe("game store", () => {
   it("shows each panel's map layer, and its flows while their checkbox is on", () => {
     const { state } = setup();
     state().chooseRealm(0);
-    expect([state().panel, state().layer, state().flows]).toEqual(["area", "area", "none"]);
+    expect([state().panel, state().layer, state().flows]).toEqual(["area", "realms", "none"]);
     state().openPanel("jobs");
+    expect(state().layer).toBe("employment");
+    state().openPanel("policies");
     expect(state().layer).toBe("wage");
     state().openPanel("population");
     expect([state().layer, state().flows]).toEqual(["population", "none"]);
@@ -186,7 +188,7 @@ describe("game store", () => {
     const { world, state } = setup();
     state().openPanel("needs");
     state().receive({ type: "static", data: buildStaticData(world), governments: [] });
-    expect([state().panel, state().layer]).toEqual(["area", "area"]);
+    expect([state().panel, state().layer]).toEqual(["area", "realms"]);
   });
 
   it("records the demography of the realm and of the selection once per game day", () => {

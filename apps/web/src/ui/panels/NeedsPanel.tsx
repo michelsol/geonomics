@@ -95,8 +95,8 @@ export function NeedsPanel() {
             testId="needs-chart"
             x={series.xs()}
             series={[
-              { label: "necessities met (%)", color: "#6fbf5a", values: percent(series.channel(5)) },
-              { label: "satisfaction (%)", color: "#e8d85a", values: percent(series.channel(6)) },
+              { label: "necessities met (%)", color: "#6fbf5a", values: percent(series.channel(4)) },
+              { label: "satisfaction (%)", color: "#e8d85a", values: percent(series.channel(5)) },
             ]}
           />
         </Section>

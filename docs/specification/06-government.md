@@ -26,7 +26,7 @@ Each policy plugs into exactly one phase of the tick.
 | `consumptionTaxRate` | Good | Consumption | Raises the consumer price, so demand drops, mostly for elastic goods. Negative values are subsidies. |
 | `importTariffRate` | Good | Trade | Added to the cost of goods entering across a border. |
 | `exportTariffRate` | Good | Trade | Added to the cost of goods leaving across a border. A very high value acts as a ban. |
-| `headTaxPerPersonPerDay` | Area | Taxes | Flat tax per inhabitant. Reliable revenue that drains savings and drives people away. |
+| `headTaxPerPersonPerDay` | Area | Taxes | Flat tax per inhabitant. Reliable revenue that drains savings and drives people away. Negative, it is an allowance paid to every inhabitant, as a subsidy. |
 | `priceCeiling`, `priceFloor` | Good | Prices | Clamp the local price. Ceilings cause shortages; floors cause gluts. |
 
 The player sets **realm policies** once and adds **area overrides** where needed.
@@ -45,8 +45,9 @@ Taxes are owed on this tick's private output and consumption at the market price
 ```typescript
 taxDue  = sum over goods of max(0, productionTaxRate) * privatelyProduced * price
         + sum over goods of max(0, consumptionTaxRate) * consumed * price
-        + headTaxPerPersonPerDay * population * days
+        + max(0, headTaxPerPersonPerDay) * population * days
 subsidy = the same production and consumption terms for negative rates, as positive amounts
+        + max(0, -headTaxPerPersonPerDay) * population * days     // a negative head tax: an allowance
 // tariffs were already collected in money during trade
 
 paidInMoney = min(taxDue, area.savings)
@@ -82,15 +83,9 @@ if (price >= limitPrice)
 
 A purchase lowers stock, so the price rises in the next price phase. Buying cheaply in good years and selling during a famine is a core strategy.
 
-### Depots and transfers
+### Depots
 
-A `transferGoods` command moves goods between two depots of the same government.
-
-- **Route:** the cheapest path by `transportCost` through active, non-blocked edges of every mode.
-- **Departure:** the goods leave the source depot at once.
-- **Payment:** transport, the sum of `transportCost × transportWeight × quantity` along the route, is paid upfront from the treasury to the savings of the source area, whose carriers do the work.
-- **Arrival:** after the sum of the edges' `travelDays`, counting `airFreightDays` for each air route.
-- **Losses:** goods spoil in depots and in transit like any stock. Goods arriving at an area the government no longer owns are lost.
+Each owned area has a depot, filled by market purchases, government production jobs and taxes taken in kind, and emptied by sales and by armies taking weapons. Goods in depots spoil like any stock. Goods do not move between depots.
 
 ### Hiring and wages
 

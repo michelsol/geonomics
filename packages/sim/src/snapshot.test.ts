@@ -12,6 +12,7 @@ import { realmWorld, send } from "./testing";
 import { lastMigration, lastNaturalChange } from "./tick/population";
 import { runTick } from "./tick/tick";
 import { lastTradeFlows, lastTradeTonnage } from "./tick/trade";
+import { addEdge } from "./world";
 
 describe("snapshots", () => {
   it("send stocks and flows only for the viewer's areas and their neighbors", () => {
@@ -78,7 +79,7 @@ describe("snapshots", () => {
     const buffers = snapshotTransferables(snapshot);
     expect(new Set(buffers).size).toBe(buffers.length);
     // Areas, edges (transport cost, capacity, flags, tonnage, migration), area details, depots.
-    expect(buffers.length).toBe(12 + 5 + 4 * 10 + 3);
+    expect(buffers.length).toBe(13 + 5 + 4 * 10 + 3);
     expect(snapshotTransferables(buildSnapshot(realmWorld(), 0, undefined, { flowGood: 0 })).length).toBe(
       buffers.length + 1,
     );
@@ -117,6 +118,34 @@ describe("snapshots", () => {
       expect(snapshot.areas.naturalChange[area.id]).toBeCloseTo((natural[area.id] as number) / 0.5, 2);
     }
     expect(snapshot.areas.naturalChange[1]).toBeLessThan(0); // the Valley starves
+  });
+
+  it("keep the last tick's flows when an air route opens after them", () => {
+    const world = realmWorld({ pace: { gameDaysPerTick: 0.5 } });
+    const valley = world.areas[1] as (typeof world.areas)[number];
+    valley.naturalCapacity.fill(0);
+    valley.naturalCapacityMaximum.fill(0);
+    valley.stock.fill(0);
+    for (let i = 0; i < 20; i++) runTick(world);
+    const before = buildSnapshot(world, 0);
+    addEdge(world, { a: 0, b: 3, mode: "air" }); // as the jobs phase does when an airport is built
+    const after = buildSnapshot(world, 0);
+    expect(Array.from(after.edges.migration.subarray(0, before.edges.migration.length))).toEqual(
+      Array.from(before.edges.migration),
+    );
+    expect(Array.from(after.areas.naturalChange)).toEqual(Array.from(before.areas.naturalChange));
+    expect(Array.from(before.edges.migration).some((v) => v !== 0)).toBe(true);
+  });
+
+  it("carry each area's employment rate: the workforce share with a job", () => {
+    const world = realmWorld();
+    const area = world.areas[0] as (typeof world.areas)[number];
+    area.unemployedWorkers = 0.25 * area.population * world.config.economy.workforceShare;
+    const empty = world.areas[1] as (typeof world.areas)[number];
+    empty.population = 0;
+    const snapshot = buildSnapshot(world, null);
+    expect(snapshot.areas.employmentRate[0]).toBeCloseTo(0.75, 6);
+    expect(snapshot.areas.employmentRate[1]).toBeNaN();
   });
 
   it("carry each visible area's demand and consumption per need", () => {

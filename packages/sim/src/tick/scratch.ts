@@ -111,10 +111,11 @@ function createScratch(world: World, previous: Scratch | undefined): Scratch {
     exportRate: world.areas.map(() => perGood()),
     importPayment: new Float64Array(areaCount),
     migrationDelta: new Float64Array(areaCount),
-    naturalChange: new Float64Array(areaCount),
+    naturalChange: carried(previous?.naturalChange, areaCount),
     attractiveness: new Float64Array(areaCount),
-    edgeTonnage: new Float64Array(world.edges.length * 2),
-    edgeMigration: new Float64Array(world.edges.length),
+    // Last tick's flows outlive a new edge: snapshots read them after the jobs phase may add an air route.
+    edgeTonnage: carried(previous?.edgeTonnage, world.edges.length * 2),
+    edgeMigration: carried(previous?.edgeMigration, world.edges.length),
     flows: previous?.flows ?? createFlows(1024),
     stateWorkers: world.areas.map(() => null),
     taxDue: new Float64Array(areaCount),
@@ -122,6 +123,13 @@ function createScratch(world: World, previous: Scratch | undefined): Scratch {
     paidShare: [],
     standingTrades: [],
   };
+}
+
+/** A new buffer of `length` holding what `previous` held, zero beyond it. */
+function carried(previous: Float64Array | undefined, length: number): Float64Array {
+  const buffer = new Float64Array(length);
+  if (previous) buffer.set(previous.subarray(0, length));
+  return buffer;
 }
 
 /**

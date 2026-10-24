@@ -33,7 +33,6 @@ An area's **savings** is the private money held by its inhabitants. Transactions
 | Government and army wages | Treasury to savings | Tax phase |
 | Government purchases on the local market | Treasury to savings | Market phase |
 | Government sales on the local market | Savings to treasury | Market phase |
-| Transport of government depot transfers | Treasury to the savings of the source area | When the transfer is ordered |
 
 Taxing without spending drains an area's savings, so it can no longer import. This is intended: it is the natural cost of over-taxation.
 

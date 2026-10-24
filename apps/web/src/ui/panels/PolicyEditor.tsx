@@ -25,7 +25,7 @@ const SLIDERS: Partial<Record<PolicyName, { min: number; max: number; step: numb
   consumptionTaxRate: { min: -100, max: 100, step: 1 },
   importTariffRate: { min: -100, max: 100, step: 1 },
   exportTariffRate: { min: -100, max: 100, step: 1 },
-  headTaxPerPersonPerDay: { min: 0, max: 2, step: 0.01 },
+  headTaxPerPersonPerDay: { min: -10, max: 10, step: 0.05 }, // negative: an allowance paid to each person
 };
 
 const policyLabel = (policy: PolicyName) => POLICIES.find((p) => p.value === policy)?.label ?? policy;
@@ -159,7 +159,7 @@ export function PolicyEditor() {
           {isRate(policy)
             ? "% (negative: a subsidy)"
             : policy === "headTaxPerPersonPerDay"
-              ? "mh per person per day"
+              ? "mh per person per day (negative: paid to each person)"
               : `mh per unit${perGood && good !== ALL ? `, labor value ${fmt(data.goods[good]?.laborValue ?? 0)}` : ""}`}
         </span>
         <button type="button" className="primary" onClick={apply}>

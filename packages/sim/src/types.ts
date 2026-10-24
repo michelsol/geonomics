@@ -251,7 +251,6 @@ export interface Government {
   realmPolicies: PolicySetting[]; // default policies applied to every owned area
   marketOrders: MarketOrder[]; // open buy and sell orders
   standingOrders: StandingOrder[]; // automation rules evaluated every tick
-  depotTransfers: DepotTransfer[]; // goods travelling between the government's own depots
   soldierWage: number; // wage paid per soldier-hour, in man-hours
 }
 
@@ -263,13 +262,6 @@ export interface MarketOrder {
   remainingQuantity: number; // units still to trade before the order completes
   limitPrice: number; // buy: highest price accepted; sell: lowest price accepted
   maximumQuantityPerDay: number; // pacing cap, so one order cannot empty a market in a single tick
-}
-
-export interface DepotTransfer {
-  good: GoodId; // good being moved
-  quantity: number; // units in transit (spoil on the way)
-  destination: AreaId; // depot the goods are delivered to
-  daysRemaining: number; // game days until arrival
 }
 
 export type StandingRule =
@@ -321,7 +313,6 @@ export type Command =
   | { type: "clearAreaPolicy"; area: AreaId; policy: PolicyName; good: GoodId | null }
   | { type: "placeMarketOrder"; order: Omit<MarketOrder, "id"> }
   | { type: "cancelMarketOrder"; orderId: number }
-  | { type: "transferGoods"; from: AreaId; to: AreaId; good: GoodId; quantity: number }
   | { type: "setJobTarget"; area: AreaId; job: GovernmentJob; targetWorkers: number }
   | { type: "setWageOffer"; area: AreaId; wageOffer: number }
   | { type: "recruitArmy"; area: AreaId; soldiers: number }

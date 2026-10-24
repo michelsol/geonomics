@@ -165,7 +165,7 @@ interface Edge {
 }
 ```
 
-Land edges join neighboring areas and never change. Sea and air edges are **routes**: map generation creates the sea routes, and air routes are rebuilt when airports open or grow (section 5, Sea and air routes). Every system that walks edges, including trade, migration, depot transfers and marching, handles all three modes the same way, apart from the rules listed for each mode. `Area.edges` lists edges of all modes.
+Land edges join neighboring areas and never change. Sea and air edges are **routes**: map generation creates the sea routes, and air routes are rebuilt when airports open or grow (section 5, Sea and air routes). Every system that walks edges, including trade, migration and marching, handles all three modes the same way, apart from the rules listed for each mode. `Area.edges` lists edges of all modes.
 
 ### Governments
 
@@ -233,7 +233,6 @@ interface Government {
   realmPolicies: PolicySetting[];       // default policies applied to every owned area
   marketOrders: MarketOrder[];          // open buy and sell orders
   standingOrders: StandingOrder[];      // automation rules evaluated every tick
-  depotTransfers: DepotTransfer[];      // goods travelling between the government's own depots
   soldierWage: number;                  // wage paid per soldier-hour, in man-hours (starts at military.soldierWage)
 }
 
@@ -245,13 +244,6 @@ interface MarketOrder {
   remainingQuantity: number;            // units still to trade before the order completes
   limitPrice: number;                   // buy: highest price accepted; sell: lowest price accepted
   maximumQuantityPerDay: number;        // pacing cap, so one order cannot empty a market in a single tick
-}
-
-interface DepotTransfer {
-  good: GoodId;                         // good being moved
-  quantity: number;                     // units in transit (spoil on the way)
-  destination: AreaId;                  // depot the goods are delivered to
-  daysRemaining: number;                // game days until arrival
 }
 
 type StandingRule =
@@ -307,7 +299,6 @@ type Command =
   | { type: "clearAreaPolicy"; area: AreaId; policy: PolicyName; good: GoodId | null }
   | { type: "placeMarketOrder"; order: Omit<MarketOrder, "id"> }
   | { type: "cancelMarketOrder"; orderId: number }
-  | { type: "transferGoods"; from: AreaId; to: AreaId; good: GoodId; quantity: number }
   | { type: "setJobTarget"; area: AreaId; job: GovernmentJob; targetWorkers: number }
   | { type: "setWageOffer"; area: AreaId; wageOffer: number }
   | { type: "recruitArmy"; area: AreaId; soldiers: number }
@@ -339,12 +330,11 @@ The host validates every command before applying it. A rejected command changes 
 | Sender | `player` must be the controller of `government` (`"ai"` for an AI government; the host never accepts that id from the network), and the government must not be eliminated |
 | Ownership | Every area, army, order or depot a command references must belong to the sending government |
 | Numbers | Every number must be finite; quantities, worker targets, soldiers and prices must be ≥ 0 |
-| Policies | Production and consumption tax rates and tariffs must be within [−1, 5]; head tax, ceilings and floors ≥ 0. Head tax takes no good; every other policy takes one good, or none for every good |
+| Policies | Production and consumption tax rates and tariffs must be within [−1, 5]; head tax any finite number (negative: an allowance); ceilings and floors ≥ 0. Head tax takes no good; every other policy takes one good, or none for every good |
 | Wages | `wageOffer` and the soldier wage must be within [0, 10] |
 | Recruiting | At least one soldier, and no more than the area's unemployed and private workers |
 | Armies | `moveArmy` needs a reachable destination under the marching rules; `disbandArmy` at most the army's soldiers |
 | Jobs | `buildPort` only in coastal areas; `buildInfrastructure` only on a land edge touching the area; `produce` never a service, and a primary good only where the area has natural capacity for it |
-| Goods | Market orders, transfers and standing rules never name a service |
-| Transfers | Two different owned areas; the quantity at most what the source depot holds; a non-blocked path between them; a treasury that covers the transport |
+| Goods | Market orders and standing rules never name a service |
 | Diplomacy | No war on oneself, an eliminated government or one already at war; peace only with a government at war, from the sending government, expiring in the future, with each listed area going from one side to the other; when accepted, a payment must fit in the payer's treasury and the listed areas must still belong to their side |
 | Limits | At most 1,000 open market orders and 200 standing orders per government, so a client cannot slow the host down |

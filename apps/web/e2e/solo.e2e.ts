@@ -66,6 +66,10 @@ test("a solo game runs, pauses, and takes commands", async ({ page }) => {
   await page.getByLabel("Policy value").fill("0.25");
   await page.getByRole("button", { name: "Set", exact: true }).click();
   await expect(page.getByTestId("head-tax")).toContainText("0.25");
+  // A negative head tax is an allowance paid to everyone.
+  await page.getByLabel("Policy value").fill("-1");
+  await page.getByRole("button", { name: "Set", exact: true }).click();
+  await expect(page.getByTestId("head-tax")).toContainText("-1 mh");
 
   // The Jobs tab shows how the workforce is employed.
   await openTab(page, "Jobs");
@@ -143,11 +147,12 @@ test("each panel shows its map layer, and flows when its checkbox is on", async 
   await startGame(page);
   const legend = page.getByTestId("legend");
   const flowLegend = page.getByTestId("flow-legend");
-  await expect(legend).toContainText("Terrain, tinted by realm");
+  await expect(legend).toHaveCount(0); // the Area panel shows the realms, which need no legend
 
   await openTab(page, "Population");
   await expect(legend).toContainText("Population per area");
   await expect(page.getByTestId("population-total")).toHaveText(/^[\d,]+$/);
+  await expect(page.getByTestId("births-deaths")).toHaveText(/^[+-]?<?[\d.,]+[kM]?\/day$/);
   await page.getByLabel("Show migration flows").check();
   await expect(flowLegend).toContainText("People moving per day");
   await expect(legend).toContainText("Population per area"); // both at once
@@ -176,12 +181,15 @@ test("each panel shows its map layer, and flows when its checkbox is on", async 
   const last = (await resource.locator("option").last().getAttribute("value")) as string;
   await resource.selectOption(last);
   await expect(legend).toContainText(`Natural capacity of ${await resource.locator("option:checked").textContent()}`);
+  await expect(legend).toContainText("plains"); // the stripes lie over the terrain
 
   await openTab(page, "Jobs");
+  await expect(legend).toContainText("Employment rate");
+  await openTab(page, "Policies");
   await expect(legend).toContainText("Average wage");
   await openTab(page, "Area");
   await expect(flowLegend).toHaveCount(0);
-  await expect(legend).toContainText("Terrain, tinted by realm");
+  await expect(legend).toHaveCount(0);
 });
 
 test("a good in the market table opens it in the Goods panel", async ({ page }) => {
