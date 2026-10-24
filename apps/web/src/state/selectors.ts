@@ -51,6 +51,75 @@ export function detailOf(snapshot: Snapshot | null, area: number): AreaDetail | 
   return snapshot?.detail.find((detail) => detail.area === area);
 }
 
+/**
+ * Cost of living in an area: the reference basket of needs at local prices over the same basket at labor values, so
+ * 1 when goods cost their labor value. Consumers split each need between its goods as the consumption phase does
+ * (specification §5, Consumption), from the public prices, without consumption tax.
+ */
+export function costOfLiving(data: StaticData, table: Uint16Array, area: number): number {
+  let local = 0;
+  let reference = 0;
+  for (const need of data.needs) {
+    let weightSum = 0;
+    let weightedPrice = 0;
+    for (const good of data.goods) {
+      if (good.satisfies?.need !== need.id) continue;
+      const unitPrice = Math.max(priceOf(data, table, area, good.id) / good.satisfies.unitsPerGood, 1e-9);
+      const weight = good.satisfies.preference * unitPrice ** -need.substitutionElasticity;
+      weightSum += weight;
+      weightedPrice += weight * unitPrice;
+    }
+    if (weightSum <= 0) continue;
+    local += need.demandPerPersonPerDay * (weightedPrice / weightSum);
+    reference += need.demandPerPersonPerDay * need.referenceUnitPrice;
+  }
+  return reference > 0 ? local / reference : 1;
+}
+
+const livingCosts = new WeakMap<Uint16Array, Float32Array>();
+
+/** The cost of living of every area (see costOfLiving), computed once per price table. */
+export function costsOfLiving(data: StaticData, table: Uint16Array): Float32Array {
+  let costs = livingCosts.get(table);
+  if (!costs) {
+    costs = new Float32Array(data.areas.length);
+    for (let area = 0; area < costs.length; area++) costs[area] = costOfLiving(data, table, area);
+    livingCosts.set(table, costs);
+  }
+  return costs;
+}
+
+/** Real income level of every area: income over the cost of living, or the income itself without a price table. */
+export function realIncomes(data: StaticData, snapshot: Snapshot, table: Uint16Array | null): Float32Array {
+  const living = table ? costsOfLiving(data, table) : null;
+  return Float32Array.from(snapshot.areas.wageLevel, (wage, area) =>
+    (snapshot.areas.population[area] as number) > 0 ? wage / (living ? (living[area] as number) : 1) : Number.NaN,
+  );
+}
+
+/** Lowest, median and highest of some values, leaving out those that are not finite and positive. */
+export interface Spread {
+  low: number;
+  median: number;
+  high: number;
+}
+
+/** Lowest, median and highest price of a good on the map: the prices layer's scale. */
+export function priceSpread(data: StaticData, table: Uint16Array, good: number): Spread | null {
+  return spreadOf(Array.from(data.areas, (_, area) => priceOf(data, table, area, good)));
+}
+
+export function spreadOf(values: ArrayLike<number>): Spread | null {
+  const kept = Array.from(values).filter((value) => Number.isFinite(value) && value > 0);
+  if (kept.length === 0) return null;
+  kept.sort((a, b) => a - b);
+  return {
+    low: kept[0] as number,
+    median: kept[Math.floor((kept.length - 1) / 2)] as number,
+    high: kept[kept.length - 1] as number,
+  };
+}
+
 /** Population of the player's realm. */
 export function realmPopulation(snapshot: Snapshot): number {
   let population = 0;
@@ -254,7 +323,9 @@ export interface SelectionSummary {
   areas: number;
   owners: { owner: number; areas: number }[]; // -1: neutral; most areas first
   population: number;
-  wageLevel: number; // means weighted by population
+  wageLevel: number; // means weighted by population: income per worker-hour
+  realIncomeLevel: number; // income over the cost of living; the income itself without a price table
+  costOfLiving: number | null; // null without a price table
   satisfaction: number;
   necessitySatisfaction: number;
   militia: number;
@@ -284,6 +355,8 @@ export function selectionSummary(
   const market: MarketRow[] = data.goods.map(() => ({ price: 0, stock: 0, made: 0, used: 0, trade: 0 }));
   let population = 0;
   let wage = 0;
+  let realIncome = 0;
+  let living = 0;
   let satisfaction = 0;
   let necessities = 0;
   let militia = 0;
@@ -296,7 +369,11 @@ export function selectionSummary(
     owners.set(owner, (owners.get(owner) ?? 0) + 1);
     const people = snapshot.areas.population[area] as number;
     population += people;
-    wage += people * (snapshot.areas.wageLevel[area] as number);
+    const areaWage = snapshot.areas.wageLevel[area] as number;
+    const areaLiving = table ? costOfLiving(data, table, area) : 1;
+    wage += people * areaWage;
+    realIncome += (people * areaWage) / areaLiving;
+    living += people * areaLiving;
     satisfaction += people * (snapshot.areas.satisfaction[area] as number);
     necessities += people * (snapshot.areas.necessitySatisfaction[area] as number);
     militia += snapshot.areas.militia[area] as number;
@@ -330,6 +407,8 @@ export function selectionSummary(
     owners: [...owners].map(([owner, n]) => ({ owner, areas: n })).sort((a, b) => b.areas - a.areas),
     population,
     wageLevel: wage * weight,
+    realIncomeLevel: realIncome * weight,
+    costOfLiving: table && population > 0 ? living * weight : null,
     satisfaction: satisfaction * weight,
     necessitySatisfaction: necessities * weight,
     militia,

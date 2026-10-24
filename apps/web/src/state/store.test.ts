@@ -2,8 +2,17 @@ import { buildSnapshot, buildStaticData, encodePriceTable, type World } from "@g
 import { describe, expect, it } from "vitest";
 import { createGame } from "../host/createGame";
 import type { ToWorker } from "../host/protocol";
+import { DIVERGING, spreadColor } from "../map/colors";
 import { Series } from "./history";
-import { conquestEstimate, demographyOf, employmentOf, priceExtremes, priceOf } from "./selectors";
+import {
+  conquestEstimate,
+  costOfLiving,
+  demographyOf,
+  employmentOf,
+  priceExtremes,
+  priceOf,
+  selectionSummary,
+} from "./selectors";
 import { createGameStore } from "./store";
 
 function setup() {
@@ -68,6 +77,37 @@ describe("demography", () => {
     expect(both).toMatchObject({ naturalChange: 2, immigration: 0, emigration: 4 });
     expect(both.population).toBeCloseTo((world.areas[a]?.population ?? 0) + (world.areas[b]?.population ?? 0), -1);
     expect(demographyOf(snapshot, data.edges, [b])).toMatchObject({ naturalChange: -3, immigration: 10 });
+  });
+});
+
+describe("cost of living and real income", () => {
+  it("is 1 at labor-value prices, rises with dear food, and divides income into real income", () => {
+    const { world } = setup();
+    for (const area of world.areas) for (const good of world.goods) area.price[good.id] = good.laborValue;
+    const data = buildStaticData(world);
+    expect(costOfLiving(data, encodePriceTable(world), 0)).toBeCloseTo(1, 3);
+    const food = world.goods.filter((good) => good.satisfies && data.needs[good.satisfies.need]?.key === "food");
+    expect(food.length).toBeGreaterThan(0);
+    for (const good of food) (world.areas[0] as World["areas"][number]).price[good.id] = 2 * good.laborValue;
+    const table = encodePriceTable(world);
+    const living = costOfLiving(data, table, 0);
+    expect(living).toBeGreaterThan(1.05);
+    expect(living).toBeLessThan(2);
+    const summary = selectionSummary(data, buildSnapshot(world, 0), table, [0]);
+    expect(summary.costOfLiving).toBeCloseTo(living, 6);
+    expect(summary.realIncomeLevel).toBeCloseTo(summary.wageLevel / living, 6);
+    expect(selectionSummary(data, buildSnapshot(world, 0), null, [0]).costOfLiving).toBeNull();
+  });
+});
+
+describe("colors against the map's own values", () => {
+  it("run from blue at the lowest value through white at the median to red at the highest", () => {
+    const scale = { low: 1, median: 2, high: 8 };
+    expect(spreadColor(1, scale)).toBe(DIVERGING[0]);
+    expect(spreadColor(2, scale)).toBe(DIVERGING[2]);
+    expect(spreadColor(8, scale)).toBe(DIVERGING[4]);
+    expect(spreadColor(4, scale)).toBe(DIVERGING[3]); // halfway up on a log scale
+    expect(spreadColor(2, { low: 2, median: 2, high: 2 })).toBe(DIVERGING[2]); // no spread: white
   });
 });
 
@@ -166,7 +206,7 @@ describe("game store", () => {
     state().openPanel("jobs");
     expect(state().layer).toBe("employment");
     state().openPanel("policies");
-    expect(state().layer).toBe("wage");
+    expect(state().layer).toBe("income");
     state().openPanel("population");
     expect([state().layer, state().flows]).toEqual(["population", "none"]);
     state().setShowMigration(true);

@@ -168,12 +168,12 @@ export function JobsPanel() {
             }
           />
           <span className="muted">
-            mh/day · average wage {target.realm ? "in the realm" : region ? "in the selection" : "here"}{" "}
+            mh/day · average income {target.realm ? "in the realm" : region ? "in the selection" : "here"}{" "}
             {fmt(averageWage * hoursPerDay)} mh/day
           </span>
         </div>
         <span className="muted">
-          Workers only take government jobs paying at least the average wage where they live.
+          Workers only take government jobs paying at least the average income where they live.
         </span>
       </Section>
 

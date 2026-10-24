@@ -158,7 +158,8 @@ test("each panel shows its map layer, and flows when its checkbox is on", async 
   await expect(legend).toContainText("Population per area"); // both at once
 
   await openTab(page, "Goods");
-  await expect(legend).toContainText("vs labor value");
+  await expect(legend).toContainText("Price of");
+  await expect(legend.locator(".ends span")).toHaveCount(3); // lowest, median and highest on the map
   await expect(flowLegend).toHaveCount(0); // migration belongs to the Population panel
   await page.getByLabel("Show transport flows").check();
   await expect(flowLegend).toContainText("Goods carried per day");
@@ -186,7 +187,10 @@ test("each panel shows its map layer, and flows when its checkbox is on", async 
   await openTab(page, "Jobs");
   await expect(legend).toContainText("Employment rate");
   await openTab(page, "Policies");
-  await expect(legend).toContainText("Average wage");
+  await expect(legend).toContainText("Real income");
+  for (const id of ["policy-income", "policy-real-income"]) await expect(page.getByTestId(id)).toContainText("mh/day");
+  await expect(page.getByTestId("policy-cost-of-living")).toHaveText(/^×[\d.]+$/);
+  await expect(page.getByTestId("policy-savings")).toContainText("mh");
   await openTab(page, "Area");
   await expect(flowLegend).toHaveCount(0);
   await expect(legend).toHaveCount(0);

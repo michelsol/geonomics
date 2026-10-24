@@ -38,16 +38,21 @@ export function ramp(stops: readonly number[], t: number): number {
 export const DIVERGING = [0x2c6bb0, 0x8db8e0, 0xf2f2f2, 0xeba07e, 0xc0392b];
 export const SATISFACTION = [0xc0392b, 0xe6a03c, 0xe8d85a, 0x6fbf5a, 0x2e8b57];
 
-/** Price relative to labor value: blue below, white at, red above; full color at a factor of PRICE_RANGE. */
-export const PRICE_RANGE = 3;
-export function priceColor(price: number, laborValue: number): number {
-  return ramp(DIVERGING, 0.5 + Math.log(price / laborValue) / (2 * Math.log(PRICE_RANGE)));
-}
-
-/** Wage level around the reference of 1: full color at half or double. */
-export const WAGE_RANGE = 2;
-export function wageColor(wageLevel: number): number {
-  return ramp(DIVERGING, 0.5 + Math.log(Math.max(wageLevel, 1e-3)) / (2 * Math.log(WAGE_RANGE)));
+/**
+ * A value against the map's own values (a good's prices, real incomes): white at the median, full blue at the lowest
+ * and full red at the highest, on a log scale on each side; a side with no spread stays white.
+ */
+export function spreadColor(
+  value: number,
+  { low, median, high }: { low: number; median: number; high: number },
+): number {
+  if (!(value > 0)) return NEUTRAL;
+  if (value <= median) {
+    const spread = Math.log(median / low);
+    return ramp(DIVERGING, spread > 0 ? 0.5 - (0.5 * Math.log(median / value)) / spread : 0.5);
+  }
+  const spread = Math.log(high / median);
+  return ramp(DIVERGING, spread > 0 ? 0.5 + (0.5 * Math.log(value / median)) / spread : 0.5);
 }
 
 /**

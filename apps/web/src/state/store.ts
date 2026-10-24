@@ -9,7 +9,7 @@ import { History } from "./history";
 import { DEMOGRAPHY_KEYS, demographyOf, meanPrices, priceExtremes, priceOf, realmPopulation } from "./selectors";
 
 export type Screen = "newGame" | "guide" | "join" | "chooseRealm" | "game" | "ended";
-export type Layer = "realms" | "population" | "prices" | "resources" | "satisfaction" | "wage" | "employment";
+export type Layer = "realms" | "population" | "prices" | "resources" | "satisfaction" | "income" | "employment";
 export type Flows = "none" | "migration" | "transport"; // arrows drawn over the area layer
 export type PanelName =
   | "area"
@@ -29,7 +29,7 @@ export const PANEL_LAYERS: Record<PanelName, Layer> = {
   population: "population",
   needs: "satisfaction",
   resources: "resources",
-  policies: "wage",
+  policies: "income",
   jobs: "employment",
   armies: "realms",
   diplomacy: "realms",

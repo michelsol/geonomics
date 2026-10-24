@@ -4,7 +4,7 @@ import { useState } from "react";
 import { type ConquestEstimate, conquestEstimate, type MarketRow, selectionSummary } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { count, fmt, pct, Section, Stat, Swatch } from "../components";
-import { areaName, type PanelProps, usePublicView } from "./common";
+import { areaName, IncomeStats, type PanelProps, usePublicView } from "./common";
 import { Depots } from "./Depots";
 
 export function AreaPanel({ onOpen }: PanelProps) {
@@ -83,11 +83,7 @@ function SelectionView({ areas, onOpen }: { areas: number[] } & PanelProps) {
         )}
         <div className="stats">
           <Stat label="Population" value={count(summary.population)} testId="population" />
-          <Stat
-            label="Average wage"
-            value={`${fmt(summary.wageLevel * hoursPerDay)} mh/day`}
-            title={`Mean value added per private worker and day, in man-hours (an hour of an average worker's labor), weighted by workers${single === null ? " and then by population" : ""}; not a median.`}
-          />
+          <IncomeStats summary={summary} hoursPerDay={hoursPerDay} several={single === null} />
           <Stat
             label="Necessities met"
             value={pct(summary.necessitySatisfaction)}

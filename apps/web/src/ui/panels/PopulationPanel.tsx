@@ -51,7 +51,7 @@ export function PopulationPanel() {
             label="Emigration"
             value={perDay(now.emigration)}
             testId="emigration"
-            title="People leaving per day for other areas, drawn by better wages and satisfaction."
+            title="People leaving per day for other areas, drawn by better incomes and satisfaction."
           />
         </div>
         <Checkbox

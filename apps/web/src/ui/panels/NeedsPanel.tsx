@@ -38,7 +38,7 @@ export function NeedsPanel() {
           <Stat
             label="Satisfaction"
             value={pct(now.satisfaction)}
-            title="Share of every need, comforts and luxuries included, that people could buy. Together with wages, it draws migrants."
+            title="Share of every need, comforts and luxuries included, that people could buy. Together with incomes, it draws migrants."
           />
         </div>
       </section>

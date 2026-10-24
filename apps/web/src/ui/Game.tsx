@@ -8,17 +8,23 @@ import {
   MIGRATION_ARROW,
   POPULATION,
   POPULATION_DECADES,
-  PRICE_RANGE,
   SATISFACTION,
   STRIPE_COLOR,
   STRIPE_TILE,
   STRIPE_WIDTHS,
   TERRAIN_COLORS,
   TRANSPORT_ARROW,
-  WAGE_RANGE,
 } from "../map/colors";
 import { MapView } from "../map/MapView";
-import { flowMaximum, largestPopulation, realmPopulation, transportFlows } from "../state/selectors";
+import {
+  flowMaximum,
+  largestPopulation,
+  priceSpread,
+  realIncomes,
+  realmPopulation,
+  spreadOf,
+  transportFlows,
+} from "../state/selectors";
 import { gameStore, type PanelName, useGame } from "../state/store";
 import { count, fmt, Select } from "./components";
 import { AreaPanel } from "./panels/AreaPanel";
@@ -407,6 +413,9 @@ function AreaLegend() {
   const good = useGame((state) => state.data?.goods[state.selectedGood]?.name);
   const resource = useGame((state) => state.data?.goods[state.selectedResource]?.name);
   const snapshot = useGame((state) => state.snapshot);
+  const data = useGame((state) => state.data);
+  const table = useGame((state) => state.priceTable);
+  const selectedGood = useGame((state) => state.selectedGood);
   const gradient = (stops: readonly number[]) => `linear-gradient(to right, ${stops.map(cssColor).join(", ")})`;
   switch (layer) {
     case "realms":
@@ -424,18 +433,16 @@ function AreaLegend() {
         </div>
       );
     }
-    case "prices":
+    case "prices": {
+      const scale = data && table ? priceSpread(data, table, selectedGood) : null;
       return (
         <div className="legend" data-testid="legend">
-          <div>Price of {good} vs labor value</div>
+          <div>Price of {good}, in mh</div>
           <div className="bar" style={{ background: gradient(DIVERGING) }} />
-          <div className="ends">
-            <span>÷{PRICE_RANGE}</span>
-            <span>1×</span>
-            <span>×{PRICE_RANGE}</span>
-          </div>
+          {scale && <SpreadEnds scale={scale} />}
         </div>
       );
+    }
     case "resources":
       return (
         <div className="legend" data-testid="legend">
@@ -470,18 +477,19 @@ function AreaLegend() {
           </div>
         </div>
       );
-    case "wage":
+    case "income": {
+      const hours = data?.config.economy.hoursPerWorkerDay ?? 1;
+      const scale = data && snapshot ? spreadOf(realIncomes(data, snapshot, table)) : null;
       return (
         <div className="legend" data-testid="legend">
-          <div>Average wage</div>
+          <div title="Income per worker and day, over the local cost of living">Real income, mh/day</div>
           <div className="bar" style={{ background: gradient(DIVERGING) }} />
-          <div className="ends">
-            <span>{1 / WAGE_RANGE}</span>
-            <span>1</span>
-            <span>{WAGE_RANGE}</span>
-          </div>
+          {scale && (
+            <SpreadEnds scale={{ low: hours * scale.low, median: hours * scale.median, high: hours * scale.high }} />
+          )}
         </div>
       );
+    }
     case "employment":
       return (
         <div className="legend" data-testid="legend">
@@ -494,6 +502,17 @@ function AreaLegend() {
         </div>
       );
   }
+}
+
+/** The ends of a scale drawn against the map's own values: its lowest, median and highest. */
+function SpreadEnds({ scale }: { scale: { low: number; median: number; high: number } }) {
+  return (
+    <div className="ends">
+      <span title="Lowest on the map">{fmt(scale.low)}</span>
+      <span title="Median">{fmt(scale.median)}</span>
+      <span title="Highest on the map">{fmt(scale.high)}</span>
+    </div>
+  );
 }
 
 /** A legend sample of the resources layer's stripes, at half their size on the map tile. */

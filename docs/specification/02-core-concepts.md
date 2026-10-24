@@ -18,7 +18,7 @@ Labor value is the starting price of every good and the reference for price boun
 
 A worker's **value added** is the market value of what they produce, minus the value of the inputs used, per hour worked. An area's **wage level** is the average value added per worker-hour across its private workers.
 
-A wage level above 1 means local labor is worth more than the reference: good resources, good trade access or scarce products. This is the main prosperity indicator shown to players.
+A wage level above 1 means local labor is worth more than the reference: good resources, good trade access or scarce products. This is the main prosperity indicator shown to players, who see it as **income** per worker and day, and as real income over the local cost of living (section 10, Map).
 
 ### Money circulation
 

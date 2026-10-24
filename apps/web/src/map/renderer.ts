@@ -2,7 +2,15 @@
 // shows changes, and the scene is rendered on demand, so an idle map costs nothing per frame.
 import { EDGE_ACTIVE, EDGE_BLOCKED, type Snapshot, type StaticData } from "@geonomics/sim";
 import { type Application, Container, FillPattern, Graphics, Matrix, Texture } from "pixi.js";
-import { largestPopulation, priceOf, transportFlows } from "../state/selectors";
+import {
+  largestPopulation,
+  priceOf,
+  priceSpread,
+  realIncomes,
+  type Spread,
+  spreadOf,
+  transportFlows,
+} from "../state/selectors";
 import type { GameState } from "../state/store";
 import { ARROW_MIN_SHARE, arrowPolygon, arrowWidth, MAX_ARROWS } from "./arrows";
 import {
@@ -18,7 +26,6 @@ import {
   PICKED,
   parseColor,
   populationColor,
-  priceColor,
   RESOURCE_LEVELS,
   resourceLevel,
   SEA_ROUTE,
@@ -27,10 +34,10 @@ import {
   STRIPE_TILE,
   STRIPE_WIDTHS,
   satisfactionColor,
+  spreadColor,
   TERRAIN_COLORS,
   TRANSPORT_ARROW,
   WATER,
-  wageColor,
 } from "./colors";
 import type { MapGeometry } from "./geometry";
 
@@ -70,6 +77,8 @@ export class MapRenderer {
   coveredBottom: () => number = () => 0;
   private ownerKey = "";
   private largestPopulation = 0;
+  private scale: Spread | null = null; // the prices or income layer's lowest, median and highest value
+  private incomes: Float32Array | null = null; // the income layer's real income per area
 
   constructor(
     private readonly app: Application,
@@ -103,7 +112,9 @@ export class MapRenderer {
           ? [layer, priceTable, selectedGood]
           : layer === "resources"
             ? [layer, selectedResource]
-            : [layer, snapshot];
+            : layer === "income"
+              ? [layer, snapshot, priceTable]
+              : [layer, snapshot];
     if (changed(this.drawn.cells, cellInputs)) {
       this.drawCells(state);
       this.drawn.cells = cellInputs;
@@ -164,16 +175,13 @@ export class MapRenderer {
         return this.realmColor(state, area);
       case "population":
         return snapshot ? populationColor(snapshot.areas.population[area] as number, this.largestPopulation) : NEUTRAL;
-      case "prices": {
-        if (!state.priceTable) return NEUTRAL;
-        const good = data.goods[state.selectedGood];
-        if (!good) return NEUTRAL;
-        return priceColor(priceOf(data, state.priceTable, area, good.id), good.laborValue);
-      }
+      case "prices":
+        if (!state.priceTable || !this.scale) return NEUTRAL;
+        return spreadColor(priceOf(data, state.priceTable, area, state.selectedGood), this.scale);
       case "satisfaction":
         return snapshot ? satisfactionColor(snapshot.areas.necessitySatisfaction[area] as number) : NEUTRAL;
-      case "wage":
-        return snapshot ? wageColor(snapshot.areas.wageLevel[area] as number) : NEUTRAL;
+      case "income":
+        return this.incomes && this.scale ? spreadColor(this.incomes[area] as number, this.scale) : NEUTRAL;
       case "employment":
         return snapshot ? employmentColor(snapshot.areas.employmentRate[area] as number) : NEUTRAL;
     }
@@ -203,6 +211,15 @@ export class MapRenderer {
   private drawCells(state: GameState): void {
     const g = this.cells.clear();
     if (state.layer === "population" && state.snapshot) this.largestPopulation = largestPopulation(state.snapshot);
+    // Prices and real incomes are colored against the map's own lowest, median and highest values.
+    this.incomes =
+      state.layer === "income" && state.snapshot ? realIncomes(this.data, state.snapshot, state.priceTable) : null;
+    this.scale =
+      state.layer === "prices" && state.priceTable
+        ? priceSpread(this.data, state.priceTable, state.selectedGood)
+        : this.incomes
+          ? spreadOf(this.incomes)
+          : null;
     for (let area = 0; area < this.geometry.cells.length; area++) {
       const polygon = this.geometry.cells[area] as number[];
       if (polygon.length < 6) continue;

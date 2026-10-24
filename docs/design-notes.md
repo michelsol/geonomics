@@ -379,3 +379,11 @@ A negative head tax is an allowance per inhabitant. It joins the government's bi
 ### Flows after a new route
 
 The jobs phase can open an air route after the population and trade phases, and the per-tick buffers were then rebuilt empty before the next snapshot, which showed no migration, no trade and no births or deaths for one sample. The rebuilt buffers now keep the last tick's values.
+
+### Scales from the map's own values
+
+The prices layer first colored a good's price against its labor value, at full color for three times more or less. Prices mostly sit within a narrower band, so the map came out in pale tints. It now runs from the map's lowest price to its highest, with white at the median and a log scale on each side, so skewed prices still use both halves of the colors. Real income uses the same scale: against the fixed reference of 1, nearly every area was blue, since the cost of living sits around ×2.
+
+### Income and real income
+
+Starving areas could show high wages: food is dear, so a worker's output is worth many man-hours, which buy little locally. The income map therefore shows real income, income over the local cost of living, and a test run confirmed that starving areas then come out the poorest (a real income a sixth of the median or less). The interface calls the wage level income: with no capital or profits, value added per worker is all a worker earns. Jobs and Armies keep the nominal income, since workers compare government wage offers and soldiers their pay with it.
