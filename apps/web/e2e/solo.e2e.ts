@@ -21,7 +21,7 @@ async function openTab(page: Page, name: string) {
 
 test("a solo game runs, pauses, and takes commands", async ({ page }) => {
   await startGame(page);
-  await expect(page.getByTestId("realm-population")).toHaveText(/^👥 [\d,]+$/);
+  await expect(page.getByTestId("realm-population")).toHaveText(/^👥 [\d.,]+k?$/);
 
   // Time runs, and pause stops it.
   const start = await day(page);

@@ -20,7 +20,7 @@ Areas are the Voronoi cells of their positions, with the water cells around them
 | Layer | Colors each area by |
 | --- | --- |
 | Realms | Owner color; neutral areas in grey. Realm borders are drawn on every layer |
-| Population | Population, one hue on a log scale between the map's smallest and largest areas |
+| Population | Population, one hue on a log scale over the two decades below the largest area: an area with 1% of the largest's people or fewer, an emptied one included, is the darkest |
 | Prices | The chosen good's price over its labor value, on a log scale from blue (cheap) through white to red (dear) |
 | Resources | The chosen good's maximum natural capacity, brighter for more, relative to the best area; grey where there is none |
 | Satisfaction | Necessity satisfaction, from red (0) to green (1) |
@@ -53,7 +53,7 @@ Mouse or one finger pans and the wheel or a pinch zooms around the pointer. A cl
 - **Regions.** A double click or double tap starts a polygon at that point. Each tap adds a corner, drawn as a dashed line with a dot; a tap within 20 px of the first corner (drawn as a ring), or Done, closes it once it has three corners, and selects every area whose center lies inside. Dragging and pinching still pan and zoom while drawing; Cancel or Escape stops.
 - **Several polygons.** With several areas selected, a new polygon adds its areas to the selection; a switch in the banner makes it remove them instead. With one area or none, a polygon replaces the selection. The double tap's first tap does not change the selection the polygon builds on.
 - **Single areas.** Shift-, Ctrl- or Cmd-click adds or removes one area. The Area panel's My realm button selects every area of the player's realm.
-- **Drawing.** Selected areas are outlined; with several, each is also lightly filled. A banner shows how many are selected.
+- **Drawing.** The selection's frontier is outlined, 3 px wide whatever its size: sides between two selected areas are not drawn, so a region shows as one shape (with its holes and separate parts). With several areas, each is also lightly filled. A banner shows how many are selected.
 - **Totals.** With several areas selected, the Area panel shows the owners and how many areas each holds, total population, militia, savings and unemployed, population-weighted average wage, satisfaction and necessities met, the hardest area to conquer, summed natural capacities, and the market: mean prices, and stock, production, use and net trade summed (trade between two selected areas cancels out). Stocks, flows, savings and unemployment cover only the areas whose detail the snapshot carries, which the panel says. The Good section shows the selection's mean price and records its history.
 - **Region actions.** When at least two of the player's areas are selected, the Policies, standing orders, Jobs and Armies panels offer the selection as a scope, over the player's selected areas:
   - **Rates and prices** (taxes, tariffs, price controls, wage offers) are set to the same value in each area, and the setting in force reads "varies by area" when they differ.

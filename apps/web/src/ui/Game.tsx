@@ -6,6 +6,7 @@ import {
   DIVERGING,
   MIGRATION_ARROW,
   POPULATION,
+  POPULATION_DECADES,
   PRICE_RANGE,
   RESOURCE,
   SATISFACTION,
@@ -14,7 +15,7 @@ import {
   WAGE_RANGE,
 } from "../map/colors";
 import { MapView } from "../map/MapView";
-import { flowMaximum, populationRange, realmPopulation, transportFlows } from "../state/selectors";
+import { flowMaximum, largestPopulation, realmPopulation, transportFlows } from "../state/selectors";
 import type { Flows, Layer } from "../state/store";
 import { gameStore, useGame } from "../state/store";
 import { count, fmt, Select } from "./components";
@@ -290,7 +291,7 @@ function TopBar() {
       </span>
       {population !== null && (
         <span className="stat" title="Population of your realm" data-testid="realm-population">
-          👥 {count(population)}
+          👥 {fmt(population)}
         </span>
       )}
       <span className="stat muted hide-phone" title="Ticks per second and milliseconds per tick">
@@ -407,14 +408,14 @@ function AreaLegend() {
     case "realms":
       return null;
     case "population": {
-      const range = snapshot ? populationRange(snapshot) : { smallest: 0, largest: 0 };
+      const largest = snapshot ? largestPopulation(snapshot) : 0;
       return (
         <div className="legend" data-testid="legend">
           <div>Population per area</div>
           <div className="bar" style={{ background: gradient(POPULATION) }} />
           <div className="ends">
-            <span>{count(range.smallest)}</span>
-            <span>{count(range.largest)}</span>
+            <span>≤ {count(largest / 10 ** POPULATION_DECADES)}</span>
+            <span>{count(largest)}</span>
           </div>
         </div>
       );

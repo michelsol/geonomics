@@ -2,7 +2,7 @@
 // shows changes, and the scene is rendered on demand, so an idle map costs nothing per frame.
 import { EDGE_ACTIVE, EDGE_BLOCKED, type Snapshot, type StaticData } from "@geonomics/sim";
 import { type Application, Container, Graphics } from "pixi.js";
-import { populationRange, priceOf, transportFlows } from "../state/selectors";
+import { largestPopulation, priceOf, transportFlows } from "../state/selectors";
 import type { GameState } from "../state/store";
 import { ARROW_MIN_SHARE, arrowPolygon, arrowWidth, MAX_ARROWS } from "./arrows";
 import {
@@ -61,7 +61,7 @@ export class MapRenderer {
   /** Screen pixels at the bottom of the map that the panels' bottom sheet covers on phones. */
   coveredBottom: () => number = () => 0;
   private ownerKey = "";
-  private populations: { smallest: number; largest: number } = { smallest: 0, largest: 0 };
+  private largestPopulation = 0;
 
   constructor(
     private readonly app: Application,
@@ -148,13 +148,7 @@ export class MapRenderer {
       case "realms":
         return this.realmColor(state, area);
       case "population":
-        return snapshot
-          ? populationColor(
-              snapshot.areas.population[area] as number,
-              this.populations.smallest,
-              this.populations.largest,
-            )
-          : NEUTRAL;
+        return snapshot ? populationColor(snapshot.areas.population[area] as number, this.largestPopulation) : NEUTRAL;
       case "prices": {
         if (!state.priceTable) return NEUTRAL;
         const good = data.goods[state.selectedGood];
@@ -196,7 +190,7 @@ export class MapRenderer {
 
   private drawCells(state: GameState): void {
     const g = this.cells.clear();
-    if (state.layer === "population" && state.snapshot) this.populations = populationRange(state.snapshot);
+    if (state.layer === "population" && state.snapshot) this.largestPopulation = largestPopulation(state.snapshot);
     for (let area = 0; area < this.geometry.cells.length; area++) {
       const polygon = this.geometry.cells[area] as number[];
       if (polygon.length < 6) continue;
@@ -354,16 +348,20 @@ export class MapRenderer {
 
   private drawSelection(state: GameState, px: number): void {
     const g = this.selection.clear();
-    const several = state.selection.length > 1;
-    for (const area of state.selection) {
-      const polygon = this.geometry.cells[area];
-      if (!polygon || polygon.length < 6) continue;
-      if (several)
-        g.poly(polygon)
-          .fill({ color: SELECTION, alpha: 0.18 })
-          .stroke({ width: 1.5 * px, color: SELECTION });
-      else g.poly(polygon).stroke({ width: 3 * px, color: SELECTION });
+    // Several areas are lightly filled; any selection is outlined along its frontier only.
+    if (state.selection.length > 1) {
+      for (const area of state.selection) {
+        const polygon = this.geometry.cells[area];
+        if (polygon && polygon.length >= 6) g.poly(polygon).fill({ color: SELECTION, alpha: 0.18 });
+      }
     }
+    const frontier = this.geometry.outline(state.selection);
+    for (let i = 0; i + 3 < frontier.length; i += 4)
+      g.moveTo(frontier[i] as number, frontier[i + 1] as number).lineTo(
+        frontier[i + 2] as number,
+        frontier[i + 3] as number,
+      );
+    if (frontier.length > 0) g.stroke({ width: 3 * px, color: SELECTION, cap: "round", join: "round" });
     if (state.mode.kind === "lasso") this.drawLasso(g, state.mode.points, state.mode.operation === "remove", px);
     for (const area of state.mode.kind === "pickPeaceAreas" || state.peaceAreas.length > 0 ? state.peaceAreas : []) {
       const polygon = this.geometry.cells[area];

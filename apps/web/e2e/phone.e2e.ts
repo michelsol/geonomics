@@ -16,6 +16,10 @@ test("every screen and panel fits a phone's width", async ({ page }, testInfo) =
   await page.locator(".realm-list button").first().click();
   await expect(page.getByTestId("area-name")).toBeVisible();
 
+  // The realm's population shares the first row of the top bar with the day and the treasury.
+  const row = async (id: string) => (await page.getByTestId(id).boundingBox())?.y;
+  expect(await row("realm-population")).toBe(await row("game-day"));
+
   // The map layer and flows stay on screen, beside the time controls.
   for (const label of ["Map layer", "Map flows"]) {
     const box = await page.getByLabel(label).boundingBox();

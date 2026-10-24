@@ -154,16 +154,11 @@ export function employmentOf(
   return result;
 }
 
-/** Smallest and largest population of an inhabited area on the map. */
-export function populationRange(snapshot: Snapshot): { smallest: number; largest: number } {
-  let smallest = Number.POSITIVE_INFINITY;
+/** Population of the most populous area on the map. */
+export function largestPopulation(snapshot: Snapshot): number {
   let largest = 0;
-  for (const population of snapshot.areas.population) {
-    if (population <= 0) continue;
-    smallest = Math.min(smallest, population);
-    largest = Math.max(largest, population);
-  }
-  return { smallest: Number.isFinite(smallest) ? smallest : 0, largest };
+  for (const population of snapshot.areas.population) largest = Math.max(largest, population);
+  return largest;
 }
 
 /** Largest flow in an array of edge flows, whatever its sign. */

@@ -58,9 +58,14 @@ export function resourceColor(capacity: number, best: number): number {
 
 /** Population: one hue, brighter for more, on a log scale between the map's smallest and largest areas. */
 export const POPULATION = [0x2d2447, 0x4b3a86, 0x6f5fd0, 0x9d93ea, 0xd8d3f7];
-export function populationColor(population: number, smallest: number, largest: number): number {
-  if (!(population > 0) || !(largest > smallest)) return ramp(POPULATION, population > 0 ? 1 : 0);
-  return ramp(POPULATION, Math.log(population / smallest) / Math.log(largest / smallest));
+/** Decades of population the layer spans below the largest area; anything smaller shows as the darkest color. */
+export const POPULATION_DECADES = 2;
+
+/** Population on a log scale from the largest area down POPULATION_DECADES, so emptied areas all show darkest. */
+export function populationColor(population: number, largest: number): number {
+  if (!(largest > 0) || !(population > 0)) return ramp(POPULATION, 0);
+  const share = Math.log10(population / largest) / POPULATION_DECADES + 1;
+  return ramp(POPULATION, Math.min(1, Math.max(0, share)));
 }
 
 /** Flow arrows: bright colors with a dark outline, so they read over any area layer. */
