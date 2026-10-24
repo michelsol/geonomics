@@ -385,10 +385,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
           const snapshot = withDetailOf(message.snapshot, state.snapshot);
           const history = state.history;
           const population = realmPopulation(snapshot);
-          if (history && snapshot.government) {
-            history.realm.push(snapshot.gameDay, [population, snapshot.government.treasury]);
-            for (const detail of snapshot.detail) history.track(detail.area);
-          }
+          if (history && snapshot.government) for (const detail of snapshot.detail) history.track(detail.area);
           set({
             snapshot,
             governments: snapshot.governments,

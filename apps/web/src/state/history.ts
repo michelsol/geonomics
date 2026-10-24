@@ -58,7 +58,6 @@ export class History {
   readonly goodPrices: Series[]; // per good: lowest, median and highest price in the world
   readonly areaPrices = new Map<number, Series>(); // per tracked area: the price of every good
   readonly selectionPrices = new Map<string, { areas: number[]; series: Series }>(); // per selection: mean prices
-  readonly realm = new Series(2); // population and treasury of the player's realm
 
   constructor(readonly goodCount: number) {
     this.goodPrices = Array.from({ length: goodCount }, () => new Series(3));

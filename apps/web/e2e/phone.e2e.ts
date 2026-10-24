@@ -21,7 +21,7 @@ test("every screen and panel fits a phone's width", async ({ page }, testInfo) =
     const box = await page.getByLabel(label).boundingBox();
     expect(box && box.x + box.width).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
   }
-  for (const tab of ["Area", "Realm", "Policies", "Jobs", "Armies", "Diplomacy"]) {
+  for (const tab of ["Area", "Policies", "Jobs", "Armies", "Diplomacy", "Game"]) {
     await page.getByRole("navigation").getByRole("button", { name: tab, exact: true }).click();
     expect(await fitsTheScreen(page), tab).toBe(true);
   }

@@ -45,7 +45,7 @@ test("an exported save loads into a new session at the same day", async ({ page 
   await startGame(page);
   const saved = await playAFewDays(page);
 
-  await page.getByRole("navigation").getByRole("button", { name: "Realm", exact: true }).click();
+  await page.getByRole("navigation").getByRole("button", { name: "Game", exact: true }).click();
   const [download] = await Promise.all([
     page.waitForEvent("download"),
     page.getByRole("button", { name: "Export save" }).click(),

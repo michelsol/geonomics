@@ -14,7 +14,7 @@ import {
   WAGE_RANGE,
 } from "../map/colors";
 import { MapView } from "../map/MapView";
-import { flowMaximum, populationRange, transportFlows } from "../state/selectors";
+import { flowMaximum, populationRange, realmPopulation, transportFlows } from "../state/selectors";
 import type { Flows, Layer } from "../state/store";
 import { gameStore, useGame } from "../state/store";
 import { count, fmt, Select } from "./components";
@@ -22,17 +22,17 @@ import { AreaPanel } from "./panels/AreaPanel";
 import { ArmiesPanel } from "./panels/ArmiesPanel";
 import type { PanelName, PanelProps } from "./panels/common";
 import { DiplomacyPanel } from "./panels/DiplomacyPanel";
-import { GovernmentPanel } from "./panels/GovernmentPanel";
+import { GamePanel } from "./panels/GamePanel";
 import { JobsPanel } from "./panels/JobsPanel";
 import { PoliciesPanel } from "./panels/PoliciesPanel";
 
 const PANELS = {
   area: { label: "Area", view: AreaPanel },
-  government: { label: "Realm", view: GovernmentPanel },
   policies: { label: "Policies", view: PoliciesPanel },
   jobs: { label: "Jobs", view: JobsPanel },
   armies: { label: "Armies", view: ArmiesPanel },
   diplomacy: { label: "Diplomacy", view: DiplomacyPanel },
+  game: { label: "Game", view: GamePanel },
 } as const satisfies Record<PanelName, { label: string; view: (props: PanelProps) => ReactNode }>;
 
 const LAYERS: { value: Layer; label: string }[] = [
@@ -53,7 +53,7 @@ const FLOWS: { value: Flows; label: string }[] = [
 
 type SheetHeight = "peek" | "half" | "full";
 
-const SPECTATOR_PANELS: readonly PanelName[] = ["area"];
+const SPECTATOR_PANELS: readonly PanelName[] = ["area", "game"];
 
 /** Keeps the host's screen on while its game runs and the tab is visible (specification §9, Hosting on mobile). */
 function useWakeLock(): void {
@@ -253,6 +253,7 @@ function TopBar() {
   const status = useGame((state) => state.status);
   const day = useGame((state) => state.snapshot?.gameDay ?? 0);
   const treasury = useGame((state) => state.snapshot?.government?.treasury ?? 0);
+  const population = useGame((state) => (state.snapshot?.government ? realmPopulation(state.snapshot) : null));
   const layer = useGame((state) => state.layer);
   const flows = useGame((state) => state.flows);
   const { setSpeed, togglePause, setLayer, setFlows } = gameStore.getState();
@@ -287,6 +288,11 @@ function TopBar() {
       <span className="stat" title="Treasury, in man-hours">
         💰 {fmt(treasury)}
       </span>
+      {population !== null && (
+        <span className="stat" title="Population of your realm" data-testid="realm-population">
+          👥 {count(population)}
+        </span>
+      )}
       <span className="stat muted hide-phone" title="Ticks per second and milliseconds per tick">
         {status.ticksPerSecond} t/s · {status.msPerTick.toFixed(1)} ms
       </span>

@@ -81,6 +81,6 @@ test("a host and a joined player share a game", async ({ browser }, testInfo) =>
   await expect(guest.getByTestId("map-canvas")).toBeVisible({ timeout: 30_000 });
   await openTab(guest, "Armies");
   await expect(guest.getByTestId("army")).toHaveCount(1, { timeout: 15_000 });
-  await openTab(hostPage, "Realm");
+  await openTab(hostPage, "Game");
   await expect(hostPage.getByTestId("players")).toContainText("Bob");
 });

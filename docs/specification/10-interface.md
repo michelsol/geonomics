@@ -66,21 +66,21 @@ Mouse or one finger pans and the wheel or a pinch zooms around the pointer. A cl
 | Panel | Shows | Actions |
 | --- | --- | --- |
 | Area | One view for one selected area or several (see Selection). A header with My realm, Center (the selection, or the capital when nothing is selected) and, for several areas, Clear; it stays when nothing is selected. The area's name, owner and terrain, or the number of areas and their owners. One grid of figures: population, average wage per day (mh/day), necessities met, satisfaction, port, airport and fortification levels (one area), savings per person and unemployed (areas seen in detail), siege, militia, defense power, and for areas not the player's the equipped soldiers needed to conquer. Each figure explains itself on hover; the panel has no explanatory paragraphs. Natural resources: maximum capacity, and current capacity, extraction and use where detail is sent. The market: price, stock, production, consumption and trade per good where detail is sent, prices only elsewhere. For own areas, the depot's contents and the goods on their way to it. At the bottom, one good across the world: lowest, median and highest price with their areas, and a chart over time of these and the selection's price | Sort the market table by any column; send goods between depots; choose the good and show it on the price map |
-| Realm | Treasury and its change per day, realm population and areas, charts of treasury and population; the players and their realms | Invite players and release offline players' realms (host); export the save (host); end the game, or leave it (joined player) |
 | Policies | Every tax and price control, realm-wide and per area; the setting in force for the chosen area, policy and good; standing orders | Set or remove a policy for all areas or one area, and for one good or all goods. The production tax is chosen first. Taxes and tariffs have a slider from −100% to +100% (the number field takes up to 500%), head tax one from 0 to 2 mh per person per day; ceilings and floors take a number. The value starts at the setting in force, and Set applies it. Add and remove standing orders |
 | Jobs | For one own area or the whole realm: the workforce split between private jobs, government jobs and unemployment, and private workers, output per day and output per worker by good. Per own area: each job's target and workers, and the wage offer | Set job targets and wage offers |
 | Armies | Soldier wage, realm average wage, soldiers and their pay per day; weapons in depots and being bought; each army's soldiers, equipment, power, stance, location and path | Set the soldier wage, recruit, buy weapons, set stance, move (then pick the destination on the map), disband |
 | Diplomacy | Relations with every government, with who runs each (a player, "AI · personality", or an offline player's realm run by the AI), pending proposals | Declare war; propose peace (payment and areas picked on the map); accept or refuse proposals |
+| Game (last tab) | The players and their realms, online or not | Invite players and release offline players' realms (host); export the save (host); end the game, or leave it (joined player) |
 
 A rejected command is shown as a short message with its reason.
 
-**Joined players** see the host's time state (running at a speed, or paused) instead of the time controls, and a banner while the connection is down, the host has paused, or the host's tab is hidden. **Spectators** get the Area panel only.
+**Joined players** see the host's time state (running at a speed, or paused) instead of the time controls, and a banner while the connection is down, the host has paused, or the host's tab is hidden. **Spectators** get the Area and Game panels only.
 
 Numbers show at most two decimals, and none from 100 up; from 10,000 they are compact (24.3k, 1.23M). A nonzero value too small to show reads "<0.01". Quantities that are whole by nature, such as people, workers, soldiers and days, show as whole numbers (24,312), compact only from a million.
 
 ### Time controls
 
-The top bar holds pause and four speeds: 1×, 2× and 5× (`maxTicksPerSecond` 2, 5 and 10) and max, which runs ticks back to back. It shows the game day, the treasury, the actual ticks per second and the milliseconds per tick. Space toggles pause. A solo game pauses while its tab is hidden; a hosted game keeps running. A game starts at 1× on phones and 2× elsewhere.
+The top bar holds pause and four speeds: 1×, 2× and 5× (`maxTicksPerSecond` 2, 5 and 10) and max, which runs ticks back to back. It shows the game day, the treasury, the realm's population, the actual ticks per second and the milliseconds per tick. Space toggles pause. A solo game pauses while its tab is hidden; a hosted game keeps running. A game starts at 1× on phones and 2× elsewhere.
 
 ### Layout
 

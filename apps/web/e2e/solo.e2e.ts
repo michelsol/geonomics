@@ -21,6 +21,7 @@ async function openTab(page: Page, name: string) {
 
 test("a solo game runs, pauses, and takes commands", async ({ page }) => {
   await startGame(page);
+  await expect(page.getByTestId("realm-population")).toHaveText(/^👥 [\d,]+$/);
 
   // Time runs, and pause stops it.
   const start = await day(page);
@@ -86,7 +87,7 @@ test("a solo game runs, pauses, and takes commands", async ({ page }) => {
   await expect(page.getByText("at war").first()).toBeVisible();
 
   // Ending the session shows the summary.
-  await openTab(page, "Realm");
+  await openTab(page, "Game");
   await page.getByRole("button", { name: "End game" }).click();
   await expect(page.getByRole("heading", { name: "Session over" })).toBeVisible();
   await page.getByRole("button", { name: "New game" }).click();

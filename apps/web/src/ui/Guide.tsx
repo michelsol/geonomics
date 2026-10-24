@@ -80,9 +80,9 @@ export function Guide() {
         <section>
           <h2>Playing with friends</h2>
           <p>
-            In the lobby or the Realm panel, Invite players gives a link to send. Your friends open it, pick a free
-            realm or watch, and play in the same world; your browser runs the game, so keep its tab open. If a friend
-            drops out, the AI runs their realm until they come back.
+            In the lobby or the Game tab, Invite players gives a link to send. Your friends open it, pick a free realm
+            or watch, and play in the same world; your browser runs the game, so keep its tab open. If a friend drops
+            out, the AI runs their realm until they come back.
           </p>
         </section>
 
@@ -90,8 +90,8 @@ export function Guide() {
           <h2>Saving</h2>
           <p>
             Games save themselves in this browser every 30 days, when you switch away from the tab and when you end the
-            game; Continue picks them up from the menu. Export save in the Realm panel downloads the game as a file,
-            which anyone can load from the menu to host it again.
+            game; Continue picks them up from the menu. Export save in the Game tab downloads the game as a file, which
+            anyone can load from the menu to host it again.
           </p>
         </section>
 

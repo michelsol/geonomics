@@ -113,7 +113,6 @@ describe("game store", () => {
     state().chooseRealm(0);
     state().receive({ type: "snapshot", snapshot: buildSnapshot(world, 0) });
     expect(state().snapshot?.government?.id).toBe(0);
-    expect(state().history?.realm.length).toBe(1);
     expect(state().history?.areaPrices.size).toBeGreaterThan(0);
     state().receive({ type: "priceTable", tick: 0, gameDay: 0, table: encodePriceTable(world) });
     const [low, median, high] = [0, 1, 2].map((c) => state().history?.goodPrices[0]?.channel(c)[0] as number);
