@@ -144,6 +144,25 @@ export function Select<T extends string | number>({
   );
 }
 
+export function Checkbox({
+  checked,
+  onChange,
+  label,
+  title,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: string;
+  title?: string;
+}) {
+  return (
+    <label className="check" title={title}>
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      {label}
+    </label>
+  );
+}
+
 export function Swatch({ color }: { color: string }) {
   return <span className="swatch" style={{ background: color }} />;
 }

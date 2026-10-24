@@ -14,7 +14,8 @@ test("the map stays smooth on a 3,000-area map", async ({ page }, testInfo) => {
   await page.locator(".realm-list button").first().click();
   await expect(page.getByTestId("map-canvas")).toBeVisible();
   // Measure with the busiest overlay: trade arrows on every edge, redrawn with each snapshot.
-  await page.getByLabel("Map flows").selectOption("transport");
+  await page.getByRole("navigation").getByRole("button", { name: "Goods", exact: true }).click();
+  await page.getByLabel("Show transport flows").check();
   await page.waitForTimeout(2000);
 
   // Count frames for five seconds while dragging the map back and forth.

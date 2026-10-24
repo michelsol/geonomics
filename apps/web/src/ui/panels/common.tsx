@@ -1,8 +1,8 @@
 // Helpers shared by the panels.
 import type { GovernmentView, Snapshot, StaticData } from "@geonomics/sim";
-import { useGame } from "../../state/store";
+import { type PanelName, useGame } from "../../state/store";
 
-export type PanelName = "area" | "policies" | "jobs" | "armies" | "diplomacy" | "game";
+export type { PanelName };
 export interface PanelProps {
   onOpen: (panel: PanelName) => void;
 }
@@ -31,14 +31,25 @@ export function useView(): View | null {
 
 export const areaName = (data: StaticData, area: number) => data.areas[area]?.name ?? `#${area}`;
 
+/**
+ * The areas an information panel shows: the selection or, when nothing is selected, the player's realm (the whole
+ * map for a spectator), with a heading naming them.
+ */
+export function shownAreas(
+  data: StaticData,
+  government: GovernmentView | null,
+  selection: readonly number[],
+): { areas: readonly number[]; heading: string } {
+  if (selection.length === 1) return { areas: selection, heading: areaName(data, selection[0] as number) };
+  if (selection.length > 1) return { areas: selection, heading: `${selection.length.toLocaleString("en-US")} areas` };
+  if (government) return { areas: government.ownedAreas, heading: "Your realm" };
+  return { areas: data.areas.map((_, area) => area), heading: "The world" };
+}
+
 export function goodOptions(data: StaticData, storableOnly = false) {
   return data.goods
     .filter((good) => !storableOnly || !good.isService)
     .map((good) => ({ value: good.id, label: good.name }));
-}
-
-export function ownedOptions(view: View) {
-  return view.government.ownedAreas.map((area) => ({ value: area, label: areaName(view.data, area) }));
 }
 
 /** Sends a command to the worker; the answer comes back as a snapshot or a rejection toast. */

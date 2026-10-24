@@ -16,20 +16,28 @@ import {
 } from "../map/colors";
 import { MapView } from "../map/MapView";
 import { flowMaximum, largestPopulation, realmPopulation, transportFlows } from "../state/selectors";
-import type { Flows, Layer } from "../state/store";
-import { gameStore, useGame } from "../state/store";
+import { gameStore, type PanelName, useGame } from "../state/store";
 import { count, fmt, Select } from "./components";
 import { AreaPanel } from "./panels/AreaPanel";
 import { ArmiesPanel } from "./panels/ArmiesPanel";
-import type { PanelName, PanelProps } from "./panels/common";
+import type { PanelProps } from "./panels/common";
 import { DiplomacyPanel } from "./panels/DiplomacyPanel";
 import { GamePanel } from "./panels/GamePanel";
+import { GoodsPanel } from "./panels/GoodsPanel";
 import { JobsPanel } from "./panels/JobsPanel";
+import { NeedsPanel } from "./panels/NeedsPanel";
 import { PoliciesPanel } from "./panels/PoliciesPanel";
+import { PopulationPanel } from "./panels/PopulationPanel";
+import { ResourcesPanel } from "./panels/ResourcesPanel";
 import { SelectionBar } from "./SelectionBar";
 
+// Each panel sets the map layer it needs (PANEL_LAYERS in the store).
 const PANELS = {
   area: { label: "Area", view: AreaPanel },
+  goods: { label: "Goods", view: GoodsPanel },
+  population: { label: "Population", view: PopulationPanel },
+  needs: { label: "Needs", view: NeedsPanel },
+  resources: { label: "Resources", view: ResourcesPanel },
   policies: { label: "Policies", view: PoliciesPanel },
   jobs: { label: "Jobs", view: JobsPanel },
   armies: { label: "Armies", view: ArmiesPanel },
@@ -37,25 +45,9 @@ const PANELS = {
   game: { label: "Game", view: GamePanel },
 } as const satisfies Record<PanelName, { label: string; view: (props: PanelProps) => ReactNode }>;
 
-const LAYERS: { value: Layer; label: string }[] = [
-  { value: "realms", label: "Realms" },
-  { value: "population", label: "Population" },
-  { value: "prices", label: "Prices" },
-  { value: "resources", label: "Resources" },
-  { value: "satisfaction", label: "Satisfaction" },
-  { value: "wage", label: "Average wage" },
-  { value: "terrain", label: "Terrain" },
-];
-
-const FLOWS: { value: Flows; label: string }[] = [
-  { value: "none", label: "No flows" },
-  { value: "migration", label: "Migration" },
-  { value: "transport", label: "Transport" },
-];
-
 type SheetHeight = "peek" | "half" | "full";
 
-const SPECTATOR_PANELS: readonly PanelName[] = ["area", "game"];
+const SPECTATOR_PANELS: readonly PanelName[] = ["area", "goods", "population", "needs", "resources", "game"];
 
 /** Keeps the host's screen on while its game runs and the tab is visible (specification §9, Hosting on mobile). */
 function useWakeLock(): void {
@@ -125,7 +117,7 @@ function saveSideWidth(width: number): void {
 }
 
 export function Game() {
-  const [chosenPanel, setPanel] = useState<PanelName>("area");
+  const chosenPanel = useGame((state) => state.panel);
   const [sheet, setSheet] = useState<SheetHeight>("peek");
   const [sideWidth, setSideWidth] = useState(storedSideWidth);
   // Spectators hold no realm: they see the map, areas and goods.
@@ -165,7 +157,7 @@ export function Game() {
   }, []);
 
   const openPanel = (name: PanelName) => {
-    setPanel(name);
+    gameStore.getState().openPanel(name);
     if (sheet === "peek") setSheet("half");
   };
 
@@ -195,7 +187,16 @@ export function Game() {
         />
         <nav className="tabs">
           {tabs.map((name) => (
-            <button type="button" key={name} className={name === panel ? "active" : ""} onClick={() => openPanel(name)}>
+            <button
+              type="button"
+              key={name}
+              className={name === panel ? "active" : ""}
+              onClick={(event) => {
+                openPanel(name);
+                // On a phone the tabs scroll sideways: bring the chosen one fully into view.
+                event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+              }}
+            >
               {PANELS[name].label}
             </button>
           ))}
@@ -257,9 +258,7 @@ function TopBar() {
   const day = useGame((state) => state.snapshot?.gameDay ?? 0);
   const treasury = useGame((state) => state.snapshot?.government?.treasury ?? 0);
   const population = useGame((state) => (state.snapshot?.government ? realmPopulation(state.snapshot) : null));
-  const layer = useGame((state) => state.layer);
-  const flows = useGame((state) => state.flows);
-  const { setSpeed, togglePause, setLayer, setFlows } = gameStore.getState();
+  const { setSpeed, togglePause } = gameStore.getState();
   const client = useGame((state) => state.session.role === "client");
   const speedLabel = SPEEDS.find((s) => s.speed === status.speed)?.label ?? String(status.speed);
   return (
@@ -302,10 +301,6 @@ function TopBar() {
       <span className="stat muted hide-phone" title="Ticks per second and milliseconds per tick">
         {status.ticksPerSecond} t/s · {status.msPerTick.toFixed(1)} ms
       </span>
-      <div className="group" style={{ marginLeft: "auto" }}>
-        <Select label="Map layer" value={layer} options={LAYERS} onChange={setLayer} />
-        <Select label="Map flows" value={flows} options={FLOWS} onChange={setFlows} />
-      </div>
     </header>
   );
 }
@@ -407,6 +402,7 @@ function FlowLegend() {
 function AreaLegend() {
   const layer = useGame((state) => state.layer);
   const good = useGame((state) => state.data?.goods[state.selectedGood]?.name);
+  const resource = useGame((state) => state.data?.goods[state.selectedResource]?.name);
   const snapshot = useGame((state) => state.snapshot);
   const gradient = (stops: readonly number[]) => `linear-gradient(to right, ${stops.map(cssColor).join(", ")})`;
   switch (layer) {
@@ -425,9 +421,10 @@ function AreaLegend() {
         </div>
       );
     }
-    case "terrain":
+    case "area":
       return (
-        <div className="legend">
+        <div className="legend" data-testid="legend">
+          <div>Terrain, tinted by realm</div>
           {Object.entries(TERRAIN_COLORS).map(([name, color]) => (
             <div key={name}>
               <span className="swatch" style={{ background: cssColor(color) }} />
@@ -438,7 +435,7 @@ function AreaLegend() {
       );
     case "prices":
       return (
-        <div className="legend">
+        <div className="legend" data-testid="legend">
           <div>Price of {good} vs labor value</div>
           <div className="bar" style={{ background: gradient(DIVERGING) }} />
           <div className="ends">
@@ -450,8 +447,8 @@ function AreaLegend() {
       );
     case "resources":
       return (
-        <div className="legend">
-          <div>Natural capacity of {good}</div>
+        <div className="legend" data-testid="legend">
+          <div>Natural capacity of {resource}</div>
           <div className="bar" style={{ background: gradient(RESOURCE) }} />
           <div className="ends">
             <span>little</span>
@@ -461,7 +458,7 @@ function AreaLegend() {
       );
     case "satisfaction":
       return (
-        <div className="legend">
+        <div className="legend" data-testid="legend">
           <div>Necessities met</div>
           <div className="bar" style={{ background: gradient(SATISFACTION) }} />
           <div className="ends">
@@ -472,7 +469,7 @@ function AreaLegend() {
       );
     case "wage":
       return (
-        <div className="legend">
+        <div className="legend" data-testid="legend">
           <div>Average wage</div>
           <div className="bar" style={{ background: gradient(DIVERGING) }} />
           <div className="ends">

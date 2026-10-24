@@ -4,6 +4,8 @@ import { expect, type Page, test } from "@playwright/test";
 const fitsTheScreen = (page: Page) =>
   page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
+const PANELS = ["Area", "Goods", "Population", "Needs", "Resources", "Policies", "Jobs", "Armies", "Diplomacy", "Game"];
+
 /** Every screen and panel fits the width, and the top bar keeps its figures together on screen. */
 async function checkLayout(page: Page) {
   await page.goto("/?warmup=10");
@@ -22,18 +24,15 @@ async function checkLayout(page: Page) {
   const population = await page.getByTestId("realm-population").boundingBox();
   expect(population && population.x + population.width).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
 
-  // The map layer and flows stay on screen, beside the time controls.
-  for (const label of ["Map layer", "Map flows"]) {
-    const box = await page.getByLabel(label).boundingBox();
-    expect(box && box.x + box.width).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
-  }
   // The selection bar shows in the peeking sheet, with its buttons on screen.
   const bar = await page.getByTestId("selection-bar").boundingBox();
   expect(bar && bar.y + bar.height).toBeLessThanOrEqual(page.viewportSize()?.height ?? 0);
   const clear = await page.getByRole("button", { name: "Clear", exact: true }).boundingBox();
   expect(clear && clear.x + clear.width).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
-  for (const tab of ["Area", "Policies", "Jobs", "Armies", "Diplomacy", "Game"]) {
-    await page.getByRole("navigation").getByRole("button", { name: tab, exact: true }).click();
+  for (const tab of PANELS) {
+    const button = page.getByRole("navigation").getByRole("button", { name: tab, exact: true });
+    await button.click();
+    await expect(button).toBeInViewport({ ratio: 0.95 }); // the tabs scroll to show the chosen one
     expect(await fitsTheScreen(page), tab).toBe(true);
   }
 }

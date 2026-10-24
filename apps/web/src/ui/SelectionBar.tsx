@@ -18,6 +18,8 @@ export function SelectionBar() {
   const owner = single === null ? undefined : snapshot.governments[snapshot.areas.owner[single] as number];
   const target = government ? actionTarget(government, selection) : null;
   const yours = government ? selection.filter((area) => government.ownedAreas.includes(area)).length : 0;
+  // Exactly the realm is selected: My realm has nothing to add, and its room goes to the action line.
+  const wholeRealm = government !== null && yours === government.ownedAreas.length && selection.length === yours;
 
   const center = () => {
     const capital = government?.capital ?? null;
@@ -61,7 +63,7 @@ export function SelectionBar() {
         )}
       </div>
       <div className="group">
-        {government && government.ownedAreas.length > 1 && (
+        {government && government.ownedAreas.length > 1 && !wholeRealm && (
           <button type="button" onClick={() => selectAreas(government.ownedAreas)}>
             My realm
           </button>

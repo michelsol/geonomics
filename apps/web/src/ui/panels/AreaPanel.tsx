@@ -1,22 +1,21 @@
-// The selected areas, one or several (specification §10, Selection): their figures and defense in one grid, natural
-// resources, a sortable market table, the depot, and one good across the world. Explanations show on hover.
+// The selected areas, one or several (specification §10, Selection): their figures and defense in one grid, a
+// sortable market table and the depot. Explanations show on hover.
 import { useState } from "react";
 import { type ConquestEstimate, conquestEstimate, type MarketRow, selectionSummary } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { count, fmt, pct, Section, Stat, Swatch } from "../components";
-import { areaName, usePublicView } from "./common";
+import { areaName, type PanelProps, usePublicView } from "./common";
 import { Depots } from "./Depots";
-import { GoodSection } from "./GoodSection";
 
-export function AreaPanel() {
+export function AreaPanel({ onOpen }: PanelProps) {
   const view = usePublicView();
   const selection = useGame((state) => state.selection);
   if (!view) return <p className="muted">Waiting for the first snapshot…</p>;
-  return <SelectionView areas={selection} />;
+  return <SelectionView areas={selection} onOpen={onOpen} />;
 }
 
 /** One area or several: totals, population-weighted means, and what it takes to conquer them. */
-function SelectionView({ areas }: { areas: number[] }) {
+function SelectionView({ areas, onOpen }: { areas: number[] } & PanelProps) {
   const view = usePublicView();
   const table = useGame((state) => state.priceTable);
   if (!view) return null;
@@ -41,7 +40,6 @@ function SelectionView({ areas }: { areas: number[] }) {
   const militiaShare = pct(data.config.military.militiaShare);
   const where = (area: number) => (single === null ? `${areaName(data, area)}: ` : "");
   const siege = single === null ? 0 : (snapshot.areas.siegeProgress[single] as number);
-  const resources = data.goods.filter((good) => good.isPrimary && (summary.capacity[good.id] as number) > 0);
   const static_ = single === null ? undefined : data.areas[single];
   const owner = single === null ? -1 : (snapshot.areas.owner[single] as number);
   const ownerSummary = owner >= 0 ? snapshot.governments[owner] : undefined;
@@ -154,58 +152,8 @@ function SelectionView({ areas }: { areas: number[] }) {
         </div>
       </section>
 
-      <Section title="Natural resources">
-        {resources.length === 0 ? (
-          <span className="muted">None: every primary good must be brought in.</span>
-        ) : (
-          <table data-testid="resources">
-            <thead>
-              <tr>
-                <th>Good</th>
-                <th className="num" title="Largest extraction per day, before depletion">
-                  Capacity
-                </th>
-                {summary.withDetail > 0 && (
-                  <>
-                    <th className="num" title={`Capacity left after depletion.${coverage}`}>
-                      Now
-                    </th>
-                    <th className="num" title={`Units extracted per day.${coverage}`}>
-                      Extracted
-                    </th>
-                    <th className="num" title="Extracted over the capacity left">
-                      Use
-                    </th>
-                  </>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {resources.map((good) => {
-                const now = summary.capacityNow[good.id] as number;
-                const extracted = summary.extracted[good.id] as number;
-                return (
-                  <tr key={good.id}>
-                    <td title={good.unit}>{good.name}</td>
-                    <td className="num">{fmt(summary.capacity[good.id] as number)}</td>
-                    {summary.withDetail > 0 && (
-                      <>
-                        <td className="num">{fmt(now)}</td>
-                        <td className="num">{fmt(extracted)}</td>
-                        <td className="num">{now > 0 ? pct(extracted / now) : "—"}</td>
-                      </>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </Section>
-
-      <MarketTable areas={areas} />
+      <MarketTable areas={areas} onOpen={onOpen} />
       <Depots areas={areas} />
-      <GoodSection />
     </>
   );
 }
@@ -245,7 +193,7 @@ function saveSort(sort: Sort): void {
 }
 
 /** Prices of every good, plus stocks and flows where the snapshot carries them; columns sort on click. */
-function MarketTable({ areas }: { areas: number[] }) {
+function MarketTable({ areas, onOpen }: { areas: number[] } & PanelProps) {
   const view = usePublicView();
   const table = useGame((state) => state.priceTable);
   const selectGood = useGame((state) => state.selectGood);
@@ -300,7 +248,7 @@ function MarketTable({ areas }: { areas: number[] }) {
                   className="link"
                   onClick={() => {
                     selectGood(row.good.id);
-                    document.getElementById("good-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    onOpen("goods");
                   }}
                 >
                   {row.good.name}

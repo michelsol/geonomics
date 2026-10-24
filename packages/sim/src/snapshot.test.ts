@@ -9,7 +9,7 @@ import {
   snapshotTransferables,
 } from "./snapshot";
 import { realmWorld, send } from "./testing";
-import { lastMigration } from "./tick/population";
+import { lastMigration, lastNaturalChange } from "./tick/population";
 import { runTick } from "./tick/tick";
 import { lastTradeFlows, lastTradeTonnage } from "./tick/trade";
 
@@ -77,9 +77,8 @@ describe("snapshots", () => {
     const snapshot = buildSnapshot(realmWorld(), 0);
     const buffers = snapshotTransferables(snapshot);
     expect(new Set(buffers).size).toBe(buffers.length);
-    // Areas, edges (transport cost, capacity, flags, tonnage, migration), area details, area states.
     // Areas, edges (transport cost, capacity, flags, tonnage, migration), area details, depots.
-    expect(buffers.length).toBe(11 + 5 + 4 * 8 + 3);
+    expect(buffers.length).toBe(12 + 5 + 4 * 10 + 3);
     expect(snapshotTransferables(buildSnapshot(realmWorld(), 0, undefined, { flowGood: 0 })).length).toBe(
       buffers.length + 1,
     );
@@ -94,6 +93,40 @@ describe("snapshots", () => {
     expect(some.visibleAreas).toEqual([0, 1, 2, 3]);
     expect(some.detail.map((d) => d.area)).toEqual([1, 2]);
     expect(buildSnapshot(world, null).visibleAreas).toEqual([]);
+  });
+
+  it("carry each area's growth or starvation per day, which with migration makes up its change", () => {
+    const world = realmWorld({ pace: { gameDaysPerTick: 0.5 } });
+    const valley = world.areas[1] as (typeof world.areas)[number];
+    valley.naturalCapacity.fill(0);
+    valley.naturalCapacityMaximum.fill(0);
+    valley.stock.fill(0);
+    for (let i = 0; i < 20; i++) runTick(world);
+    const before = world.areas.map((area) => area.population);
+    runTick(world);
+    const snapshot = buildSnapshot(world, 0);
+    const migration = lastMigration(world);
+    const natural = lastNaturalChange(world);
+    for (const area of world.areas) {
+      let migrants = 0;
+      for (const edge of world.edges) {
+        if (edge.areaA === area.id) migrants -= migration[edge.id] as number;
+        if (edge.areaB === area.id) migrants += migration[edge.id] as number;
+      }
+      expect(area.population - (before[area.id] as number)).toBeCloseTo((natural[area.id] as number) + migrants, 6);
+      expect(snapshot.areas.naturalChange[area.id]).toBeCloseTo((natural[area.id] as number) / 0.5, 2);
+    }
+    expect(snapshot.areas.naturalChange[1]).toBeLessThan(0); // the Valley starves
+  });
+
+  it("carry each visible area's demand and consumption per need", () => {
+    const world = realmWorld();
+    runTick(world);
+    const detail = buildSnapshot(world, 0).detail[0];
+    const area = world.areas[0] as (typeof world.areas)[number];
+    expect(detail?.needDemanded.length).toBe(world.needs.length);
+    expect(detail?.needDemanded[0]).toBeCloseTo(area.needDemanded[0] as number, 3);
+    expect(detail?.needConsumed[0]).toBeCloseTo(area.needConsumed[0] as number, 3);
   });
 
   it("carry the last tick's migration and trade per edge and day", () => {

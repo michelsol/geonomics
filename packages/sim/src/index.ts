@@ -21,7 +21,7 @@ export { purchasingPower } from "./tick/consumption";
 export { advanceInfrastructure, rebuildAirRoutes, updateRouteCapacities } from "./tick/infrastructure";
 export { buildInfrastructure } from "./tick/jobs";
 export { realmWageLevel } from "./tick/military";
-export { lastMigration } from "./tick/population";
+export { lastMigration, lastNaturalChange } from "./tick/population";
 export { hourlyOutputPerWorker } from "./tick/production";
 export { runTick, type TickOptions } from "./tick/tick";
 export { lastTradeFlows, lastTradeTonnage, type TradeFlow } from "./tick/trade";

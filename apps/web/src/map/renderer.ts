@@ -13,11 +13,13 @@ import {
   CELL_LINE,
   ERASE,
   MIGRATION_ARROW,
+  mix,
   NEUTRAL,
   PICKED,
   parseColor,
   populationColor,
   priceColor,
+  REALM_TINT,
   resourceColor,
   SEA_ROUTE,
   SELECTION,
@@ -78,18 +80,16 @@ export class MapRenderer {
   /** Redraws whatever the new state changes, then renders once. */
   update(state: GameState): void {
     this.state = state;
-    const { snapshot, layer, priceTable, selectedGood, governments } = state;
+    const { snapshot, layer, priceTable, selectedGood, selectedResource, governments } = state;
     const owners = snapshot ? this.owners(snapshot) : "";
     const cellInputs =
-      layer === "realms"
+      layer === "realms" || layer === "area"
         ? [layer, owners, governments.length]
         : layer === "prices"
           ? [layer, priceTable, selectedGood]
           : layer === "resources"
-            ? [layer, selectedGood]
-            : layer === "terrain"
-              ? [layer]
-              : [layer, snapshot];
+            ? [layer, selectedResource]
+            : [layer, snapshot];
     if (changed(this.drawn.cells, cellInputs)) {
       this.drawCells(state);
       this.drawn.cells = cellInputs;
@@ -144,8 +144,11 @@ export class MapRenderer {
   private cellColor(state: GameState, area: number): number {
     const { snapshot, data } = { snapshot: state.snapshot, data: this.data };
     switch (state.layer) {
-      case "terrain":
-        return TERRAIN_COLORS[(data.areas[area] as StaticData["areas"][number]).terrain];
+      case "area": {
+        const terrain = TERRAIN_COLORS[(data.areas[area] as StaticData["areas"][number]).terrain];
+        const owner = state.snapshot ? (state.snapshot.areas.owner[area] as number) : -1;
+        return owner >= 0 ? mix(terrain, this.realmColor(state, area), REALM_TINT) : terrain;
+      }
       case "realms":
         return this.realmColor(state, area);
       case "population":
@@ -159,7 +162,8 @@ export class MapRenderer {
       case "resources": {
         const goods = data.goods.length;
         const table = data.naturalCapacityMaximum;
-        return resourceColor(table[area * goods + state.selectedGood] as number, this.bestCapacity(state.selectedGood));
+        const good = state.selectedResource;
+        return resourceColor(table[area * goods + good] as number, this.bestCapacity(good));
       }
       case "satisfaction":
         return snapshot ? satisfactionColor(snapshot.areas.necessitySatisfaction[area] as number) : NEUTRAL;

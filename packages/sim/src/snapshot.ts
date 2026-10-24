@@ -2,7 +2,7 @@
 // snapshots of the dynamic state as seen by one government. Typed arrays are Float32Array, and every value is
 // structured-clone friendly, so snapshots cross a worker boundary as transferables or go through msgpack unchanged.
 import type { WorldConfig } from "./config";
-import { lastMigration } from "./tick/population";
+import { lastMigration, lastNaturalChange } from "./tick/population";
 import { lastTradeFlows, lastTradeTonnage } from "./tick/trade";
 import type {
   AreaId,
@@ -92,6 +92,8 @@ export interface AreaDetail {
   exported: Float32Array;
   privateWorkers: Float32Array;
   naturalCapacity: Float32Array; // current extraction capacity per day, after depletion
+  needDemanded: Float32Array; // per need: need units the population wanted in the last tick
+  needConsumed: Float32Array; // per need: need units it consumed, substitutes included
 }
 
 export interface Snapshot {
@@ -100,6 +102,7 @@ export interface Snapshot {
   areas: {
     owner: Int16Array; // -1 for neutral
     population: Float32Array;
+    naturalChange: Float32Array; // people per day gained by growth, or lost to starvation when negative
     wageLevel: Float32Array;
     satisfaction: Float32Array;
     necessitySatisfaction: Float32Array;
@@ -182,6 +185,7 @@ export function buildSnapshot(
   const areas: Snapshot["areas"] = {
     owner: new Int16Array(n),
     population: new Float32Array(n),
+    naturalChange: new Float32Array(n),
     wageLevel: new Float32Array(n),
     satisfaction: new Float32Array(n),
     necessitySatisfaction: new Float32Array(n),
@@ -192,10 +196,13 @@ export function buildSnapshot(
     besieger: new Int16Array(n),
     militia: new Float32Array(n),
   };
+  const natural = lastNaturalChange(world);
+  const days = world.config.pace.gameDaysPerTick;
   for (const area of world.areas) {
     const i = area.id;
     areas.owner[i] = area.owner ?? -1;
     areas.population[i] = area.population;
+    areas.naturalChange[i] = (natural[i] ?? 0) / days;
     areas.wageLevel[i] = area.wageLevel;
     areas.satisfaction[i] = area.satisfaction;
     areas.necessitySatisfaction[i] = area.necessitySatisfaction;
@@ -208,7 +215,6 @@ export function buildSnapshot(
   }
 
   const m = world.edges.length;
-  const days = world.config.pace.gameDaysPerTick;
   const tonnage = lastTradeTonnage(world);
   const migration = lastMigration(world);
   const flowGood = options.flowGood ?? null;
@@ -297,6 +303,8 @@ function detailOf(world: World, id: AreaId): AreaDetail {
     exported: Float32Array.from(area.exported),
     privateWorkers: Float32Array.from(area.privateWorkers),
     naturalCapacity: Float32Array.from(area.naturalCapacity),
+    needDemanded: Float32Array.from(area.needDemanded),
+    needConsumed: Float32Array.from(area.needConsumed),
   };
 }
 
@@ -342,6 +350,8 @@ export function snapshotTransferables(snapshot: Snapshot): ArrayBuffer[] {
       detail.exported,
       detail.privateWorkers,
       detail.naturalCapacity,
+      detail.needDemanded,
+      detail.needConsumed,
     ])
       add(view);
   }

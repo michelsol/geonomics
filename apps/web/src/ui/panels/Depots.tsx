@@ -1,13 +1,10 @@
-// The government's depots in the chosen areas, goods on their way between depots, and sending more.
-import { useState } from "react";
-import { fmt, NumberField, Section, Select } from "../components";
-import { AreaLink, goodOptions, ownedOptions, useSend, useView } from "./common";
+// The government's depots in the chosen areas, and goods on their way to them.
+import { fmt, Section } from "../components";
+import { AreaLink, useView } from "./common";
 
 /** Depot contents summed over the player's areas among `areas`; nothing when it holds none of them. */
 export function Depots({ areas }: { areas: number[] }) {
   const view = useView();
-  const send = useSend();
-  const [transfer, setTransfer] = useState({ from: -1, to: -1, good: 0, quantity: 10 });
   if (!view) return null;
   const { data, government } = view;
   const own = areas.filter((area) => government.ownedAreas.includes(area));
@@ -18,12 +15,6 @@ export function Depots({ areas }: { areas: number[] }) {
     for (let g = 0; g < held.length; g++) held[g] = (held[g] as number) + (state.depot[g] as number);
   }
   const goods = data.goods.filter((good) => (held[good.id] as number) > 0.01);
-  const owned = ownedOptions(view);
-  const from = transfer.from >= 0 ? transfer.from : (own[0] as number);
-  const to =
-    transfer.to >= 0
-      ? transfer.to
-      : (government.ownedAreas.find((area) => area !== from) ?? (government.ownedAreas[0] as number));
   const arriving = government.depotTransfers.filter((t) => own.includes(t.destination));
   const goodName = (g: number) => data.goods[g]?.name ?? "?";
 
@@ -52,47 +43,6 @@ export function Depots({ areas }: { areas: number[] }) {
           {fmt(Math.max(0, t.daysRemaining))} days
         </div>
       ))}
-      {owned.length > 1 && (
-        <>
-          <div className="row">
-            <Select
-              label="From"
-              value={from}
-              options={owned}
-              onChange={(value) => setTransfer({ ...transfer, from: value })}
-            />
-            <span>→</span>
-            <Select
-              label="To"
-              value={to}
-              options={owned}
-              onChange={(value) => setTransfer({ ...transfer, to: value })}
-            />
-          </div>
-          <div className="row">
-            <Select
-              label="Transfer good"
-              value={transfer.good}
-              options={goodOptions(data, true)}
-              onChange={(good) => setTransfer({ ...transfer, good })}
-            />
-            <NumberField
-              label="Transfer quantity"
-              value={transfer.quantity}
-              min={0}
-              onChange={(quantity) => setTransfer({ ...transfer, quantity })}
-            />
-            <button
-              type="button"
-              onClick={() =>
-                send({ type: "transferGoods", from, to, good: transfer.good, quantity: transfer.quantity })
-              }
-            >
-              Send
-            </button>
-          </div>
-        </>
-      )}
     </Section>
   );
 }

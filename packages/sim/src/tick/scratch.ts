@@ -25,6 +25,7 @@ export interface Scratch {
   exportRate: Float64Array[]; // per area, per good: sum of the area's outgoing shipping rates, units per day
   importPayment: Float64Array; // per area: money owed for this tick's imports
   migrationDelta: Float64Array; // per area: net migrants this tick
+  naturalChange: Float64Array; // per area: people gained by growth, or lost to starvation when negative, this tick
   attractiveness: Float64Array; // per area
   edgeTonnage: Float64Array; // per edge and direction (2 × edge + 0 for A→B, + 1 for B→A): tonnes this tick
   edgeMigration: Float64Array; // per edge: migrants this tick, positive from A to B
@@ -110,6 +111,7 @@ function createScratch(world: World, previous: Scratch | undefined): Scratch {
     exportRate: world.areas.map(() => perGood()),
     importPayment: new Float64Array(areaCount),
     migrationDelta: new Float64Array(areaCount),
+    naturalChange: new Float64Array(areaCount),
     attractiveness: new Float64Array(areaCount),
     edgeTonnage: new Float64Array(world.edges.length * 2),
     edgeMigration: new Float64Array(world.edges.length),

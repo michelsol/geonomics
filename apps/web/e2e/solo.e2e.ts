@@ -139,27 +139,58 @@ test("the realm count is chosen at the start", async ({ page }) => {
   await expect(page.locator(".realm-list button")).toHaveCount(12);
 });
 
-test("flows overlay any area layer, each with its legend", async ({ page }) => {
+test("each panel shows its map layer, and flows when its checkbox is on", async ({ page }) => {
   await startGame(page);
-  const flows = page.getByLabel("Map flows");
-  await page.getByLabel("Map layer").selectOption("population");
-  await expect(page.getByTestId("legend")).toContainText("Population per area");
-  await flows.selectOption("migration");
-  await expect(page.getByTestId("flow-legend")).toContainText("People moving per day");
-  await expect(page.getByTestId("legend")).toContainText("Population per area"); // both at once
-  await flows.selectOption("transport");
-  const legend = page.getByTestId("flow-legend");
-  await expect(legend).toContainText("Goods carried per day");
-  await expect(legend).toContainText("t/day");
+  const legend = page.getByTestId("legend");
+  const flowLegend = page.getByTestId("flow-legend");
+  await expect(legend).toContainText("Terrain, tinted by realm");
+
+  await openTab(page, "Population");
+  await expect(legend).toContainText("Population per area");
+  await expect(page.getByTestId("population-total")).toHaveText(/^[\d,]+$/);
+  await page.getByLabel("Show migration flows").check();
+  await expect(flowLegend).toContainText("People moving per day");
+  await expect(legend).toContainText("Population per area"); // both at once
+
+  await openTab(page, "Goods");
+  await expect(legend).toContainText("vs labor value");
+  await expect(flowLegend).toHaveCount(0); // migration belongs to the Population panel
+  await page.getByLabel("Show transport flows").check();
+  await expect(flowLegend).toContainText("Goods carried per day");
+  await expect(flowLegend).toContainText("t/day");
   // One good, in its own unit, then back to every good.
   const good = page.getByLabel("Transported good");
   const first = (await good.locator("option").nth(1).getAttribute("value")) as string;
   await good.selectOption(first);
-  await expect(legend).not.toContainText("t/day", { timeout: 5000 });
+  await expect(flowLegend).not.toContainText("t/day", { timeout: 5000 });
   await good.selectOption("-1");
-  await expect(legend).toContainText("t/day");
-  await flows.selectOption("none");
-  await expect(legend).toHaveCount(0);
+  await expect(flowLegend).toContainText("t/day");
+
+  await openTab(page, "Needs");
+  await expect(legend).toContainText("Necessities met");
+  await expect(page.getByTestId("needs").locator("tbody tr").first()).toBeVisible();
+
+  await openTab(page, "Resources");
+  await expect(legend).toContainText("Natural capacity of");
+  const resource = page.getByLabel("Resource", { exact: true });
+  const last = (await resource.locator("option").last().getAttribute("value")) as string;
+  await resource.selectOption(last);
+  await expect(legend).toContainText(`Natural capacity of ${await resource.locator("option:checked").textContent()}`);
+
+  await openTab(page, "Jobs");
+  await expect(legend).toContainText("Average wage");
+  await openTab(page, "Area");
+  await expect(flowLegend).toHaveCount(0);
+  await expect(legend).toContainText("Terrain, tinted by realm");
+});
+
+test("a good in the market table opens it in the Goods panel", async ({ page }) => {
+  await startGame(page);
+  const name = (await page.getByTestId("market").locator("tbody tr button").nth(1).textContent()) as string;
+  await page.getByTestId("market").locator("tbody tr button").nth(1).click();
+  await expect(page.getByRole("navigation").getByRole("button", { name: "Goods", exact: true })).toHaveClass(/active/);
+  await expect(page.getByLabel("Good", { exact: true }).locator("option:checked")).toHaveText(name);
+  await expect(page.getByTestId("price-low")).toBeVisible();
 });
 
 test("rejected commands are explained", async ({ page }) => {

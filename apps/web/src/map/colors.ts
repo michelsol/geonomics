@@ -35,6 +35,14 @@ export function ramp(stops: readonly number[], t: number): number {
   return fromRgb([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]);
 }
 
+/** A color part way from `a` to `b`, t in [0, 1]. */
+export function mix(a: number, b: number, t: number): number {
+  return ramp([a, b], t);
+}
+
+/** The Area layer: terrain, tinted this much toward the owner's color. */
+export const REALM_TINT = 0.45;
+
 export const DIVERGING = [0x2c6bb0, 0x8db8e0, 0xf2f2f2, 0xeba07e, 0xc0392b];
 export const SATISFACTION = [0xc0392b, 0xe6a03c, 0xe8d85a, 0x6fbf5a, 0x2e8b57];
 

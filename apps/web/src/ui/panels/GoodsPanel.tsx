@@ -1,12 +1,12 @@
-// One good across the world, at the bottom of the Area panel: lowest, median and highest price with their areas,
-// and their history.
+// One good across the world (specification §10, Panels): lowest, median and highest price with their areas, their
+// history, and the goods carried between areas. The map shows the good's price.
 import { meanPrices, priceExtremes } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { Chart } from "../Chart";
-import { fmt, Section, Select } from "../components";
+import { Checkbox, fmt, Section, Select } from "../components";
 import { AreaLink, areaName, goodOptions, usePublicView } from "./common";
 
-export function GoodSection() {
+export function GoodsPanel() {
   const view = usePublicView();
   const good = useGame((state) => state.selectedGood);
   const table = useGame((state) => state.priceTable);
@@ -14,8 +14,9 @@ export function GoodSection() {
   const selection = useGame((state) => state.selection);
   useGame((state) => state.historyVersion); // redraw the chart with every new sample
   const selectGood = useGame((state) => state.selectGood);
-  const setLayer = useGame((state) => state.setLayer);
-  if (!view) return null;
+  const showTransport = useGame((state) => state.showTransport);
+  const setShowTransport = useGame((state) => state.setShowTransport);
+  if (!view) return <p className="muted">Waiting for the first snapshot…</p>;
   const { data } = view;
   const info = data.goods[good];
   if (!info) return null;
@@ -27,18 +28,19 @@ export function GoodSection() {
     selection.length === 1 ? areaName(data, selection[0] as number) : `${selection.length} areas (mean)`;
 
   return (
-    <div className="section" id="good-section">
+    <>
       <Section title="Good">
-        <div className="row">
-          <Select label="Good" value={good} options={goodOptions(data)} onChange={selectGood} />
-          <button type="button" onClick={() => setLayer("prices")}>
-            Show on map
-          </button>
-        </div>
+        <Select label="Good" value={good} options={goodOptions(data)} onChange={selectGood} />
         <div className="muted">
           {info.isService ? "Service" : info.isPrimary ? "Primary good" : "Crafted good"} · labor value{" "}
           {fmt(info.laborValue)} mh per {info.unit}
         </div>
+        <Checkbox
+          label="Show transport flows"
+          title="Arrows on the map for the goods carried between areas: every good in tonnes, or one good, chosen in the legend"
+          checked={showTransport}
+          onChange={setShowTransport}
+        />
       </Section>
 
       {extremes && (
@@ -91,7 +93,7 @@ export function GoodSection() {
           />
         </Section>
       )}
-    </div>
+    </>
   );
 }
 

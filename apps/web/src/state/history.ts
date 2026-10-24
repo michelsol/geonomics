@@ -3,6 +3,8 @@
 export const HISTORY_SAMPLES = 365;
 /** Selections of several areas whose mean prices are recorded; the oldest is dropped beyond this. */
 export const TRACKED_SELECTIONS = 20;
+/** Population, births, deaths, immigration, emigration, necessities met and satisfaction (see DEMOGRAPHY_KEYS). */
+export const DEMOGRAPHY_CHANNELS = 7;
 
 /** A ring buffer of samples: one x (game day) and a fixed number of channels per sample. */
 export class Series {
@@ -58,6 +60,9 @@ export class History {
   readonly goodPrices: Series[]; // per good: lowest, median and highest price in the world
   readonly areaPrices = new Map<number, Series>(); // per tracked area: the price of every good
   readonly selectionPrices = new Map<string, { areas: number[]; series: Series }>(); // per selection: mean prices
+  // Per selection, and for the player's realm (the whole world for a spectator): the DEMOGRAPHY_KEYS channels.
+  readonly demography = new Map<string, { areas: number[]; series: Series }>();
+  readonly realmDemography = new Series(DEMOGRAPHY_CHANNELS);
 
   constructor(readonly goodCount: number) {
     this.goodPrices = Array.from({ length: goodCount }, () => new Series(3));
@@ -80,6 +85,23 @@ export class History {
       this.selectionPrices.delete(old);
     }
     return series;
+  }
+
+  /** Starts recording the demography of some areas; the series of the oldest selection goes past the limit. */
+  trackDemography(areas: readonly number[]): void {
+    const key = selectionKey(areas);
+    if (this.demography.has(key)) return;
+    this.demography.set(key, { areas: [...areas], series: new Series(DEMOGRAPHY_CHANNELS) });
+    for (const old of this.demography.keys()) {
+      if (this.demography.size <= TRACKED_SELECTIONS) break;
+      this.demography.delete(old);
+    }
+  }
+
+  /** The recorded demography of some areas, or of the realm when none are given. */
+  demographyOf(areas: readonly number[]): Series | undefined {
+    if (areas.length === 0) return this.realmDemography;
+    return this.demography.get(selectionKey(areas))?.series;
   }
 
   /** The recorded prices of one area, or the mean prices of several. */

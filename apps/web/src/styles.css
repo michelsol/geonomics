@@ -109,6 +109,21 @@ select {
 input[type="number"] {
   width: 96px;
 }
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  cursor: pointer;
+}
+.check input {
+  min-height: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--accent);
+}
 
 .muted {
   color: var(--muted);
@@ -291,8 +306,10 @@ input[type="number"] {
   background: var(--surface);
   border-left: 1px solid var(--line);
 }
+/* Tabs wrap onto a second row on desktop; on phones they scroll sideways in the peeking sheet. */
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   overflow-x: auto;
   border-bottom: 1px solid var(--line);
   flex-shrink: 0;
@@ -393,6 +410,9 @@ th,
 td {
   padding: 3px 4px;
   border-bottom: 1px solid var(--line);
+}
+tr.chosen td {
+  background: var(--surface-2);
 }
 .list-item {
   padding: 8px;
@@ -612,7 +632,13 @@ th button.sort:hover {
   select {
     font-size: 16px;
   }
+  .tabs {
+    flex-wrap: nowrap;
+  }
   .tabs button {
+    min-height: 44px;
+  }
+  .check {
     min-height: 44px;
   }
   /* Inline links keep their line height, with a finger-sized hit area around them. */
@@ -626,13 +652,6 @@ th button.sort:hover {
   .topbar button {
     min-width: 40px;
     padding: 0 8px;
-  }
-  /* The map layer and flows take a second row, rather than hide past the edge. */
-  .topbar > .group:last-child {
-    flex: 1 1 100%;
-  }
-  .topbar > .group:last-child select {
-    flex: 1;
   }
   th button.sort {
     min-height: 44px;

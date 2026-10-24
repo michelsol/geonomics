@@ -6,11 +6,35 @@ import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { FromWorker, GameOptions, HostStatus, Speed, ToWorker } from "../host/protocol";
 import { History } from "./history";
-import { meanPrices, priceExtremes, priceOf, realmPopulation } from "./selectors";
+import { DEMOGRAPHY_KEYS, demographyOf, meanPrices, priceExtremes, priceOf, realmPopulation } from "./selectors";
 
 export type Screen = "newGame" | "guide" | "join" | "chooseRealm" | "game" | "ended";
-export type Layer = "realms" | "population" | "prices" | "resources" | "satisfaction" | "wage" | "terrain";
+export type Layer = "area" | "realms" | "population" | "prices" | "resources" | "satisfaction" | "wage";
 export type Flows = "none" | "migration" | "transport"; // arrows drawn over the area layer
+export type PanelName =
+  | "area"
+  | "goods"
+  | "population"
+  | "needs"
+  | "resources"
+  | "policies"
+  | "jobs"
+  | "armies"
+  | "diplomacy"
+  | "game";
+/** The map layer each panel shows (specification §10, Map). */
+export const PANEL_LAYERS: Record<PanelName, Layer> = {
+  area: "area",
+  goods: "prices",
+  population: "population",
+  needs: "satisfaction",
+  resources: "resources",
+  policies: "realms",
+  jobs: "wage",
+  armies: "realms",
+  diplomacy: "realms",
+  game: "realms",
+};
 export type Mode =
   | { kind: "select" }
   | { kind: "moveArmy"; army: number }
@@ -86,8 +110,12 @@ export interface GameState {
   selectedArea: number | null; // the selected area when exactly one is selected
   selectedGood: number;
   selectedArmy: number | null;
+  selectedResource: number; // the primary good the Resources panel and the resources layer show
+  panel: PanelName; // the open panel, which sets the map layer and flows
   layer: Layer;
   flows: Flows;
+  showTransport: boolean; // the Goods panel draws transport flows
+  showMigration: boolean; // the Population panel draws migration flows
   transportAllGoods: boolean; // transport flows show total tonnes, not the selected good
   mode: Mode;
   brush: Brush;
@@ -126,6 +154,11 @@ export interface GameState {
   paint(areas: readonly number[]): void;
   selectGood(good: number): void;
   selectArmy(army: number | null): void;
+  selectResource(good: number): void;
+  /** Opens a panel, with its map layer and, if its checkbox is on, its flows. */
+  openPanel(panel: PanelName): void;
+  setShowTransport(show: boolean): void;
+  setShowMigration(show: boolean): void;
   setLayer(layer: Layer): void;
   setFlows(flows: Flows): void;
   setTransportGood(good: number | "all"): void;
@@ -160,8 +193,12 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     selectedArea: null,
     selectedGood: 0,
     selectedArmy: null,
-    layer: "realms",
+    selectedResource: 0,
+    panel: "area",
+    layer: "area",
     flows: "none",
+    showTransport: false,
+    showMigration: false,
     transportAllGoods: true,
     mode: { kind: "select" },
     brush: { erase: false, size: "M" },
@@ -307,6 +344,21 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     selectArmy(army) {
       set({ selectedArmy: army });
     },
+    selectResource(good) {
+      set({ selectedResource: good });
+    },
+    openPanel(panel) {
+      set({ panel, layer: PANEL_LAYERS[panel], flows: panelFlows({ ...get(), panel }) });
+      watchFlows();
+    },
+    setShowTransport(show) {
+      set({ showTransport: show, flows: panelFlows({ ...get(), showTransport: show }) });
+      watchFlows();
+    },
+    setShowMigration(show) {
+      set({ showMigration: show, flows: panelFlows({ ...get(), showMigration: show }) });
+      watchFlows();
+    },
     setLayer(layer) {
       set({ layer });
     },
@@ -352,7 +404,9 @@ export function createGameStore(port: Port): StoreApi<GameState> {
             history: new History(message.data.goods.length),
             historyVersion: 0,
             selectedGood: firstNecessityGood(message.data),
-            layer: "realms",
+            selectedResource: message.data.goods.find((good) => good.isPrimary)?.id ?? 0,
+            panel: "area",
+            layer: "area",
             flows: "none",
             transportAllGoods: true,
             mode: { kind: "select" },
@@ -366,11 +420,13 @@ export function createGameStore(port: Port): StoreApi<GameState> {
           const snapshot = withDetailOf(message.snapshot, state.snapshot);
           const history = state.history;
           const population = realmPopulation(snapshot);
+          const edges = snapshot.newEdges.length > 0 ? [...state.edges, ...snapshot.newEdges] : state.edges;
           if (history && snapshot.government) for (const detail of snapshot.detail) history.track(detail.area);
+          if (history && state.data) recordDemography(history, state.data, snapshot, edges, state.selection);
           set({
             snapshot,
             governments: snapshot.governments,
-            edges: snapshot.newEdges.length > 0 ? [...state.edges, ...snapshot.newEdges] : state.edges,
+            edges,
             peakPopulation: Math.max(state.peakPopulation, population),
             historyVersion: state.historyVersion + 1,
           });
@@ -422,6 +478,35 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     port.postMessage({ type: "setFlowGood", good });
   }
   return store;
+}
+
+/** The flows a panel draws: its own, when the player ticked them. */
+function panelFlows(state: Pick<GameState, "panel" | "showTransport" | "showMigration">): Flows {
+  if (state.panel === "goods" && state.showTransport) return "transport";
+  if (state.panel === "population" && state.showMigration) return "migration";
+  return "none";
+}
+
+/**
+ * Samples the demography of the realm (the world for a spectator) and of every tracked selection, the current one
+ * included, once per game day: later snapshots of the same day replace the sample.
+ */
+function recordDemography(
+  history: History,
+  data: StaticData,
+  snapshot: Snapshot,
+  edges: readonly StaticEdge[],
+  selection: readonly number[],
+): void {
+  if (selection.length > 0) history.trackDemography(selection);
+  const day = Math.floor(snapshot.gameDay);
+  const sample = (areas: readonly number[]) => {
+    const demography = demographyOf(snapshot, edges, areas);
+    return DEMOGRAPHY_KEYS.map((key) => demography[key]);
+  };
+  const realm = snapshot.government?.ownedAreas ?? data.areas.map((_, area) => area);
+  history.realmDemography.push(day, sample(realm));
+  for (const { areas, series } of history.demography.values()) series.push(day, sample(areas));
 }
 
 /** A game starts at 1× on phones, which heat up and drain their battery as hosts, and at 2× elsewhere. */

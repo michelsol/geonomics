@@ -15,29 +15,28 @@ The interface is map-first: the map fills the screen and panels sit beside it on
 
 ### Map
 
-Areas are the Voronoi cells of their positions, with the water cells around them.
+Areas are the Voronoi cells of their positions, with the water cells around them. The open panel sets the layer; there is no layer menu.
 
-| Layer | Colors each area by |
-| --- | --- |
-| Realms | Owner color; neutral areas in grey. Realm borders are drawn on every layer |
-| Population | Population, one hue on a log scale over the two decades below the largest area: an area with 1% of the largest's people or fewer, an emptied one included, is the darkest |
-| Prices | The chosen good's price over its labor value, on a log scale from blue (cheap) through white to red (dear) |
-| Resources | The chosen good's maximum natural capacity, brighter for more, relative to the best area; grey where there is none |
-| Satisfaction | Necessity satisfaction, from red (0) to green (1) |
-| Average wage | Wage level (mean value added per private worker-hour) on a log scale |
-| Terrain | Terrain type |
+| Layer | Panels | Colors each area by |
+| --- | --- | --- |
+| Area | Area | Terrain type, tinted 45% toward the owner's color; neutral areas show plain terrain |
+| Realms | Policies, Armies, Diplomacy, Game | Owner color; neutral areas in grey. Realm borders are drawn on every layer |
+| Prices | Goods | The chosen good's price over its labor value, on a log scale from blue (cheap) through white to red (dear) |
+| Population | Population | Population, one hue on a log scale over the two decades below the largest area: an area with 1% of the largest's people or fewer, an emptied one included, is the darkest |
+| Satisfaction | Needs | Necessity satisfaction, from red (0) to green (1) |
+| Resources | Resources | The chosen resource's maximum natural capacity, brighter for more, relative to the best area; grey where there is none |
+| Average wage | Jobs | Wage level (mean value added per private worker-hour) on a log scale |
 
-**Flows** are a separate choice, drawn over any layer:
+**Flows** are drawn over the layer while their panel is open and its checkbox ticked (both off at first; each keeps its state for the session):
 
-| Flows | Draws |
-| --- | --- |
-| None | Nothing (the default) |
-| Migration | An arrow per edge for the net migrants of the last tick |
-| Transport | An arrow per edge and direction for the goods carried in the last tick: every good in tonnes, or one good chosen in the legend in its own units |
+| Flows | Panel | Draws |
+| --- | --- | --- |
+| Migration | Population | An arrow per edge for the net migrants of the last tick |
+| Transport | Goods | An arrow per edge and direction for the goods carried in the last tick: every good in tonnes, or one good chosen in the legend in its own units |
 
 **Flow arrows** run from 20% to 80% of the segment between two area centers, with a dark outline. Their width grows from 1 to 6 px with the square root of the flow over the largest flow on the map. Transport arrows sit to the right of their direction, so the two directions of an edge stay apart. Flows under 3% of the largest are left out, as are arrows with less than 14 px of room on screen (they appear when zooming in), and at most the 2,500 largest flows are drawn. The legend shows sample arrows with their values.
 
-One layer and one flow choice are active at a time, each with its own legend, stacked bottom left. Every layer also shows:
+The layer and the flows each have their own legend, stacked bottom left. Every layer also shows:
 
 - **Routes:** sea routes dashed, air routes dotted; blocked edges red.
 - **Capitals:** a star.
@@ -49,11 +48,11 @@ Mouse or one finger pans and the wheel or a pinch zooms around the pointer. A cl
 
 ### Selection
 
-- **The bar.** A bar under the panel tabs, on every tab, shows the selection: the area's name and owner, the number of areas, or "Nothing selected". For a player, a second line says what actions apply to (see Action target). Its buttons: My realm (players with two areas or more) selects every area of the realm; Brush turns the brush on or off; Center centers the map on the selection, or on the capital when nothing is selected; Clear (when something is selected) empties the selection.
+- **The bar.** A bar under the panel tabs, on every tab, shows the selection: the area's name and owner, the number of areas, or "Nothing selected". For a player, a second line says what actions apply to (see Action target). Its buttons: My realm (players with two areas or more, unless exactly the realm is selected) selects every area of the realm; Brush turns the brush on or off; Center centers the map on the selection, or on the capital when nothing is selected; Clear (when something is selected) empties the selection.
 - **One area.** A click or tap selects the area under it, alone. Shift-, Ctrl- or Cmd-click adds or removes one area. Escape empties a selection of several areas.
 - **Brush.** While the brush is on, dragging one finger or the left mouse button paints areas, and a tap paints the area under it. A banner over the map has Add and Erase (Add by default), the brush size and Done. Size S paints the areas under the pointer's path; M and L also paint the areas whose center lies within 24 or 60 screen pixels of it. The areas painted by a stroke are filled, white when adding and red when erasing, with a ring at the pointer showing the brush's reach; when the stroke ends, they are added to the selection or taken out of it. Two fingers pan and pinch, the wheel zooms, and a right or middle mouse drag pans, without painting; a second finger landing during a stroke cancels it. The brush keeps its mode and size until changed. Done, the Brush button, Escape, or moving an army or picking peace areas turn it off.
 - **Drawing.** The selection's frontier is outlined, 3 px wide whatever its size: sides between two selected areas are not drawn, so a region shows as one shape (with its holes and separate parts). With several areas, each is also lightly filled.
-- **Totals.** With several areas selected, the Area panel shows the owners and how many areas each holds, total population, militia, savings and unemployed, population-weighted average wage, satisfaction and necessities met, the hardest area to conquer, summed natural capacities, and the market: mean prices, and stock, production, use and net trade summed (trade between two selected areas cancels out). Stocks, flows, savings and unemployment cover only the areas whose detail the snapshot carries, which the panel says. The Good section shows the selection's mean price and records its history.
+- **Totals.** With several areas selected, the Area panel shows the owners and how many areas each holds, total population, militia, savings and unemployed, population-weighted average wage, satisfaction and necessities met, the hardest area to conquer, and the market: mean prices, and stock, production, use and net trade summed (trade between two selected areas cancels out). The Resources panel sums natural capacities, and the Goods panel shows the selection's mean price and records its history. Stocks, flows, savings and unemployment cover only the areas whose detail the snapshot carries, which the panel says.
 - **Action target.** The Policies, standing orders, Jobs and Armies panels have no area choice of their own: they act on the player's areas in the selection. When the selection holds none of the player's areas, or all of them, they act on the whole realm: taxes and price controls are set realm-wide, and standing orders apply to every area, including areas taken later. The bar reads "Actions: <area>", "Actions: your N areas" or "Actions: your whole realm". A new game opens with the capital selected.
   - **Rates and prices** (taxes, tariffs, price controls, wage offers) are set to the same value in each area, and the setting in force reads "varies by area" when they differ.
   - **Amounts** (workers to hire, recruits, weapons to buy) are totals, split over the areas by population, in whole numbers that add up to the total. A port job goes over the coastal areas only; a road job over the land edges inside the selection, evenly. Recruits make one army per area that gets any, and weapon purchases one buy order per area. For the whole realm, recruits form one army at the capital, and weapons are bought at the capital.
@@ -64,7 +63,11 @@ Mouse or one finger pans and the wheel or a pinch zooms around the pointer. A cl
 
 | Panel | Shows | Actions |
 | --- | --- | --- |
-| Area | One view for one selected area or several (see Selection), or "No area selected". The area's name, owner and terrain, or the number of areas and their owners. One grid of figures: population, average wage per day (mh/day), necessities met, satisfaction, port, airport and fortification levels (one area), savings per person and unemployed (areas seen in detail), siege, militia, defense power, and for areas not the player's the equipped soldiers needed to conquer. Each figure explains itself on hover; the panel has no explanatory paragraphs. Natural resources: maximum capacity, and current capacity, extraction and use where detail is sent. The market: price, stock, production, consumption and trade per good where detail is sent, prices only elsewhere. For own areas, the depot's contents and the goods on their way to it. At the bottom, one good across the world: lowest, median and highest price with their areas, and a chart over time of these and the selection's price | Sort the market table by any column; send goods between depots; choose the good and show it on the price map |
+| Area | One view for one selected area or several (see Selection), or "No area selected". The area's name, owner and terrain, or the number of areas and their owners. One grid of figures: population, average wage per day (mh/day), necessities met, satisfaction, port, airport and fortification levels (one area), savings per person and unemployed (areas seen in detail), siege, militia, defense power, and for areas not the player's the equipped soldiers needed to conquer. Each figure explains itself on hover; the panel has no explanatory paragraphs. The market: price, stock, production, consumption and trade per good where detail is sent, prices only elsewhere. For own areas, the depot's contents and the goods on their way to it | Sort the market table by any column; a good's name opens it in the Goods panel |
+| Goods | One good across the world: its kind and labor value; lowest, median and highest price with their areas, and the selection's mean price; a chart over time of these | Choose the good; show transport flows |
+| Population | For the selection or, with nothing selected, the player's realm (the whole map for a spectator): population, its change per day, births, deaths, immigration and emigration per day, and charts over time of population and of the four flows. Births sum the growth of the areas that grow and deaths the starvation of the areas that shrink (section 5, Population). Immigration and emigration count migrants crossing the edge of the areas shown, so moves between two of them cancel out | Show migration flows |
+| Needs | For the same areas: necessities met and satisfaction, weighted by population, with a chart over time; per need, its tier, the need units wanted per person and day, and the share met, over the areas seen in detail | — |
+| Resources | One resource (a primary good) chosen for the map, with the five areas of the map with the most of it; for the selection, maximum capacity per resource, and current capacity, extraction and use where detail is sent | Choose the resource, also by clicking it in the table |
 | Policies | Every tax and price control, realm-wide and per area; the setting in force for the action target, policy and good; standing orders | Set or remove a policy for the action target (see Selection), for one good or all goods. The production tax is chosen first. Taxes and tariffs have a slider from −100% to +100% (the number field takes up to 500%), head tax one from 0 to 2 mh per person per day; ceilings and floors take a number. The value starts at the setting in force, and Set applies it. Add and remove standing orders |
 | Jobs | For the action target (see Selection): the workforce split between private jobs, government jobs and unemployment, and private workers, output per day and output per worker by good. Each job's target and workers, and the wage offer, in mh/day | Set job targets and wage offers |
 | Armies | Recruiting (recruits, for the action target) with the soldier wage beside it, in mh/day and paid to every soldier; soldiers, their pay per day and the realm average wage in mh/day; weapons in depots and being bought; each army's soldiers, equipment, power, stance, location and path | Set the soldier wage, recruit, buy weapons, set stance, move (then pick the destination on the map), disband |
@@ -73,7 +76,7 @@ Mouse or one finger pans and the wheel or a pinch zooms around the pointer. A cl
 
 A rejected command is shown as a short message with its reason.
 
-**Joined players** see the host's time state (running at a speed, or paused) instead of the time controls, and a banner while the connection is down, the host has paused, or the host's tab is hidden. **Spectators** get the Area and Game panels only.
+**Joined players** see the host's time state (running at a speed, or paused) instead of the time controls, and a banner while the connection is down, the host has paused, or the host's tab is hidden. **Spectators** get the Area, Goods, Population, Needs, Resources and Game panels.
 
 Numbers show at most two decimals, and none from 100 up; from 10,000 they are compact (24.3k, 1.23M). A nonzero value too small to show reads "<0.01". Quantities that are whole by nature, such as people, workers, soldiers and days, show as whole numbers (24,312), compact only from a million.
 
@@ -83,6 +86,6 @@ The top bar holds pause and four speeds: 1×, 2× and 5× (`maxTicksPerSecond` 2
 
 ### Layout
 
-- **Desktop** (900 px wide and more): the map fills the window, under a top bar. A sidebar on the right holds the panels as tabs. It is 380 px wide by default; dragging the divider between map and sidebar resizes it between 280 px and the smaller of 900 px and 70% of the window, arrow keys nudge it, and a double-click restores the default. The width is remembered on the device.
-- **Phone:** the map fills the screen under a compact top bar, whose map layer and flows take a second row. The panels sit in a bottom sheet with three heights: a peek showing the tabs and the selection bar, half the screen, and full screen; centering the map on an area centers it above the sheet. Touch targets are at least 44 px (inline links through a larger hit area), and fields use 16 px text, so phones do not zoom on focus. No page scrolls sideways.
+- **Desktop** (900 px wide and more): the map fills the window, under a top bar. A sidebar on the right holds the panels as tabs, wrapping onto a second row. It is 380 px wide by default; dragging the divider between map and sidebar resizes it between 280 px and the smaller of 900 px and 70% of the window, arrow keys nudge it, and a double-click restores the default. The width is remembered on the device.
+- **Phone:** the map fills the screen under a compact top bar. The panels sit in a bottom sheet with three heights: a peek showing the tabs (one row that scrolls sideways, to the chosen tab) and the selection bar, half the screen, and full screen; centering the map on an area centers it above the sheet. Touch targets are at least 44 px (inline links through a larger hit area), and fields use 16 px text, so phones do not zoom on focus. No page scrolls sideways.
 - **Installed app:** the top bar, the sheet and the menus stay clear of the screen's notches and rounded corners (safe areas), and pulling down never reloads the page.

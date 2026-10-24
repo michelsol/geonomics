@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createGame } from "../host/createGame";
 import type { ToWorker } from "../host/protocol";
 import { Series } from "./history";
-import { conquestEstimate, employmentOf, priceExtremes, priceOf } from "./selectors";
+import { conquestEstimate, demographyOf, employmentOf, priceExtremes, priceOf } from "./selectors";
 import { createGameStore } from "./store";
 
 function setup() {
@@ -45,6 +45,29 @@ describe("selectors", () => {
     expect(extremes.high.area).toBe(world.areas.length - 1);
     expect(extremes.median.price).toBeGreaterThan(extremes.low.price);
     expect(priceOf(data, table, 3, grain)).toBeCloseTo(world.areas[3]?.price[grain] as number, 3);
+  });
+});
+
+describe("demography", () => {
+  it("splits growth and starvation into births and deaths, and counts only migrants crossing the edge", () => {
+    const { world } = setup();
+    const data = buildStaticData(world);
+    const snapshot = buildSnapshot(world, 0);
+    const { areaA: a, areaB: b } = data.edges[0] as (typeof data.edges)[number];
+    const outward = data.edges.findIndex(
+      (edge) => (edge.areaA === a) !== (edge.areaB === a) && edge.areaA !== b && edge.areaB !== b,
+    );
+    const out = data.edges[outward] as (typeof data.edges)[number];
+    snapshot.areas.naturalChange.fill(0);
+    snapshot.areas.naturalChange[a] = 5;
+    snapshot.areas.naturalChange[b] = -3;
+    snapshot.edges.migration.fill(0);
+    snapshot.edges.migration[0] = 10; // from a to b: inside the selection
+    snapshot.edges.migration[outward] = out.areaA === a ? 4 : -4; // from a, out of the selection
+    const both = demographyOf(snapshot, data.edges, [a, b]);
+    expect(both).toMatchObject({ births: 5, deaths: 3, immigration: 0, emigration: 4 });
+    expect(both.population).toBeCloseTo((world.areas[a]?.population ?? 0) + (world.areas[b]?.population ?? 0), -1);
+    expect(demographyOf(snapshot, data.edges, [b])).toMatchObject({ births: 0, deaths: 3, immigration: 10 });
   });
 });
 
@@ -134,6 +157,51 @@ describe("game store", () => {
     state().setTransportGood("all");
     expect(flowGoods()).toEqual([2, 3, null]);
     expect(state().layer).toBe("population");
+  });
+
+  it("shows each panel's map layer, and its flows while their checkbox is on", () => {
+    const { state } = setup();
+    state().chooseRealm(0);
+    expect([state().panel, state().layer, state().flows]).toEqual(["area", "area", "none"]);
+    state().openPanel("jobs");
+    expect(state().layer).toBe("wage");
+    state().openPanel("population");
+    expect([state().layer, state().flows]).toEqual(["population", "none"]);
+    state().setShowMigration(true);
+    expect(state().flows).toBe("migration");
+    state().openPanel("goods");
+    expect([state().layer, state().flows]).toEqual(["prices", "none"]); // migration belongs to Population
+    state().setShowTransport(true);
+    expect(state().flows).toBe("transport");
+    state().openPanel("armies");
+    expect([state().layer, state().flows]).toEqual(["realms", "none"]);
+    state().openPanel("population"); // the checkbox kept its value
+    expect(state().flows).toBe("migration");
+    state().openPanel("resources");
+    expect(state().layer).toBe("resources");
+    expect(state().data?.goods[state().selectedResource]?.isPrimary).toBe(true);
+  });
+
+  it("goes back to the Area panel for a new game", () => {
+    const { world, state } = setup();
+    state().openPanel("needs");
+    state().receive({ type: "static", data: buildStaticData(world), governments: [] });
+    expect([state().panel, state().layer]).toEqual(["area", "area"]);
+  });
+
+  it("records the demography of the realm and of the selection once per game day", () => {
+    const { world, state } = setup();
+    state().chooseRealm(0);
+    const owned = world.governments[0]?.ownedAreas as number[];
+    state().selectAreas(owned.slice(0, 2));
+    state().receive({ type: "snapshot", snapshot: buildSnapshot(world, 0) });
+    state().receive({ type: "snapshot", snapshot: buildSnapshot(world, 0) }); // the same day: replaced
+    const history = state().history;
+    const realm = history?.demographyOf([]);
+    expect(realm?.length).toBe(1);
+    const people = owned.reduce((sum, area) => sum + (world.areas[area]?.population ?? 0), 0);
+    expect(realm?.channel(0)[0]).toBeCloseTo(people, -1);
+    expect(history?.demographyOf(owned.slice(0, 2))?.length).toBe(1);
   });
 
   it("turns map clicks into army moves and peace picks by mode", () => {

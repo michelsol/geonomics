@@ -8,6 +8,7 @@ import {
   resolveSettings,
   type Snapshot,
   type StaticData,
+  type StaticEdge,
 } from "@geonomics/sim";
 
 /** Price of a good in an area from the public price table. */
@@ -350,4 +351,96 @@ export function meanPrices(data: StaticData, table: Uint16Array, areas: readonly
     for (const area of areas) sum += priceOf(data, table, area, good.id);
     return areas.length > 0 ? sum / areas.length : 0;
   });
+}
+
+/** Population and its movements over some areas (specification §10, Population panel), in people per day. */
+export interface Demography {
+  population: number;
+  births: number; // growth, summed over the areas that grow
+  deaths: number; // starvation, summed over the areas that shrink
+  immigration: number; // migrants coming in from outside the areas; moves between two of them cancel out
+  emigration: number;
+  necessitySatisfaction: number; // means weighted by population
+  satisfaction: number;
+}
+
+/** The channels of a demography series, in order (see History.demography). */
+export const DEMOGRAPHY_KEYS = [
+  "population",
+  "births",
+  "deaths",
+  "immigration",
+  "emigration",
+  "necessitySatisfaction",
+  "satisfaction",
+] as const satisfies readonly (keyof Demography)[];
+
+/** Demography of some areas from public figures: `edges` are every edge the snapshot's flows index. */
+export function demographyOf(snapshot: Snapshot, edges: readonly StaticEdge[], areas: readonly number[]): Demography {
+  const result: Demography = {
+    population: 0,
+    births: 0,
+    deaths: 0,
+    immigration: 0,
+    emigration: 0,
+    necessitySatisfaction: 0,
+    satisfaction: 0,
+  };
+  const inside = new Set(areas);
+  for (const area of areas) {
+    const people = snapshot.areas.population[area] as number;
+    const change = snapshot.areas.naturalChange[area] as number;
+    result.population += people;
+    if (change > 0) result.births += change;
+    else result.deaths -= change;
+    result.necessitySatisfaction += people * (snapshot.areas.necessitySatisfaction[area] as number);
+    result.satisfaction += people * (snapshot.areas.satisfaction[area] as number);
+  }
+  const migration = snapshot.edges.migration;
+  const count = Math.min(edges.length, migration.length);
+  for (let e = 0; e < count; e++) {
+    const migrants = migration[e] as number;
+    if (migrants === 0) continue;
+    const edge = edges[e] as StaticEdge;
+    const from = migrants > 0 ? edge.areaA : edge.areaB;
+    const to = migrants > 0 ? edge.areaB : edge.areaA;
+    const leaves = inside.has(from);
+    if (leaves === inside.has(to)) continue;
+    if (leaves) result.emigration += Math.abs(migrants);
+    else result.immigration += Math.abs(migrants);
+  }
+  if (result.population > 0) {
+    result.necessitySatisfaction /= result.population;
+    result.satisfaction /= result.population;
+  }
+  return result;
+}
+
+/** One need over some areas: what people wanted and got per day, over the areas whose detail the snapshot carries. */
+export interface NeedRow {
+  demanded: number;
+  consumed: number;
+}
+
+export function needsOf(
+  data: StaticData,
+  snapshot: Snapshot,
+  areas: readonly number[],
+): { rows: NeedRow[]; withDetail: number; detailPopulation: number } {
+  const days = data.config.pace.gameDaysPerTick;
+  const rows = data.needs.map(() => ({ demanded: 0, consumed: 0 }));
+  let withDetail = 0;
+  let detailPopulation = 0;
+  for (const area of areas) {
+    const detail = detailOf(snapshot, area);
+    if (!detail) continue;
+    withDetail++;
+    detailPopulation += snapshot.areas.population[area] as number;
+    for (let n = 0; n < rows.length; n++) {
+      const row = rows[n] as NeedRow;
+      row.demanded += (detail.needDemanded[n] as number) / days;
+      row.consumed += (detail.needConsumed[n] as number) / days;
+    }
+  }
+  return { rows, withDetail, detailPopulation };
 }

@@ -8,6 +8,7 @@ export function runPopulation(world: World): void {
   const p = world.config.population;
   const { demographyResponsiveness, gameDaysPerTick: days } = world.config.pace;
 
+  const natural = scratch.naturalChange;
   for (const area of world.areas) {
     const s = area.necessitySatisfaction;
     const threshold = p.growthSatisfactionThreshold;
@@ -15,7 +16,9 @@ export function runPopulation(world: World): void {
       s >= threshold
         ? (p.growthRatePerDay * (s - threshold)) / Math.max(1 - threshold, EPSILON)
         : (-p.starvationRatePerDay * (threshold - s)) / Math.max(threshold, EPSILON);
+    const before = area.population;
     changePopulation(world, area, area.population * (Math.exp(growth * demographyResponsiveness * days) - 1));
+    natural[area.id] = area.population - before;
   }
 
   // Migration reads populations and attractiveness after growth, then applies every edge together.
@@ -53,6 +56,14 @@ export function runPopulation(world: World): void {
  */
 export function lastMigration(world: World): Float64Array {
   return scratchOf(world).edgeMigration;
+}
+
+/**
+ * People each area gained by growth, or lost to starvation when negative, in the last population phase. Recomputed
+ * every tick and not part of the saved world.
+ */
+export function lastNaturalChange(world: World): Float64Array {
+  return scratchOf(world).naturalChange;
 }
 
 function modeFactor(world: World, edge: Edge): number {
