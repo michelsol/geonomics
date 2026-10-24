@@ -1,13 +1,14 @@
 // The map: a PixiJS canvas driven imperatively from the store, outside React's render cycle.
 import { Application } from "pixi.js";
 import { useEffect, useRef } from "react";
-import { gameStore, useGame } from "../state/store";
+import { areasNear } from "../state/selectors";
+import { BRUSH_REACH_PX, gameStore, useGame } from "../state/store";
 import { buildGeometry } from "./geometry";
-import { attachInput } from "./input";
+import { attachInput, type MapPoint } from "./input";
 import { MapRenderer } from "./renderer";
 
-/** Screen pixels from a lasso's first corner within which a tap closes it. */
-const CLOSE_PX = 20;
+/** Screen pixels between the points a brush stroke paints at, at most, so a fast stroke skips no area. */
+const STROKE_STEP_PX = 4;
 
 /** The renderer of the mounted map, for controls outside it (center on area, fit). */
 export const mapControls: { renderer: MapRenderer | null } = { renderer: null };
@@ -50,23 +51,56 @@ export function MapView() {
         }
         renderer.update(gameStore.getState());
         const unsubscribe = gameStore.subscribe((state) => renderer.update(state));
+        // A brush stroke collects its areas here and reaches the selection only when it ends.
+        const painted = new Set<number>();
+        let last: MapPoint | null = null;
+        const reach = () => BRUSH_REACH_PX[gameStore.getState().brush.size];
+        const paintAt = (point: MapPoint) => {
+          const area = renderer.pick(point.x, point.y);
+          if (area !== null) painted.add(area);
+          const px = reach();
+          if (px === 0) return;
+          const center = renderer.toMap(point.x, point.y);
+          const radius = renderer.toMap(point.x + px, point.y).x - center.x;
+          for (const near of areasNear(data, center, radius)) painted.add(near);
+        };
+        const showStroke = (point: MapPoint) => {
+          const center = renderer.toMap(point.x, point.y);
+          const radius = renderer.toMap(point.x + reach(), point.y).x - center.x;
+          renderer.setStroke({ areas: painted, erase: gameStore.getState().brush.erase, at: center, radius });
+        };
         const detach = attachInput(app.canvas, renderer, {
-          tap(area, point, additive) {
-            const state = gameStore.getState();
-            if (state.mode.kind !== "lasso") {
-              state.clickArea(area, additive);
-              return;
-            }
-            // Drawing a selection: a tap on the first corner closes the loop, any other adds a corner.
-            const [first] = state.mode.points;
-            const start = first && renderer.toScreen(first.x, first.y);
-            if (start && state.mode.points.length >= 3 && Math.hypot(start.x - point.x, start.y - point.y) <= CLOSE_PX)
-              state.closeLasso();
-            else state.addLassoPoint(renderer.toMap(point.x, point.y));
+          tap(area, _point, additive) {
+            gameStore.getState().clickArea(area, additive);
           },
-          doubleTap(point) {
-            const state = gameStore.getState();
-            if (state.mode.kind === "select") state.startLasso(renderer.toMap(point.x, point.y));
+          brushing: () => gameStore.getState().mode.kind === "brush",
+          stroke: {
+            start(point) {
+              painted.clear();
+              last = point;
+              paintAt(point);
+              showStroke(point);
+            },
+            move(point) {
+              const from = last ?? point;
+              const step = Math.max(STROKE_STEP_PX, reach() / 2);
+              const steps = Math.ceil(Math.hypot(point.x - from.x, point.y - from.y) / step);
+              for (let i = 1; i <= steps; i++)
+                paintAt({ x: from.x + ((point.x - from.x) * i) / steps, y: from.y + ((point.y - from.y) * i) / steps });
+              last = point;
+              showStroke(point);
+            },
+            end() {
+              renderer.setStroke(null);
+              gameStore.getState().paint([...painted]);
+              painted.clear();
+              last = null;
+            },
+            cancel() {
+              renderer.setStroke(null);
+              painted.clear();
+              last = null;
+            },
           },
         });
         const observer = new ResizeObserver(() => {

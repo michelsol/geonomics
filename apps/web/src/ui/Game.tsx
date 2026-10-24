@@ -26,6 +26,7 @@ import { DiplomacyPanel } from "./panels/DiplomacyPanel";
 import { GamePanel } from "./panels/GamePanel";
 import { JobsPanel } from "./panels/JobsPanel";
 import { PoliciesPanel } from "./panels/PoliciesPanel";
+import { SelectionBar } from "./SelectionBar";
 
 const PANELS = {
   area: { label: "Area", view: AreaPanel },
@@ -139,7 +140,7 @@ export function Game() {
     const key = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
       if (event.code === "Escape") {
-        // Escape leaves a lasso, then a selection of several areas.
+        // Escape leaves the brush or another mode, then a selection of several areas.
         const state = gameStore.getState();
         if (state.mode.kind !== "select") state.setMode({ kind: "select" });
         else if (state.selection.length > 1) state.selectArea(null);
@@ -199,6 +200,7 @@ export function Game() {
             </button>
           ))}
         </nav>
+        <SelectionBar />
         <div className="panel">
           <View onOpen={openPanel} />
         </div>
@@ -486,47 +488,48 @@ function AreaLegend() {
 function ModeBanner() {
   const mode = useGame((state) => state.mode);
   const picked = useGame((state) => state.peaceAreas.length);
-  const selected = useGame((state) => state.selection.length);
+  const brush = useGame((state) => state.brush);
   const setMode = useGame((state) => state.setMode);
-  const { closeLasso, setLassoOperation, selectArea } = gameStore.getState();
-  if (mode.kind === "lasso")
+  const setBrush = useGame((state) => state.setBrush);
+  if (mode.kind === "select") return null;
+  if (mode.kind === "brush")
     return (
-      <div className="mode-banner" role="status" data-testid="lasso-banner">
-        Tap corners, then the first one to close ({mode.points.length})
-        {selected > 1 && (
-          <span className="group">
-            {(["add", "remove"] as const).map((operation) => (
-              <button
-                type="button"
-                key={operation}
-                className={mode.operation === operation ? "active" : ""}
-                aria-pressed={mode.operation === operation}
-                onClick={() => setLassoOperation(operation)}
-              >
-                {operation === "add" ? "Add" : "Remove"}
-              </button>
-            ))}
-          </span>
-        )}
-        <button type="button" onClick={closeLasso} disabled={mode.points.length < 3}>
+      <div className="mode-banner" role="status" data-testid="brush-banner">
+        <span className="hide-phone" title="Two fingers, or a right-button drag, move the map while the brush is on">
+          Paint over areas
+        </span>
+        <span className="group">
+          {[false, true].map((erase) => (
+            <button
+              type="button"
+              key={String(erase)}
+              className={brush.erase === erase ? "active" : ""}
+              aria-pressed={brush.erase === erase}
+              onClick={() => setBrush({ erase })}
+            >
+              {erase ? "Erase" : "Add"}
+            </button>
+          ))}
+        </span>
+        <span className="group">
+          {(["S", "M", "L"] as const).map((size) => (
+            <button
+              type="button"
+              key={size}
+              className={brush.size === size ? "active" : ""}
+              aria-pressed={brush.size === size}
+              aria-label={`Brush size ${size}`}
+              onClick={() => setBrush({ size })}
+            >
+              {size}
+            </button>
+          ))}
+        </span>
+        <button type="button" onClick={() => setMode({ kind: "select" })}>
           Done
         </button>
-        <button type="button" onClick={() => setMode({ kind: "select" })}>
-          Cancel
-        </button>
       </div>
     );
-  if (mode.kind === "select") {
-    if (selected <= 1) return null;
-    return (
-      <div className="mode-banner" role="status">
-        <span data-testid="selection-count">{selected} areas selected</span>
-        <button type="button" onClick={() => selectArea(null)}>
-          Clear
-        </button>
-      </div>
-    );
-  }
   return (
     <div className="mode-banner" role="status">
       {mode.kind === "moveArmy" ? "Click the destination" : `Click areas to exchange (${picked})`}

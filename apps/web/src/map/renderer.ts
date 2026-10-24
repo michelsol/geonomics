@@ -11,7 +11,7 @@ import {
   BLOCKED,
   BORDER,
   CELL_LINE,
-  LASSO_REMOVE,
+  ERASE,
   MIGRATION_ARROW,
   NEUTRAL,
   PICKED,
@@ -53,6 +53,7 @@ export class MapRenderer {
   private readonly flows = new Graphics();
   private readonly markers = new Graphics();
   private readonly selection = new Graphics();
+  private readonly brush = new Graphics();
   private drawn: Partial<Drawn> = {};
   private lineScale = 0;
   private fitScale = 1;
@@ -68,7 +69,7 @@ export class MapRenderer {
     private readonly data: StaticData,
     private readonly geometry: MapGeometry,
   ) {
-    this.root.addChild(this.cells, this.lines, this.routes, this.flows, this.markers, this.selection);
+    this.root.addChild(this.cells, this.lines, this.routes, this.flows, this.markers, this.selection, this.brush);
     app.stage.addChild(this.root);
     app.renderer.background.color = WATER;
     this.fit();
@@ -362,7 +363,6 @@ export class MapRenderer {
         frontier[i + 3] as number,
       );
     if (frontier.length > 0) g.stroke({ width: 3 * px, color: SELECTION, cap: "round", join: "round" });
-    if (state.mode.kind === "lasso") this.drawLasso(g, state.mode.points, state.mode.operation === "remove", px);
     for (const area of state.mode.kind === "pickPeaceAreas" || state.peaceAreas.length > 0 ? state.peaceAreas : []) {
       const polygon = this.geometry.cells[area];
       if (polygon && polygon.length >= 6)
@@ -372,19 +372,22 @@ export class MapRenderer {
     }
   }
 
-  /** The polygon being drawn: dashed sides, a dot at each corner, and a ring on the first, where it closes. */
-  private drawLasso(g: Graphics, points: readonly { x: number; y: number }[], removing: boolean, px: number): void {
-    const color = removing ? LASSO_REMOVE : SELECTION;
-    for (let i = 1; i < points.length; i++) {
-      const a = points[i - 1] as { x: number; y: number };
-      const b = points[i] as { x: number; y: number };
-      dashed(g, a.x, a.y, b.x, b.y, 8 * px, 5 * px);
+  /**
+   * The brush stroke being painted, before it reaches the selection: its areas filled, white when adding and red when
+   * erasing, and a ring of the brush's reach at the pointer. Null clears it.
+   */
+  setStroke(stroke: { areas: Iterable<number>; erase: boolean; at: { x: number; y: number }; radius: number } | null) {
+    const g = this.brush.clear();
+    if (stroke) {
+      const px = 1 / this.root.scale.x;
+      const color = stroke.erase ? ERASE : SELECTION;
+      for (const area of stroke.areas) {
+        const polygon = this.geometry.cells[area];
+        if (polygon && polygon.length >= 6) g.poly(polygon).fill({ color, alpha: 0.4 });
+      }
+      g.circle(stroke.at.x, stroke.at.y, Math.max(stroke.radius, 6 * px)).stroke({ width: 2 * px, color });
     }
-    g.stroke({ width: 2.5 * px, color });
-    for (const [i, point] of points.entries()) {
-      if (i === 0) g.circle(point.x, point.y, 9 * px).stroke({ width: 2.5 * px, color });
-      g.circle(point.x, point.y, 3.5 * px).fill({ color });
-    }
+    this.requestRender();
   }
 
   // Camera

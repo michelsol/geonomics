@@ -1,19 +1,17 @@
-// Employment, government jobs and wage offers in one of the player's areas or in the selected ones. Totals for several
-// areas are split over them by population (specification §10, Selection).
+// Employment, government jobs and wage offers where the player's actions apply: one area, the selected ones, or the
+// whole realm. Totals for several areas are split over them by population (specification §10, Selection).
 import type { Command, GovernmentJob } from "@geonomics/sim";
 import { useEffect, useState } from "react";
-import { employmentOf, splitByPopulation } from "../../state/selectors";
+import { actionTarget, employmentOf, splitByPopulation } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { count, fmt, NumberField, pct, Section, Select } from "../components";
-import { areaName, ownedOptions, useSend, useView, type View } from "./common";
+import { areaName, useSend, useView, type View } from "./common";
 
 // Categorical slots 1 and 2 of the chart palette (dark steps), validated against the panel surface; the unemployed
 // are a neutral gray, since they are the absence of a job rather than a third kind of one.
 const PRIVATE_COLOR = "#3987e5";
 const GOVERNMENT_COLOR = "#d95926";
 const UNEMPLOYED_COLOR = "#5b6270";
-
-const SELECTED = -2; // the player's areas in the map selection, in the area select
 
 type JobKind = GovernmentJob["kind"];
 const JOB_LABELS: Record<JobKind, string> = {
@@ -35,20 +33,22 @@ interface JobGroup {
 export function JobsPanel() {
   const view = useView();
   const send = useSend();
-  const selected = useGame((state) => state.selectedArea);
   const selection = useGame((state) => state.selection);
   const edges = useGame((state) => state.edges);
-  const selectArea = useGame((state) => state.selectArea);
   const [job, setJob] = useState({ kind: "fortify" as JobKind, good: 0, edge: -1, workers: 100 });
   if (!view) return null;
   const { data, government, snapshot } = view;
-  const ownSelected = selection.filter((area) => government.ownedAreas.includes(area));
-  const region = ownSelected.length >= 2;
-  const single = selected !== null && government.ownedAreas.includes(selected) ? selected : government.capital;
-  if (!region && single === null) return <p className="muted">You hold no area.</p>;
-  const areas = region ? ownSelected : [single as number];
+  const target = actionTarget(government, selection);
+  const areas = target.areas;
+  if (areas.length === 0) return <p className="muted">You hold no area.</p>;
+  const region = areas.length >= 2;
+  const single = region ? null : (areas[0] as number);
   const population = snapshot.areas.population;
-  const label = region ? `Selection (${areas.length} areas)` : areaName(data, areas[0] as number);
+  const label = target.realm
+    ? "Whole realm"
+    : region
+      ? `Selection (${areas.length} areas)`
+      : areaName(data, areas[0] as number);
 
   // Roads: from one area, a chosen edge; across a selection, every land edge inside it.
   const inside = new Set(areas);
@@ -154,18 +154,6 @@ export function JobsPanel() {
 
   return (
     <>
-      <Section title="Area">
-        <Select
-          label="Jobs area"
-          value={region ? SELECTED : (single as number)}
-          options={[...(region ? [{ value: SELECTED, label }] : []), ...ownedOptions(view)]}
-          onChange={(area) => {
-            if (area !== SELECTED) selectArea(area);
-          }}
-        />
-        {region && <span className="hint">Workers you hire here are split over the areas by population.</span>}
-      </Section>
-
       <EmploymentSection view={view} areas={areas} label={label} />
 
       <Section title="Wages">
@@ -180,7 +168,8 @@ export function JobsPanel() {
             }
           />
           <span className="muted">
-            mh/day · average wage {region ? "in the selection" : "here"} {fmt(averageWage * hoursPerDay)} mh/day
+            mh/day · average wage {target.realm ? "in the realm" : region ? "in the selection" : "here"}{" "}
+            {fmt(averageWage * hoursPerDay)} mh/day
           </span>
         </div>
         <span className="muted">
@@ -233,7 +222,7 @@ export function JobsPanel() {
           <button type="button" className="primary" onClick={() => sendAll(hireNew())}>
             Hire
           </button>
-          {region && <span className="muted">in total</span>}
+          {region && <span className="muted">in total, split over the areas by population</span>}
         </div>
       </Section>
     </>
@@ -270,9 +259,8 @@ function JobLine({ group, title, onTarget }: { group: JobGroup; title: string; o
 
 /** Who works at what, as a share bar (private, government, unemployed) and a table of private jobs by good. */
 function EmploymentSection({ view, areas, label }: { view: View; areas: number[]; label: string }) {
-  const [scope, setScope] = useState<"here" | "realm">("here");
   const { data, snapshot, government } = view;
-  const employment = employmentOf(data, snapshot, government, scope === "realm" ? government.ownedAreas : areas);
+  const employment = employmentOf(data, snapshot, government, areas);
   const total = employment.privateTotal + employment.government + employment.unemployed;
   const parts = [
     { label: "Private jobs", value: employment.privateTotal, color: PRIVATE_COLOR },
@@ -290,20 +278,7 @@ function EmploymentSection({ view, areas, label }: { view: View; areas: number[]
   const most = Math.max(1, ...rows.map((row) => row.workers));
 
   return (
-    <Section
-      title="Employment"
-      actions={
-        <Select
-          label="Employment scope"
-          value={scope}
-          options={[
-            { value: "here", label },
-            { value: "realm", label: "Whole realm" },
-          ]}
-          onChange={setScope}
-        />
-      }
-    >
+    <Section title="Employment" actions={<span className="muted">{label}</span>}>
       <div className="share-bar" data-testid="employment-bar" role="img" aria-label="Workforce by kind of job">
         {parts
           .filter((part) => part.value > 0)

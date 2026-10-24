@@ -21,64 +21,78 @@ async function mapCenter(page: Page, canvas: Locator) {
   return { x: box.width / 2, y: (bottom - box.y) / 2 };
 }
 
-/** Draws a triangle: a double click on its first corner, a click on each other, and a click back on the first. */
-async function lasso(canvas: Locator, corners: { x: number; y: number }[], remove = false) {
-  const [first, ...rest] = corners as [{ x: number; y: number }, ...{ x: number; y: number }[]];
-  await canvas.dblclick({ position: first });
-  if (remove) await canvas.page().getByRole("button", { name: "Remove", exact: true }).click();
-  for (const corner of rest) await canvas.click({ position: corner });
-  await canvas.page().waitForTimeout(350); // not a double click with the last corner
-  await canvas.click({ position: first });
+/** Drags the left mouse button (or another) through points on the map canvas. */
+async function drag(
+  page: Page,
+  canvas: Locator,
+  points: { x: number; y: number }[],
+  button: "left" | "right" = "left",
+) {
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("map canvas has no size");
+  const [first, ...rest] = points as [{ x: number; y: number }, ...{ x: number; y: number }[]];
+  await page.mouse.move(box.x + first.x, box.y + first.y);
+  await page.mouse.down({ button });
+  for (const point of rest) await page.mouse.move(box.x + point.x, box.y + point.y, { steps: 8 });
+  await page.mouse.up({ button });
 }
 
-/** Areas selected: the banner's count, or one or none when it is gone. */
+/** Areas selected: the bar's count, or one or none. */
 async function selected(page: Page): Promise<number> {
-  const banner = page.getByTestId("selection-count");
-  if ((await banner.count()) === 0) return (await page.getByTestId("area-name").count()) > 0 ? 1 : 0;
-  return Number((await banner.textContent())?.replace(/\D/g, ""));
+  const count = page.getByTestId("selection-count");
+  if ((await count.count()) === 0) return (await page.getByTestId("area-name").count()) > 0 ? 1 : 0;
+  return Number((await count.textContent())?.replace(/\D/g, ""));
 }
 
-test("regions drawn on the map select their areas, add up, and take actions", async ({ page }) => {
+test("the brush paints areas into the selection, and actions follow it", async ({ page }) => {
   await startGame(page);
   const canvas = page.getByTestId("map-canvas");
   const c = await mapCenter(page, canvas);
-  // Triangles around the capital, which opens at the center: a larger one holds the smaller.
-  const triangle = (r: number) => [
-    { x: c.x - r, y: c.y - r },
-    { x: c.x + r, y: c.y - r },
-    { x: c.x, y: c.y + r },
+  const across = (half: number, dy = 0) => [
+    { x: c.x - half, y: c.y + dy },
+    { x: c.x + half, y: c.y + dy },
   ];
-  const small = triangle(60);
-  const large = triangle(150);
 
-  // One polygon.
-  await lasso(canvas, large);
+  // A wide stroke through the capital, which opens at the center.
+  await page.getByRole("button", { name: "Brush", exact: true }).click();
+  await expect(page.getByTestId("brush-banner")).toBeVisible();
+  await page.getByRole("button", { name: "Brush size L" }).click();
+  await drag(page, canvas, across(120));
   await expect.poll(() => selected(page)).toBeGreaterThan(1);
   const whole = await selected(page);
   await expect(page.getByTestId("selection-name")).toHaveText(`${whole} areas`);
   await expect(page.getByTestId("population")).toBeVisible();
 
-  // A Remove polygon cuts the middle out; an Add polygon puts exactly that back.
-  await lasso(canvas, small, true);
+  // A thin Erase stroke cuts some out; the same stroke with Add puts exactly those back.
+  await page.getByRole("button", { name: "Brush size S" }).click();
+  await page.getByRole("button", { name: "Erase", exact: true }).click();
+  await drag(page, canvas, across(20));
   await expect.poll(() => selected(page)).toBeLessThan(whole);
-  await lasso(canvas, small);
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await drag(page, canvas, across(20));
   await expect.poll(() => selected(page)).toBe(whole);
 
-  // The capital is inside: Shift-click takes it out, and puts it back.
+  // A right-button drag moves the map without painting; this one goes there and back.
+  await page.getByRole("button", { name: "Brush size L" }).click();
+  const [left, right] = across(120, 0.6 * c.y) as [{ x: number; y: number }, { x: number; y: number }];
+  await drag(page, canvas, [left, right, left], "right");
+  await page.waitForTimeout(200);
+  expect(await selected(page)).toBe(whole);
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(page.getByTestId("brush-banner")).toHaveCount(0);
+
+  // Without the brush, Shift-click takes one area out, and puts it back.
   const shiftClick = () => canvas.click({ position: c, modifiers: ["Shift"] });
   await shiftClick();
   await expect.poll(() => selected(page)).toBe(whole - 1);
-  await page.waitForTimeout(350); // two Shift-clicks, not a double click
   await shiftClick();
   await expect.poll(() => selected(page)).toBe(whole);
 
-  // A tax for the selection is an override in each of the player's selected areas.
+  // A tax applies to the player's areas in the selection: an override in each.
   await page.getByRole("navigation").getByRole("button", { name: "Policies", exact: true }).click();
-  const scope = page.getByLabel("Policy area");
-  const option = scope.locator("option", { hasText: "Selection (" });
-  await expect(option).toHaveCount(1);
-  const owned = Number((await option.textContent())?.match(/\((\d+)/)?.[1]);
-  await scope.selectOption({ label: (await option.textContent()) as string });
+  const target = (await page.getByTestId("action-target").textContent()) ?? "";
+  const owned = Number(/your (\d+) area/.exec(target)?.[1]);
+  expect(owned).toBeGreaterThan(0);
   await page.getByLabel("Policy value").fill("12");
   await page.getByRole("button", { name: "Set", exact: true }).click();
   await expect(page.getByTestId("policies").locator("th", { hasText: "Only in" })).toHaveCount(owned);
@@ -90,6 +104,12 @@ test("regions drawn on the map select their areas, add up, and take actions", as
   await page.getByRole("button", { name: "Hire" }).click();
   const job = page.getByTestId("job").first();
   await expect(job).toContainText("Fortify");
-  await expect(job).toContainText(`${owned} areas`);
+  if (owned > 1) await expect(job).toContainText(`${owned} areas`);
   await expect(job).toContainText("/ 1,000 workers");
+
+  // My realm makes the actions realm-wide.
+  await page.getByRole("button", { name: "My realm", exact: true }).click();
+  await expect(page.getByTestId("action-target")).toHaveText("Actions: your whole realm");
+  await page.getByRole("navigation").getByRole("button", { name: "Policies", exact: true }).click();
+  await expect(page.getByTestId("head-tax")).toContainText("across the realm");
 });

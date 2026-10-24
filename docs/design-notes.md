@@ -337,3 +337,19 @@ At worst an autosave delays one tick by about 0.1 s every 30 game days. Five kep
 - **Updates wait.** With an update that takes over at once, the new service worker deletes the old version's cache, and a running game that then opens the Game or PeerJS chunk for the first time would fail to load it. The new version therefore waits for a reload, offered on the menu only.
 - **Phones.** The audit at Pixel 7 and iPhone 14 sizes found: fields under 16 px (iOS zooms into them), 40 px tabs and 18 px inline links, a lobby wider than the screen, the map layer and flows hidden past the edge of a sideways-scrolling top bar, and areas centered under the bottom sheet. All are fixed, and an end-to-end test keeps every screen and panel within the phone's width.
 
+
+## Selecting areas
+
+### From polygons to a brush
+
+Regions were first drawn as polygons: a double tap started one, each tap added a corner, and a tap on the first corner closed it. Players did not find the double tap, and phones had no way to add or remove a single area, since Shift-click needs a keyboard. A brush toggled from a visible button is found at once, and it paints any shape, including thin coastlines and areas scattered across the map. While it is on, one finger paints, so the map moves with two fingers, the wheel, or a right-button drag.
+
+A stroke reaches the selection only when it ends. Updating the selection on every pointer move would recompute the Area panel's totals, record a price history for every intermediate selection (the history keeps the last few selections), and tell the host about a new focus, many times a second. The renderer previews the stroke on its own layer meanwhile.
+
+### One action target
+
+Each action panel used to choose its own scope: Policy area, Rule scope, Jobs area, Recruit in, Buy weapons in. These choices disagreed with each other and with the map, and the selection's scope only appeared once two of the player's areas were selected. Now the selection is the only scope, and the bar under the tabs says what it is.
+
+With none of the player's areas selected, the actions apply to the whole realm. The alternative, disabling them until something is selected, would put an extra tap before every realm-wide tax. Selecting every area of the realm also means the whole realm, so standing orders cover areas taken later, and taxes are set realm-wide rather than as an override in each area.
+
+Recruits and weapon purchases for the whole realm go to the capital. Split by population over a realm of 40 areas, 500 recruits would make 40 armies of a dozen soldiers, which nobody wants to march one by one. Selecting areas still splits them on purpose.

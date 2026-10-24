@@ -27,6 +27,11 @@ async function checkLayout(page: Page) {
     const box = await page.getByLabel(label).boundingBox();
     expect(box && box.x + box.width).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
   }
+  // The selection bar shows in the peeking sheet, with its buttons on screen.
+  const bar = await page.getByTestId("selection-bar").boundingBox();
+  expect(bar && bar.y + bar.height).toBeLessThanOrEqual(page.viewportSize()?.height ?? 0);
+  const clear = await page.getByRole("button", { name: "Clear", exact: true }).boundingBox();
+  expect(clear && clear.x + clear.width).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
   for (const tab of ["Area", "Policies", "Jobs", "Armies", "Diplomacy", "Game"]) {
     await page.getByRole("navigation").getByRole("button", { name: tab, exact: true }).click();
     expect(await fitsTheScreen(page), tab).toBe(true);

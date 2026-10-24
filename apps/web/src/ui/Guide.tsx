@@ -21,11 +21,12 @@ export function Guide() {
           <h2>The map</h2>
           <p>
             Tap or click an area to see it in the Area panel. Drag to pan, and pinch or scroll to zoom. To work on a
-            whole region, double-tap the map, tap the corners of a shape around it, and tap the first corner again: the
-            panels then show its totals, and taxes, jobs and recruits apply to all of it. Draw more shapes to add areas,
-            or switch to Remove to cut some out; Shift-click adds or removes one area. The layer menu colors the map by
-            realm, population, the price of a good, resources, satisfaction, wages or terrain; the flows menu draws
-            migration or goods on the move. Dashed lines are sea routes, dotted lines air routes.
+            whole region, turn on the Brush in the bar above the panels and paint over its areas; Erase takes some out,
+            and two fingers or a right-button drag move the map meanwhile. Shift-click adds or removes one area. Taxes,
+            jobs, recruits and standing orders apply to your areas in the selection, shown in the bar, or to your whole
+            realm when it holds none of them. The layer menu colors the map by realm, population, the price of a good,
+            resources, satisfaction, wages or terrain; the flows menu draws migration or goods on the move. Dashed lines
+            are sea routes, dotted lines air routes.
           </p>
         </section>
 

@@ -1,44 +1,46 @@
 // The player's armies: pay, recruiting, weapons, stance, moves and disbanding; foreign armies for awareness.
-import type { Army } from "@geonomics/sim";
+import type { Army, GovernmentView } from "@geonomics/sim";
 import { useState } from "react";
-import { realmWageLevel, splitByPopulation } from "../../state/selectors";
+import { actionTarget, realmWageLevel, splitByPopulation } from "../../state/selectors";
 import { useGame } from "../../state/store";
-import { count, fmt, NumberField, pct, Section, Select, Stat, Swatch } from "../components";
-import { AreaLink, areaName, ownedOptions, useSend, useView } from "./common";
+import { count, fmt, NumberField, pct, Section, Stat, Swatch } from "../components";
+import { AreaLink, areaName, useSend, useView } from "./common";
 
-const SELECTED = -2; // the player's areas in the map selection, in the area select
+/**
+ * Where recruits and weapon purchases go: the selection's own areas, split by population, or the capital when the
+ * actions are realm-wide, since an army spread over the whole realm would be dozens of small ones.
+ */
+function placesFor(government: GovernmentView, selection: readonly number[]): number[] {
+  const target = actionTarget(government, selection);
+  if (!target.realm) return target.areas;
+  const capital = government.capital ?? government.ownedAreas[0];
+  return capital === undefined ? [] : [capital];
+}
+
+/** Text saying where `placesFor` puts things. */
+function placesText(data: { areas: readonly { name: string }[] }, places: number[]): string {
+  return places.length === 1
+    ? `in ${data.areas[places[0] as number]?.name ?? "?"}`
+    : `split over the ${places.length} selected areas by population, one per area`;
+}
 
 export function ArmiesPanel() {
   const view = useView();
   const send = useSend();
-  const selected = useGame((state) => state.selectedArea);
   const selection = useGame((state) => state.selection);
   const selectedArmy = useGame((state) => state.selectedArmy);
   const selectArmy = useGame((state) => state.selectArmy);
   const setMode = useGame((state) => state.setMode);
-  const [recruit, setRecruit] = useState({ area: -1, soldiers: 500 });
+  const [recruits, setRecruits] = useState(500);
   if (!view) return null;
   const { snapshot, government, data } = view;
   const own = snapshot.armies.filter((army) => army.owner === government.id);
   const foreign = snapshot.armies.filter((army) => army.owner !== government.id);
-  const ownSelected = selection.filter((area) => government.ownedAreas.includes(area));
-  const region = ownSelected.length >= 2;
-  const recruitArea =
-    recruit.area >= 0 || (recruit.area === SELECTED && region)
-      ? recruit.area
-      : region
-        ? SELECTED
-        : selected !== null && government.ownedAreas.includes(selected)
-          ? selected
-          : (government.capital ?? 0);
-  // Recruits for the selection are split over its areas by population: one army per area that gets any.
+  const places = placesFor(government, selection);
+  // Recruits for several areas are split over them by population: one army per area that gets any.
   const recruitIn = (soldiers: number) => {
-    if (recruitArea !== SELECTED) {
-      send({ type: "recruitArmy", area: recruitArea, soldiers });
-      return;
-    }
-    splitByPopulation(soldiers, ownSelected, snapshot.areas.population).forEach((part, i) => {
-      if (part >= 1) send({ type: "recruitArmy", area: ownSelected[i] as number, soldiers: part });
+    splitByPopulation(soldiers, places, snapshot.areas.population).forEach((part, i) => {
+      if (part >= 1) send({ type: "recruitArmy", area: places[i] as number, soldiers: part });
     });
   };
   const soldiers = own.reduce((sum, army) => sum + army.soldiers, 0);
@@ -52,21 +54,7 @@ export function ArmiesPanel() {
     <>
       <Section title="Soldiers">
         <div className="row">
-          <Select
-            label="Recruit in"
-            value={recruitArea}
-            options={[
-              ...(region ? [{ value: SELECTED, label: `Selection (${ownSelected.length} areas)` }] : []),
-              ...ownedOptions(view),
-            ]}
-            onChange={(area) => setRecruit({ ...recruit, area })}
-          />
-          <NumberField
-            label="Recruits"
-            value={recruit.soldiers}
-            min={1}
-            onChange={(soldiers) => setRecruit({ ...recruit, soldiers })}
-          />
+          <NumberField label="Recruits" value={recruits} min={1} onChange={setRecruits} />
           <span className="muted">soldiers at</span>
           <span
             className="row"
@@ -83,8 +71,9 @@ export function ArmiesPanel() {
           <button
             type="button"
             className="primary"
-            title={`Recruits leave the workforce of the area.${recruitArea === SELECTED ? " The total is split over the selection by population, one army per area." : ""}`}
-            onClick={() => recruitIn(recruit.soldiers)}
+            title={`Recruits form an army ${placesText(data, places)}, and leave the workforce there.`}
+            disabled={places.length === 0}
+            onClick={() => recruitIn(recruits)}
           >
             Recruit
           </button>
@@ -136,8 +125,8 @@ export function ArmiesPanel() {
 function Weapons() {
   const view = useView();
   const send = useSend();
-  const selected = useGame((state) => state.selectedArea);
-  const [buy, setBuy] = useState({ area: -1, quantity: 500, limit: -1 });
+  const selection = useGame((state) => state.selection);
+  const [buy, setBuy] = useState({ quantity: 500, limit: -1 });
   if (!view) return null;
   const { data, government } = view;
   const weapons = data.config.military.weaponsGood;
@@ -148,12 +137,7 @@ function Weapons() {
     .filter((entry) => entry.quantity >= 0.5);
   const total = held.reduce((sum, entry) => sum + entry.quantity, 0);
   const buying = government.marketOrders.filter((order) => order.good === weapons && order.side === "buy");
-  const area =
-    buy.area >= 0
-      ? buy.area
-      : selected !== null && government.ownedAreas.includes(selected)
-        ? selected
-        : (government.capital ?? 0);
+  const places = placesFor(government, selection);
   const limit = buy.limit >= 0 ? buy.limit : Math.round(2 * good.laborValue * 100) / 100;
 
   return (
@@ -173,12 +157,6 @@ function Weapons() {
         </div>
       )}
       <div className="row">
-        <Select
-          label="Buy weapons in"
-          value={area}
-          options={ownedOptions(view)}
-          onChange={(value) => setBuy({ ...buy, area: value })}
-        />
         <NumberField
           label="Weapons to buy"
           value={buy.quantity}
@@ -193,17 +171,22 @@ function Weapons() {
         />
         <button
           type="button"
+          title={`Bought ${placesText(data, places)}, into the depots there.`}
+          disabled={places.length === 0}
           onClick={() =>
-            send({
-              type: "placeMarketOrder",
-              order: {
-                area,
-                good: weapons,
-                side: "buy",
-                remainingQuantity: buy.quantity,
-                limitPrice: limit,
-                maximumQuantityPerDay: Math.max(1, buy.quantity / 5),
-              },
+            splitByPopulation(buy.quantity, places, view.snapshot.areas.population).forEach((quantity, i) => {
+              if (quantity < 1) return;
+              send({
+                type: "placeMarketOrder",
+                order: {
+                  area: places[i] as number,
+                  good: weapons,
+                  side: "buy",
+                  remainingQuantity: quantity,
+                  limitPrice: limit,
+                  maximumQuantityPerDay: Math.max(1, quantity / 5),
+                },
+              });
             })
           }
         >

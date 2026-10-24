@@ -6,18 +6,24 @@ import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { FromWorker, GameOptions, HostStatus, Speed, ToWorker } from "../host/protocol";
 import { History } from "./history";
-import { areasInPolygon, meanPrices, type Point, priceExtremes, priceOf, realmPopulation } from "./selectors";
+import { meanPrices, priceExtremes, priceOf, realmPopulation } from "./selectors";
 
 export type Screen = "newGame" | "guide" | "join" | "chooseRealm" | "game" | "ended";
 export type Layer = "realms" | "population" | "prices" | "resources" | "satisfaction" | "wage" | "terrain";
 export type Flows = "none" | "migration" | "transport"; // arrows drawn over the area layer
-/** What closing a lasso does with the areas inside it: replace the selection, add to it, or remove from it. */
-export type LassoOperation = "replace" | "add" | "remove";
 export type Mode =
   | { kind: "select" }
   | { kind: "moveArmy"; army: number }
   | { kind: "pickPeaceAreas" }
-  | { kind: "lasso"; points: Point[]; operation: LassoOperation }; // corners in map units
+  | { kind: "brush" };
+/** The selection brush (specification §10, Selection): whether a stroke adds or erases, and how wide it paints. */
+export type BrushSize = "S" | "M" | "L";
+export interface Brush {
+  erase: boolean;
+  size: BrushSize;
+}
+/** How far from the pointer each brush size reaches, in screen pixels, past the area under it. */
+export const BRUSH_REACH_PX: Record<BrushSize, number> = { S: 0, M: 24, L: 60 };
 
 export interface Toast {
   id: number;
@@ -84,6 +90,7 @@ export interface GameState {
   flows: Flows;
   transportAllGoods: boolean; // transport flows show total tonnes, not the selected good
   mode: Mode;
+  brush: Brush;
   peaceAreas: number[]; // areas picked on the map for a peace proposal
   toasts: Toast[];
   peakPopulation: number;
@@ -114,11 +121,9 @@ export interface GameState {
   selectArea(area: number | null): void;
   selectAreas(areas: readonly number[]): void;
   toggleArea(area: number): void;
-  startLasso(point: Point): void;
-  addLassoPoint(point: Point): void;
-  setLassoOperation(operation: LassoOperation): void;
-  /** Applies the lasso to the selection; fewer than three corners cancel it. */
-  closeLasso(): void;
+  setBrush(brush: Partial<Brush>): void;
+  /** Applies a finished brush stroke to the selection: adds its areas, or takes them out when erasing. */
+  paint(areas: readonly number[]): void;
   selectGood(good: number): void;
   selectArmy(army: number | null): void;
   setLayer(layer: Layer): void;
@@ -136,11 +141,7 @@ const IDLE_STATUS: HostStatus = { paused: true, speed: 5, ticksPerSecond: 0, msP
 const TOAST_LIMIT = 4;
 let nextToast = 1;
 
-/** A double tap's first tap selects one area; a lasso started this soon after it keeps the selection from before. */
-const DOUBLE_TAP_RESTORE_MS = 600;
-
 export function createGameStore(port: Port): StoreApi<GameState> {
-  let lastTap = { at: Number.NEGATIVE_INFINITY, selection: [] as number[] };
   const store = createStore<GameState>()((set, get) => ({
     screen: "newGame",
     progress: null,
@@ -163,6 +164,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     flows: "none",
     transportAllGoods: true,
     mode: { kind: "select" },
+    brush: { erase: false, size: "M" },
     peaceAreas: [],
     toasts: [],
     peakPopulation: 0,
@@ -261,8 +263,6 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     },
     clickArea(area, additive = false) {
       const { mode } = get();
-      // Every tap counts as a double tap's possible first one, water included, so a lasso restores the right selection.
-      if (mode.kind === "select" && !additive) lastTap = { at: Date.now(), selection: get().selection };
       if (area === null) return;
       if (mode.kind === "moveArmy") {
         get().send({ type: "moveArmy", army: mode.army, destination: area });
@@ -292,32 +292,13 @@ export function createGameStore(port: Port): StoreApi<GameState> {
       const { selection } = get();
       get().selectAreas(selection.includes(area) ? selection.filter((a) => a !== area) : [...selection, area]);
     },
-    startLasso(point) {
-      if (Date.now() - lastTap.at < DOUBLE_TAP_RESTORE_MS) get().selectAreas(lastTap.selection);
-      lastTap = { at: Number.NEGATIVE_INFINITY, selection: [] };
-      const operation = get().selection.length > 1 ? "add" : "replace";
-      set({ mode: { kind: "lasso", points: [point], operation } });
+    setBrush(brush) {
+      set({ brush: { ...get().brush, ...brush } });
     },
-    addLassoPoint(point) {
-      const { mode } = get();
-      if (mode.kind === "lasso") set({ mode: { ...mode, points: [...mode.points, point] } });
-    },
-    setLassoOperation(operation) {
-      const { mode } = get();
-      if (mode.kind === "lasso") set({ mode: { ...mode, operation } });
-    },
-    closeLasso() {
-      const { mode, data, selection } = get();
-      set({ mode: { kind: "select" } });
-      if (mode.kind !== "lasso" || mode.points.length < 3 || !data) return;
-      const inside = areasInPolygon(data, mode.points);
-      const next =
-        mode.operation === "replace"
-          ? inside
-          : mode.operation === "add"
-            ? [...selection, ...inside]
-            : selection.filter((area) => !inside.includes(area));
-      get().selectAreas(next);
+    paint(areas) {
+      const { selection, brush } = get();
+      const painted = new Set(areas);
+      get().selectAreas(brush.erase ? selection.filter((area) => !painted.has(area)) : [...selection, ...areas]);
     },
     selectGood(good) {
       set({ selectedGood: good });

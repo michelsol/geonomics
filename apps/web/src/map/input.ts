@@ -1,10 +1,8 @@
-// Pointer input on the map canvas: pan with a mouse or one finger, zoom with the wheel or a pinch, tap to pick, and
-// double-tap, with a mouse or a finger alike.
+// Pointer input on the map canvas: pan with a mouse or one finger, zoom with the wheel or a pinch, and tap to pick. While
+// the selection brush is on, one finger or the left button paints instead, and two fingers or another button pan.
 import type { MapRenderer } from "./renderer";
 
 const TAP_DISTANCE = 6; // pixels a pointer may move and still count as a tap
-const DOUBLE_TAP_MS = 300; // a second tap this soon after the first, and this close, is a double tap
-const DOUBLE_TAP_DISTANCE = 24;
 const WHEEL_ZOOM = 0.0015; // zoom factor per wheel pixel
 
 export interface MapPoint {
@@ -15,15 +13,22 @@ export interface MapPoint {
 export interface MapHandlers {
   /** A tap; `additive` when Shift, Ctrl or Cmd was held. */
   tap(area: number | null, point: MapPoint, additive: boolean): void;
-  /** The second tap of a double tap, instead of a second `tap`. */
-  doubleTap(point: MapPoint): void;
+  /** Whether a pointer going down now starts a brush stroke rather than a pan. */
+  brushing(): boolean;
+  stroke: {
+    start(point: MapPoint): void;
+    move(point: MapPoint): void;
+    end(): void;
+    /** A second finger came down: the stroke is dropped, and the fingers pan and pinch. */
+    cancel(): void;
+  };
 }
 
 export function attachInput(element: HTMLElement, renderer: MapRenderer, handlers: MapHandlers): () => void {
   const pointers = new Map<number, { x: number; y: number }>();
   let travelled = 0;
   let pinchDistance = 0;
-  let lastTap = { at: Number.NEGATIVE_INFINITY, x: 0, y: 0 };
+  let stroking = false;
 
   const local = (event: PointerEvent | WheelEvent) => {
     const rect = element.getBoundingClientRect();
@@ -37,8 +42,14 @@ export function attachInput(element: HTMLElement, renderer: MapRenderer, handler
   const down = (event: PointerEvent) => {
     element.setPointerCapture(event.pointerId);
     pointers.set(event.pointerId, local(event));
-    if (pointers.size === 1) travelled = 0;
+    if (pointers.size === 1) {
+      travelled = 0;
+      stroking = event.button === 0 && handlers.brushing();
+      if (stroking) handlers.stroke.start(local(event));
+    }
     if (pointers.size === 2) {
+      if (stroking) handlers.stroke.cancel();
+      stroking = false;
       pinchDistance = spread().distance;
       travelled = Number.POSITIVE_INFINITY; // a pinch is never a tap
     }
@@ -47,7 +58,10 @@ export function attachInput(element: HTMLElement, renderer: MapRenderer, handler
     const previous = pointers.get(event.pointerId);
     if (!previous) return;
     const point = local(event);
-    if (pointers.size === 1) {
+    if (stroking) {
+      pointers.set(event.pointerId, point);
+      handlers.stroke.move(point);
+    } else if (pointers.size === 1) {
       renderer.panBy(point.x - previous.x, point.y - previous.y);
       travelled += Math.hypot(point.x - previous.x, point.y - previous.y);
       pointers.set(event.pointerId, point);
@@ -63,17 +77,13 @@ export function attachInput(element: HTMLElement, renderer: MapRenderer, handler
   const up = (event: PointerEvent) => {
     const point = pointers.get(event.pointerId);
     pointers.delete(event.pointerId);
-    if (!point || pointers.size > 0 || travelled >= TAP_DISTANCE) return;
-    const now = performance.now();
-    if (
-      now - lastTap.at < DOUBLE_TAP_MS &&
-      Math.hypot(point.x - lastTap.x, point.y - lastTap.y) < DOUBLE_TAP_DISTANCE
-    ) {
-      lastTap = { at: Number.NEGATIVE_INFINITY, x: 0, y: 0 };
-      handlers.doubleTap(point);
+    if (stroking) {
+      stroking = false;
+      if (event.type === "pointercancel") handlers.stroke.cancel();
+      else handlers.stroke.end();
       return;
     }
-    lastTap = { at: now, ...point };
+    if (!point || pointers.size > 0 || travelled >= TAP_DISTANCE) return;
     handlers.tap(renderer.pick(point.x, point.y), point, event.shiftKey || event.ctrlKey || event.metaKey);
   };
   const wheel = (event: WheelEvent) => {
@@ -87,7 +97,13 @@ export function attachInput(element: HTMLElement, renderer: MapRenderer, handler
   element.addEventListener("pointerup", up);
   element.addEventListener("pointercancel", up);
   element.addEventListener("wheel", wheel, { passive: false });
+  // While brushing, the right button pans the map instead of opening a menu.
+  const menu = (event: Event) => {
+    if (handlers.brushing()) event.preventDefault();
+  };
+  element.addEventListener("contextmenu", menu);
   return () => {
+    element.removeEventListener("contextmenu", menu);
     element.removeEventListener("pointerdown", down);
     element.removeEventListener("pointermove", move);
     element.removeEventListener("pointerup", up);

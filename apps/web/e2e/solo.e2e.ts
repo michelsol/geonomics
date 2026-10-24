@@ -48,8 +48,10 @@ test("a solo game runs, pauses, and takes commands", async ({ page }) => {
   }
   expect(await page.getByTestId("area-name").textContent()).not.toBe(capital);
 
-  // Policies open on the production tax; the slider sets a realm-wide rate.
+  // Policies open on the production tax; with nothing selected, the slider sets a realm-wide rate.
   await openTab(page, "Policies");
+  await page.getByRole("button", { name: "Clear", exact: true }).click();
+  await expect(page.getByTestId("action-target")).toHaveText("Actions: your whole realm");
   await expect(page.getByLabel("Policy", { exact: true })).toHaveValue("productionTaxRate");
   await page.getByLabel("Policy level").fill("10");
   await expect(page.getByLabel("Policy value")).toHaveValue("10");
@@ -57,8 +59,9 @@ test("a solo game runs, pauses, and takes commands", async ({ page }) => {
   await expect(page.getByTestId("policies")).toContainText("Production tax · all goods");
   await expect(page.getByTestId("policies")).toContainText("10%");
 
-  // A realm head tax, set for all areas, shows up as the tax in force.
-  await page.getByLabel("Policy area").selectOption("-1");
+  await expect(page.getByTestId("policies").locator("th", { hasText: "Only in" })).toHaveCount(0);
+
+  // A realm head tax shows up as the tax in force.
   await page.getByLabel("Policy", { exact: true }).selectOption("headTaxPerPersonPerDay");
   await page.getByLabel("Policy value").fill("0.25");
   await page.getByRole("button", { name: "Set", exact: true }).click();

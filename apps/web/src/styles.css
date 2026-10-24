@@ -312,6 +312,36 @@ input[type="number"] {
   border-bottom-color: var(--accent);
   background: none;
 }
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.selection-what {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+}
+.selection-what > div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.selection-name {
+  font-weight: 600;
+}
+.selection-bar .group {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.selection-bar button.icon {
+  font-size: 18px;
+  line-height: 1;
+}
 .panel {
   flex: 1;
   overflow-y: auto;
@@ -568,7 +598,8 @@ th button.sort:hover {
     padding: max(4px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) 4px
       max(8px, env(safe-area-inset-left));
   }
-  .topbar .hide-phone {
+  .topbar .hide-phone,
+  .mode-banner .hide-phone {
     display: none;
   }
   button,
@@ -620,7 +651,7 @@ th button.sort:hover {
     padding-bottom: env(safe-area-inset-bottom);
   }
   .side.peek {
-    height: 112px;
+    height: 128px;
   }
   .side.half {
     height: 50%;
@@ -645,15 +676,15 @@ th button.sort:hover {
     background: var(--line);
   }
   .legend {
-    bottom: 122px;
+    bottom: 138px;
   }
   /* Above the peeking sheet, like the toasts. */
   .legends {
-    bottom: 122px;
+    bottom: 138px;
     max-width: calc(100vw - 20px);
   }
   .toasts {
-    bottom: 122px;
+    bottom: 138px;
   }
 }
 @media (min-width: 900px) {

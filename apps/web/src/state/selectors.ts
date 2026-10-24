@@ -194,20 +194,28 @@ export interface Point {
   y: number;
 }
 
-/** Areas whose center lies inside a polygon given by its corners, in map units (even-odd rule). */
-export function areasInPolygon(data: StaticData, corners: readonly Point[]): number[] {
-  if (corners.length < 3) return [];
-  const inside: number[] = [];
+/** Areas whose center lies within `radius` of a point, in map units. */
+export function areasNear(data: StaticData, point: Point, radius: number): number[] {
+  const near: number[] = [];
   for (const [id, area] of data.areas.entries()) {
-    let odd = false;
-    for (let i = 0, j = corners.length - 1; i < corners.length; j = i++) {
-      const a = corners[i] as Point;
-      const b = corners[j] as Point;
-      if (a.y > area.y !== b.y > area.y && area.x < ((b.x - a.x) * (area.y - a.y)) / (b.y - a.y) + a.x) odd = !odd;
-    }
-    if (odd) inside.push(id);
+    if ((area.x - point.x) ** 2 + (area.y - point.y) ** 2 <= radius * radius) near.push(id);
   }
-  return inside;
+  return near;
+}
+
+/** What the player's actions apply to (specification §10, Selection). */
+export interface ActionTarget {
+  /** True when none or all of the player's areas are selected: the actions are realm-wide. */
+  realm: boolean;
+  /** The player's selected areas, or all of them for the realm. */
+  areas: number[];
+}
+
+export function actionTarget(government: GovernmentView, selection: readonly number[]): ActionTarget {
+  const owned = new Set(government.ownedAreas);
+  const own = selection.filter((area) => owned.has(area));
+  const realm = own.length === 0 || own.length === owned.size;
+  return { realm, areas: realm ? [...government.ownedAreas] : own };
 }
 
 /**

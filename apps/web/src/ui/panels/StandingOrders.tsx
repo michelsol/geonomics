@@ -1,6 +1,8 @@
-// Standing orders: automation rules that buy and sell on the realm's markets every tick (specification §6).
+// Standing orders: automation rules that buy and sell on the realm's markets every tick (specification §6). A new one
+// applies to the selection's own areas, or to every area, including future ones, when the actions are realm-wide.
 import type { StandingRule } from "@geonomics/sim";
 import { useState } from "react";
+import { actionTarget } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { fmt, NumberField, Section, Select } from "../components";
 import { goodOptions, useSend, useView } from "./common";
@@ -22,23 +24,18 @@ const RULE_LABELS: Record<RuleKind, [string, string | null]> = {
 export function StandingOrders() {
   const view = useView();
   const send = useSend();
-  const selected = useGame((state) => state.selectedArea);
   const selection = useGame((state) => state.selection);
   const [rule, setRule] = useState({
     kind: "keepDepotStock" as RuleKind,
     good: 0,
     a: 10,
     b: 5,
-    scope: "all" as "all" | "area" | "selection",
   });
   if (!view) return null;
   const { data, government } = view;
   const goodName = (g: number) => data.goods[g]?.name ?? "?";
-  const scopeArea = selected !== null && government.ownedAreas.includes(selected) ? selected : government.capital;
-  const ownSelected = selection.filter((a) => government.ownedAreas.includes(a));
-  const scope = rule.scope === "selection" && ownSelected.length < 2 ? "area" : rule.scope;
-  const ruleAreas = (): number[] | "all" =>
-    scope === "all" || scopeArea === null ? "all" : scope === "selection" ? ownSelected : [scopeArea];
+  const target = actionTarget(government, selection);
+  const ruleAreas: number[] | "all" = target.realm ? "all" : target.areas;
 
   const buildRule = (): StandingRule => {
     switch (rule.kind) {
@@ -100,24 +97,12 @@ export function StandingOrders() {
             onChange={(b) => setRule({ ...rule, b })}
           />
         )}
-        <Select
-          label="Rule scope"
-          value={scope}
-          options={[
-            { value: "all", label: "All areas" },
-            ...(ownSelected.length >= 2
-              ? [{ value: "selection" as const, label: `Selection (${ownSelected.length} areas)` }]
-              : []),
-            { value: "area", label: scopeArea === null ? "This area" : `${data.areas[scopeArea]?.name} only` },
-          ]}
-          onChange={(scope) => setRule({ ...rule, scope })}
-        />
         <button
           type="button"
           onClick={() =>
             send({
               type: "addStandingOrder",
-              order: { areas: ruleAreas(), rule: buildRule() },
+              order: { areas: ruleAreas, rule: buildRule() },
             })
           }
         >

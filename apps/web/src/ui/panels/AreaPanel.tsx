@@ -1,17 +1,12 @@
 // The selected areas, one or several (specification §10, Selection): their figures and defense in one grid, natural
 // resources, a sortable market table, the depot, and one good across the world. Explanations show on hover.
 import { useState } from "react";
-import { mapControls } from "../../map/MapView";
 import { type ConquestEstimate, conquestEstimate, type MarketRow, selectionSummary } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { count, fmt, pct, Section, Stat, Swatch } from "../components";
 import { areaName, usePublicView } from "./common";
 import { Depots } from "./Depots";
 import { GoodSection } from "./GoodSection";
-
-const SELECTING =
-  "Click an area to select it. Double-click or double-tap the map to draw a region: tap its corners, then the first " +
-  "one again. Shift-click adds or removes one area.";
 
 export function AreaPanel() {
   const view = usePublicView();
@@ -20,59 +15,15 @@ export function AreaPanel() {
   return <SelectionView areas={selection} />;
 }
 
-/** Selects every area of the player's realm, for its totals and realm-wide actions. */
-function SelectRealm() {
-  const owned = useGame((state) => state.snapshot?.government?.ownedAreas);
-  const selectAreas = useGame((state) => state.selectAreas);
-  if (!owned || owned.length < 2) return null;
-  return (
-    <button type="button" onClick={() => selectAreas(owned)}>
-      My realm
-    </button>
-  );
-}
-
 /** One area or several: totals, population-weighted means, and what it takes to conquer them. */
 function SelectionView({ areas }: { areas: number[] }) {
   const view = usePublicView();
   const table = useGame((state) => state.priceTable);
-  const selectArea = useGame((state) => state.selectArea);
   if (!view) return null;
   const { data, snapshot, government } = view;
   const single = areas.length === 1 ? (areas[0] as number) : null;
-  const center = () => {
-    const targets = areas.length > 0 ? areas : government && government.capital !== null ? [government.capital] : [];
-    if (targets.length === 0) return;
-    let x = 0;
-    let y = 0;
-    for (const area of targets) {
-      x += data.areas[area]?.x ?? 0;
-      y += data.areas[area]?.y ?? 0;
-    }
-    mapControls.renderer?.centerOnPoint(x / targets.length, y / targets.length);
-  };
-  const header = (
-    <Section
-      title="Area"
-      hint={SELECTING}
-      actions={
-        <>
-          <SelectRealm />
-          <button type="button" onClick={center}>
-            Center
-          </button>
-          {areas.length > 1 && (
-            <button type="button" onClick={() => selectArea(null)}>
-              Clear
-            </button>
-          )}
-        </>
-      }
-    >
-      {areas.length === 0 && <p className="muted">No area selected.</p>}
-    </Section>
-  );
-  if (areas.length === 0) return header;
+  if (areas.length === 0)
+    return <p className="muted">No area selected: tap one on the map, or paint several with the Brush.</p>;
 
   const summary = selectionSummary(data, snapshot, table, areas);
   const hoursPerDay = data.config.economy.hoursPerWorkerDay;
@@ -98,7 +49,6 @@ function SelectionView({ areas }: { areas: number[] }) {
   return (
     <>
       <section className="section">
-        {header}
         {static_ ? (
           <>
             <h2 data-testid="area-name">{static_.name}</h2>
