@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { actionTarget, policiesInForce } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { fmt, NumberField, Select } from "../components";
-import { areaName, useSend, useView } from "./common";
+import { areaName, goodOptions, NoOwnArea, useSend, useView } from "./common";
 
 const POLICIES: { value: PolicyName; label: string; rate: boolean }[] = [
   { value: "productionTaxRate", label: "Production tax", rate: true },
@@ -130,55 +130,61 @@ export function PolicyEditor() {
         </tbody>
       </table>
 
-      <div className="row">
-        <Select label="Policy" value={policy} options={POLICIES} onChange={setPolicy} />
-        {perGood && (
-          <Select
-            label="Policy good"
-            value={good}
-            options={[{ value: ALL, label: "All goods" }, ...data.goods.map((g) => ({ value: g.id, label: g.name }))]}
-            onChange={setGood}
-          />
-        )}
-      </div>
-      {slider && (
-        <input
-          type="range"
-          className="policy-slider"
-          aria-label="Policy level"
-          min={slider.min}
-          max={slider.max}
-          step={slider.step}
-          value={Math.min(slider.max, Math.max(slider.min, value))}
-          onChange={(event) => setValue(Number(event.target.value))}
-        />
+      {target.areas.length === 0 ? (
+        <NoOwnArea />
+      ) : (
+        <>
+          <div className="row">
+            <Select label="Policy" value={policy} options={POLICIES} onChange={setPolicy} />
+            {perGood && (
+              <Select
+                label="Policy good"
+                value={good}
+                options={[{ value: ALL, label: "All goods" }, ...goodOptions(data)]}
+                onChange={setGood}
+              />
+            )}
+          </div>
+          {slider && (
+            <input
+              type="range"
+              className="policy-slider"
+              aria-label="Policy level"
+              min={slider.min}
+              max={slider.max}
+              step={slider.step}
+              value={Math.min(slider.max, Math.max(slider.min, value))}
+              onChange={(event) => setValue(Number(event.target.value))}
+            />
+          )}
+          <div className="row">
+            <NumberField label="Policy value" value={value} onChange={setValue} />
+            <span className="muted">
+              {isRate(policy)
+                ? "% (negative: a subsidy)"
+                : policy === "headTaxPerPersonPerDay"
+                  ? "mh per person per day (negative: paid to each person)"
+                  : `mh per unit${perGood && good !== ALL ? `, labor value ${fmt(data.goods[good]?.laborValue ?? 0)}` : ""}`}
+            </span>
+            <button type="button" className="primary" onClick={apply}>
+              Set
+            </button>
+          </div>
+          <div className="muted">
+            In force for this choice:{" "}
+            {varies ? "varies by area" : isRate(policy) ? `${fmt(100 * current)}%` : `${fmt(current)} mh`}
+          </div>
+          <div className="row muted" data-testid="head-tax">
+            Head tax in force{" "}
+            {target.realm
+              ? "across the realm"
+              : targetAreas.length > 1
+                ? "in the selection, on average"
+                : `in ${areaName(data, targetAreas[0] as number)}`}
+            : {fmt(headTax)} mh per person per day
+          </div>
+        </>
       )}
-      <div className="row">
-        <NumberField label="Policy value" value={value} onChange={setValue} />
-        <span className="muted">
-          {isRate(policy)
-            ? "% (negative: a subsidy)"
-            : policy === "headTaxPerPersonPerDay"
-              ? "mh per person per day (negative: paid to each person)"
-              : `mh per unit${perGood && good !== ALL ? `, labor value ${fmt(data.goods[good]?.laborValue ?? 0)}` : ""}`}
-        </span>
-        <button type="button" className="primary" onClick={apply}>
-          Set
-        </button>
-      </div>
-      <div className="muted">
-        In force for this choice:{" "}
-        {varies ? "varies by area" : isRate(policy) ? `${fmt(100 * current)}%` : `${fmt(current)} mh`}
-      </div>
-      <div className="row muted" data-testid="head-tax">
-        Head tax in force{" "}
-        {target.realm
-          ? "across the realm"
-          : targetAreas.length > 1
-            ? "in the selection, on average"
-            : `in ${areaName(data, targetAreas[0] as number)}`}
-        : {fmt(headTax)} mh per person per day
-      </div>
       <p className="hint">
         A setting for one good beats one for all goods; a setting for one area beats the realm's. Negative production
         taxes are subsidies.

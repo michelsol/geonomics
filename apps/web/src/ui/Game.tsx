@@ -26,7 +26,7 @@ import {
   transportFlows,
 } from "../state/selectors";
 import { gameStore, type PanelName, useGame } from "../state/store";
-import { count, fmt, Select } from "./components";
+import { count, fmt } from "./components";
 import { AreaPanel } from "./panels/AreaPanel";
 import { ArmiesPanel } from "./panels/ArmiesPanel";
 import type { PanelProps } from "./panels/common";
@@ -358,11 +358,9 @@ function FlowLegend() {
   const flows = useGame((state) => state.flows);
   const snapshot = useGame((state) => state.snapshot);
   const data = useGame((state) => state.data);
-  const allGoods = useGame((state) => state.transportAllGoods);
   const selectedGood = useGame((state) => state.selectedGood);
   // Derived here, not in the selector: a selector returning a fresh object would re-render forever.
-  const transport = transportFlows({ snapshot, transportAllGoods: allGoods, selectedGood });
-  const setTransportGood = useGame((state) => state.setTransportGood);
+  const transport = transportFlows({ snapshot, selectedGood });
   switch (flows) {
     case "none":
       return null;
@@ -378,26 +376,17 @@ function FlowLegend() {
         </div>
       );
     case "transport": {
-      const info = transport.good === null ? undefined : data?.goods[transport.good];
-      const options = [
-        { value: -1, label: "All goods (tonnes)" },
-        ...(data?.goods ?? []).filter((g) => !g.isService).map((g) => ({ value: g.id, label: g.name })),
-      ];
-      const service = !allGoods && data?.goods[selectedGood]?.isService;
+      const info = data?.goods[transport.good];
       return (
-        <div className="legend interactive" data-testid="flow-legend">
-          <div>Goods carried per day, each direction</div>
-          <Select
-            label="Transported good"
-            value={allGoods || service ? -1 : selectedGood}
-            options={options}
-            onChange={(value) => setTransportGood(value < 0 ? "all" : value)}
-          />
-          {transport.flows ? (
+        <div className="legend" data-testid="flow-legend">
+          <div>{info?.name} carried per day, each direction</div>
+          {info?.isService ? (
+            <div className="muted">Services are not carried between areas</div>
+          ) : transport.flows ? (
             <FlowScale
               color={TRANSPORT_ARROW}
               maximum={flowMaximum(transport.flows)}
-              unit={info ? `× ${info.unit} per day` : "t/day"}
+              unit={`× ${info?.unit} per day`}
             />
           ) : (
             <div className="muted">Waiting for the next snapshot…</div>

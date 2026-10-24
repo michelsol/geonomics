@@ -5,7 +5,7 @@ import { useState } from "react";
 import { actionTarget } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { fmt, NumberField, Section, Select } from "../components";
-import { goodOptions, useSend, useView } from "./common";
+import { goodOptions, NoOwnArea, storable, useSend, useView } from "./common";
 
 type RuleKind = StandingRule["kind"];
 
@@ -73,46 +73,52 @@ export function StandingOrders() {
           </span>
         </div>
       ))}
-      <div className="row">
-        <Select label="Rule" value={rule.kind} options={RULES} onChange={(kind) => setRule({ ...rule, kind })} />
-        <Select
-          label="Rule good"
-          value={rule.good}
-          options={goodOptions(data, true)}
-          onChange={(good) => setRule({ ...rule, good })}
-        />
-      </div>
-      <div className="row">
-        <NumberField
-          label={RULE_LABELS[rule.kind][0]}
-          value={rule.a}
-          min={0}
-          onChange={(a) => setRule({ ...rule, a })}
-        />
-        {RULE_LABELS[rule.kind][1] && (
-          <NumberField
-            label={RULE_LABELS[rule.kind][1] as string}
-            value={rule.b}
-            min={0}
-            onChange={(b) => setRule({ ...rule, b })}
-          />
-        )}
-        <button
-          type="button"
-          onClick={() =>
-            send({
-              type: "addStandingOrder",
-              order: { areas: ruleAreas, rule: buildRule() },
-            })
-          }
-        >
-          Add
-        </button>
-      </div>
-      <span className="muted">
-        {RULE_LABELS[rule.kind][0]}
-        {RULE_LABELS[rule.kind][1] ? ` · ${RULE_LABELS[rule.kind][1]}` : ""}
-      </span>
+      {target.areas.length === 0 ? (
+        <NoOwnArea />
+      ) : (
+        <>
+          <div className="row">
+            <Select label="Rule" value={rule.kind} options={RULES} onChange={(kind) => setRule({ ...rule, kind })} />
+            <Select
+              label="Rule good"
+              value={rule.good}
+              options={goodOptions(data, storable)}
+              onChange={(good) => setRule({ ...rule, good })}
+            />
+          </div>
+          <div className="row">
+            <NumberField
+              label={RULE_LABELS[rule.kind][0]}
+              value={rule.a}
+              min={0}
+              onChange={(a) => setRule({ ...rule, a })}
+            />
+            {RULE_LABELS[rule.kind][1] && (
+              <NumberField
+                label={RULE_LABELS[rule.kind][1] as string}
+                value={rule.b}
+                min={0}
+                onChange={(b) => setRule({ ...rule, b })}
+              />
+            )}
+            <button
+              type="button"
+              onClick={() =>
+                send({
+                  type: "addStandingOrder",
+                  order: { areas: ruleAreas, rule: buildRule() },
+                })
+              }
+            >
+              Add
+            </button>
+          </div>
+          <span className="muted">
+            {RULE_LABELS[rule.kind][0]}
+            {RULE_LABELS[rule.kind][1] ? ` · ${RULE_LABELS[rule.kind][1]}` : ""}
+          </span>
+        </>
+      )}
     </Section>
   );
 }

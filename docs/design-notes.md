@@ -387,3 +387,11 @@ The prices layer first colored a good's price against its labor value, at full c
 ### Income and real income
 
 Starving areas could show high wages: food is dear, so a worker's output is worth many man-hours, which buy little locally. The income map therefore shows real income, income over the local cost of living, and a test run confirmed that starving areas then come out the poorest (a real income a sixth of the median or less). The interface calls the wage level income: with no capital or profits, value added per worker is all a worker earns. Jobs and Armies keep the nominal income, since workers compare government wage offers and soldiers their pay with it.
+
+### No stand-in for a foreign selection
+
+Actions first fell back to the whole realm whenever the selection held none of the player's areas, so selecting a neighbor's area and opening Jobs showed the realm's employment, which read as the neighbor's. A selection of others' areas now has no target, and the action panels say so; the realm stays one tap away with Clear. An empty selection still means the whole realm, so realm-wide actions need no extra step.
+
+### One good's transport flows
+
+The transport flows first had their own good choice in the legend, with "all goods in tonnes" as the default, apart from the Goods panel's good. The flows now show the Goods panel's good, so the prices, their history and the arrows all describe the same good, and the legend no longer needs a control.

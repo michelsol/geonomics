@@ -54,11 +54,13 @@ export function SelectionBar() {
             Actions:{" "}
             {target.realm
               ? "your whole realm"
-              : single !== null
-                ? areaName(data, single)
-                : yours === 1
-                  ? "your 1 area"
-                  : `your ${count(yours)} areas`}
+              : target.areas.length === 0
+                ? "none of your areas"
+                : single !== null
+                  ? areaName(data, single)
+                  : yours === 1
+                    ? "your 1 area"
+                    : `your ${count(yours)} areas`}
           </div>
         )}
       </div>

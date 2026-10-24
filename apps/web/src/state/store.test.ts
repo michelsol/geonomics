@@ -183,20 +183,19 @@ describe("game store", () => {
     expect(median).toBeLessThanOrEqual(high as number);
   });
 
-  it("asks for one good's trade flows only while the transport flows show it, whatever the area layer", () => {
+  it("asks for the selected good's trade flows only while the transport flows show", () => {
     const { state, sent } = setup();
     state().chooseRealm(0);
     const flowGoods = () => sent.flatMap((m) => (m.type === "setFlowGood" ? [m.good] : []));
-    state().setFlows("transport");
-    expect(flowGoods()).toEqual([]); // all goods: tonnage needs no request
-    state().setTransportGood(2);
-    expect(state().selectedGood).toBe(2);
-    state().setLayer("population"); // the area layer does not change the flows
-    state().selectGood(3);
-    state().setFlows("migration");
-    state().setTransportGood("all");
-    expect(flowGoods()).toEqual([2, 3, null]);
-    expect(state().layer).toBe("population");
+    const first = state().selectedGood;
+    state().selectGood(first === 2 ? 3 : 2);
+    expect(flowGoods()).toEqual([]); // no flows shown: nothing to ask for
+    const chosen = state().selectedGood;
+    state().openPanel("goods");
+    state().setShowTransport(true);
+    state().selectGood(4);
+    state().openPanel("area");
+    expect(flowGoods()).toEqual([chosen, 4, null]);
   });
 
   it("shows each panel's map layer, and its flows while their checkbox is on", () => {

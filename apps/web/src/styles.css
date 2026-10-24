@@ -414,6 +414,9 @@ td {
 tr.chosen td {
   background: var(--surface-2);
 }
+tr.chosen-row td {
+  font-weight: 600;
+}
 .list-item {
   padding: 8px;
   background: var(--surface-2);

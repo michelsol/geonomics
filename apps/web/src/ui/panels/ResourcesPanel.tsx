@@ -3,7 +3,7 @@
 import { capacityMaximum, selectionSummary } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { fmt, pct, Section, Select } from "../components";
-import { AreaLink, usePublicView } from "./common";
+import { AreaLink, goodOptions, usePublicView } from "./common";
 
 const RICHEST = 5;
 
@@ -14,7 +14,6 @@ export function ResourcesPanel() {
   const selectResource = useGame((state) => state.selectResource);
   if (!view) return <p className="muted">Waiting for the first snapshot…</p>;
   const { data } = view;
-  const primary = data.goods.filter((good) => good.isPrimary);
   const info = data.goods[resource];
   const richest = data.areas
     .map((_, area) => ({ area, capacity: capacityMaximum(data, area, resource) }))
@@ -28,7 +27,7 @@ export function ResourcesPanel() {
         <Select
           label="Resource"
           value={resource}
-          options={primary.map((good) => ({ value: good.id, label: good.name }))}
+          options={goodOptions(data, (good) => good.isPrimary)}
           onChange={selectResource}
         />
         {info && (

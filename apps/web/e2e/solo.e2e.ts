@@ -162,15 +162,17 @@ test("each panel shows its map layer, and flows when its checkbox is on", async 
   await expect(legend.locator(".ends span")).toHaveCount(3); // lowest, median and highest on the map
   await expect(flowLegend).toHaveCount(0); // migration belongs to the Population panel
   await page.getByLabel("Show transport flows").check();
-  await expect(flowLegend).toContainText("Goods carried per day");
-  await expect(flowLegend).toContainText("t/day");
-  // One good, in its own unit, then back to every good.
-  const good = page.getByLabel("Transported good");
-  const first = (await good.locator("option").nth(1).getAttribute("value")) as string;
-  await good.selectOption(first);
-  await expect(flowLegend).not.toContainText("t/day", { timeout: 5000 });
-  await good.selectOption("-1");
-  await expect(flowLegend).toContainText("t/day");
+  // The flows are the chosen good's, which the legend names; another good changes them.
+  const good = page.getByLabel("Good", { exact: true });
+  await expect(flowLegend).toContainText(`${await good.locator("option:checked").textContent()} carried per day`);
+  await expect(page.getByLabel("Transported good")).toHaveCount(0);
+  const other = good.locator("option:not(:checked)").first();
+  const otherName = (await other.textContent()) as string;
+  await good.selectOption((await other.getAttribute("value")) as string);
+  await expect(flowLegend).toContainText(`${otherName} carried per day`);
+  // Goods are listed by name.
+  const names = await good.locator("option").allTextContents();
+  expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
 
   await openTab(page, "Needs");
   await expect(legend).toContainText("Necessities met");
@@ -203,6 +205,46 @@ test("a good in the market table opens it in the Goods panel", async ({ page }) 
   await expect(page.getByRole("navigation").getByRole("button", { name: "Goods", exact: true })).toHaveClass(/active/);
   await expect(page.getByLabel("Good", { exact: true }).locator("option:checked")).toHaveText(name);
   await expect(page.getByTestId("price-low")).toBeVisible();
+  // The selection's price comes first among the prices across the world.
+  await expect(page.locator("tr.chosen-row").first()).toBeVisible();
+  await expect(
+    page
+      .locator("table")
+      .filter({ has: page.getByTestId("price-low") })
+      .locator("tbody tr")
+      .first(),
+  ).toHaveClass(/chosen-row/);
+});
+
+test("a selection with none of your areas has no action target", async ({ page }) => {
+  await startGame(page);
+  const canvas = page.getByTestId("map-canvas");
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("map canvas has no size");
+  const target = page.getByTestId("action-target");
+  // Walk out from the capital, at the center, until a click lands on another realm's area.
+  search: for (let radius = 40; radius < Math.min(box.width, box.height) / 2; radius += 25) {
+    for (let step = 0; step < 12; step++) {
+      const angle = (step * Math.PI) / 6;
+      const x = box.width / 2 + radius * Math.cos(angle);
+      const y = box.height / 2 + radius * Math.sin(angle);
+      if (x < 10 || x > box.width - 10 || y < 10 || y > box.height - 180) continue; // the phone's sheet covers the bottom
+      await canvas.click({ position: { x, y } });
+      if ((await target.textContent()) === "Actions: none of your areas") break search;
+    }
+  }
+  await expect(target).toHaveText("Actions: none of your areas");
+  await openTab(page, "Jobs");
+  await expect(page.getByTestId("no-own-area")).toBeVisible();
+  await expect(page.getByTestId("employment-bar")).toHaveCount(0);
+  await openTab(page, "Policies");
+  await expect(page.getByTestId("no-own-area").first()).toBeVisible();
+  await expect(page.getByTestId("policy-income")).toHaveCount(0);
+  await page.getByRole("button", { name: "Clear", exact: true }).click();
+  await expect(target).toHaveText("Actions: your whole realm");
+  await expect(page.getByTestId("policy-income")).toBeVisible();
+  await openTab(page, "Jobs");
+  await expect(page.getByTestId("employment-bar")).toBeVisible();
 });
 
 test("rejected commands are explained", async ({ page }) => {

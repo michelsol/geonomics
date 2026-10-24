@@ -37,7 +37,7 @@ export function GoodsPanel() {
         </div>
         <Checkbox
           label="Show transport flows"
-          title="Arrows on the map for the goods carried between areas: every good in tonnes, or one good, chosen in the legend"
+          title="Arrows on the map for this good carried between areas"
           checked={showTransport}
           onChange={setShowTransport}
         />
@@ -47,6 +47,15 @@ export function GoodsPanel() {
         <Section title="Prices across the world">
           <table>
             <tbody>
+              {selection.length > 0 && table && (
+                <tr className="chosen-row">
+                  <td>{selectedLabel}</td>
+                  <td className="num" data-testid="price-selected">
+                    {fmt(meanPrices(data, table, selection)[good] as number)}
+                  </td>
+                  <td className="muted">selected</td>
+                </tr>
+              )}
               {(["low", "median", "high"] as const).map((key) => (
                 <tr key={key}>
                   <td>{key === "low" ? "Lowest" : key === "median" ? "Median" : "Highest"}</td>
@@ -58,13 +67,6 @@ export function GoodsPanel() {
                   </td>
                 </tr>
               ))}
-              {selection.length > 0 && table && (
-                <tr>
-                  <td>{selectedLabel}</td>
-                  <td className="num">{fmt(meanPrices(data, table, selection)[good] as number)}</td>
-                  <td className="muted">selected</td>
-                </tr>
-              )}
             </tbody>
           </table>
         </Section>

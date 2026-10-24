@@ -3,7 +3,7 @@
 import { actionTarget, selectionSummary } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { fmt, Section, Stat } from "../components";
-import { areaName, IncomeStats, useView } from "./common";
+import { areaName, IncomeStats, NoOwnArea, useView } from "./common";
 import { PolicyEditor } from "./PolicyEditor";
 import { StandingOrders } from "./StandingOrders";
 
@@ -27,6 +27,7 @@ function TargetFigures() {
   if (!view) return null;
   const { data, snapshot, government } = view;
   const target = actionTarget(government, selection);
+  if (target.areas.length === 0) return <NoOwnArea />;
   const summary = selectionSummary(data, snapshot, table, target.areas);
   const heading = target.realm
     ? "Your realm"

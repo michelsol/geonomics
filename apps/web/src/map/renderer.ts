@@ -149,7 +149,7 @@ export class MapRenderer {
       this.drawRoutes(state, px);
       this.drawn.routes = routeInputs;
     }
-    const flowInputs = [state.flows, state.snapshot, state.transportAllGoods, state.selectedGood, this.lineScale];
+    const flowInputs = [state.flows, state.snapshot, state.selectedGood, this.lineScale];
     if (changed(this.drawn.flows, flowInputs)) {
       this.drawFlows(state, px);
       this.drawn.flows = flowInputs;

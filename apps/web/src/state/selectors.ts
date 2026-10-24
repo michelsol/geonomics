@@ -238,16 +238,12 @@ export function flowMaximum(flows: ArrayLike<number>): number {
   return maximum;
 }
 
-/** What the transport layer shows: one good's units per day, or every good's tonnes per day. */
-export function transportFlows(state: {
-  snapshot: Snapshot | null;
-  transportAllGoods: boolean;
-  selectedGood: number;
-}): { flows: Float32Array | null; good: number | null } {
-  const edges = state.snapshot?.edges;
-  if (!edges) return { flows: null, good: null };
-  if (state.transportAllGoods) return { flows: edges.tonnage, good: null };
-  return { flows: edges.goodFlow, good: state.selectedGood };
+/** What the transport flows show: the selected good's units carried per day, once a snapshot carries them. */
+export function transportFlows(state: { snapshot: Snapshot | null; selectedGood: number }): {
+  flows: Float32Array | null;
+  good: number;
+} {
+  return { flows: state.snapshot?.edges.goodFlow ?? null, good: state.selectedGood };
 }
 
 /** Policies in force in one of the government's areas, resolved from its settings as the host does. */
@@ -275,15 +271,16 @@ export function areasNear(data: StaticData, point: Point, radius: number): numbe
 
 /** What the player's actions apply to (specification §10, Selection). */
 export interface ActionTarget {
-  /** True when none or all of the player's areas are selected: the actions are realm-wide. */
+  /** True when nothing or all of the player's areas are selected: the actions are realm-wide. */
   realm: boolean;
-  /** The player's selected areas, or all of them for the realm. */
+  /** The player's selected areas, or all of them for the realm; none when only others' areas are selected. */
   areas: number[];
 }
 
 export function actionTarget(government: GovernmentView, selection: readonly number[]): ActionTarget {
   const owned = new Set(government.ownedAreas);
   const own = selection.filter((area) => owned.has(area));
+  if (selection.length > 0 && own.length === 0) return { realm: false, areas: [] };
   const realm = own.length === 0 || own.length === owned.size;
   return { realm, areas: realm ? [...government.ownedAreas] : own };
 }

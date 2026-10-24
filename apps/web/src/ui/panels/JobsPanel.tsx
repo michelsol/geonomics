@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { actionTarget, employmentOf, splitByPopulation } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { count, fmt, NumberField, pct, Section, Select } from "../components";
-import { areaName, useSend, useView, type View } from "./common";
+import { areaName, goodOptions, NoOwnArea, storable, useSend, useView, type View } from "./common";
 
 // Categorical slots 1 and 2 of the chart palette (dark steps), validated against the panel surface; the unemployed
 // are a neutral gray, since they are the absence of a job rather than a third kind of one.
@@ -40,7 +40,7 @@ export function JobsPanel() {
   const { data, government, snapshot } = view;
   const target = actionTarget(government, selection);
   const areas = target.areas;
-  if (areas.length === 0) return <p className="muted">You hold no area.</p>;
+  if (areas.length === 0) return <NoOwnArea />;
   const region = areas.length >= 2;
   const single = region ? null : (areas[0] as number);
   const population = snapshot.areas.population;
@@ -196,7 +196,7 @@ export function JobsPanel() {
             <Select
               label="Job good"
               value={job.good}
-              options={data.goods.filter((g) => !g.isService).map((g) => ({ value: g.id, label: g.name }))}
+              options={goodOptions(data, storable)}
               onChange={(good) => setJob({ ...job, good })}
             />
           )}

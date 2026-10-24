@@ -116,7 +116,6 @@ export interface GameState {
   flows: Flows;
   showTransport: boolean; // the Goods panel draws transport flows
   showMigration: boolean; // the Population panel draws migration flows
-  transportAllGoods: boolean; // transport flows show total tonnes, not the selected good
   mode: Mode;
   brush: Brush;
   peaceAreas: number[]; // areas picked on the map for a peace proposal
@@ -161,7 +160,6 @@ export interface GameState {
   setShowMigration(show: boolean): void;
   setLayer(layer: Layer): void;
   setFlows(flows: Flows): void;
-  setTransportGood(good: number | "all"): void;
   setMode(mode: Mode): void;
   togglePeaceArea(area: number): void;
   setPeaceAreas(areas: readonly number[]): void;
@@ -199,7 +197,6 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     flows: "none",
     showTransport: false,
     showMigration: false,
-    transportAllGoods: true,
     mode: { kind: "select" },
     brush: { erase: false, size: "M" },
     peaceAreas: [],
@@ -366,10 +363,6 @@ export function createGameStore(port: Port): StoreApi<GameState> {
       set({ flows });
       watchFlows();
     },
-    setTransportGood(good) {
-      set(good === "all" ? { transportAllGoods: true } : { transportAllGoods: false, selectedGood: good });
-      watchFlows();
-    },
     setMode(mode) {
       // Picking peace areas starts from an empty selection; the picks stay for the proposal form afterwards.
       set(mode.kind === "pickPeaceAreas" ? { mode, peaceAreas: [] } : { mode });
@@ -408,7 +401,6 @@ export function createGameStore(port: Port): StoreApi<GameState> {
             panel: "area",
             layer: "realms",
             flows: "none",
-            transportAllGoods: true,
             mode: { kind: "select" },
             peaceAreas: [],
           });
@@ -468,11 +460,11 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     },
   }));
 
-  // Snapshots carry one good's trade flows, only while the transport flows show that good.
+  // Snapshots carry one good's trade flows, the selected good's, only while the transport flows show.
   let watched: number | null = null;
   function watchFlows(): void {
-    const { flows, transportAllGoods, selectedGood } = store.getState();
-    const good = flows === "transport" && !transportAllGoods ? selectedGood : null;
+    const { flows, selectedGood } = store.getState();
+    const good = flows === "transport" ? selectedGood : null;
     if (good === watched) return;
     watched = good;
     port.postMessage({ type: "setFlowGood", good });

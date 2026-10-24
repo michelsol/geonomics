@@ -4,7 +4,7 @@ import { useState } from "react";
 import { actionTarget, realmWageLevel, splitByPopulation } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { count, fmt, NumberField, pct, Section, Stat, Swatch } from "../components";
-import { AreaLink, areaName, useSend, useView } from "./common";
+import { AreaLink, areaName, NoOwnArea, useSend, useView } from "./common";
 
 /**
  * Where recruits and weapon purchases go: the selection's own areas, split by population, or the capital when the
@@ -12,7 +12,7 @@ import { AreaLink, areaName, useSend, useView } from "./common";
  */
 function placesFor(government: GovernmentView, selection: readonly number[]): number[] {
   const target = actionTarget(government, selection);
-  if (!target.realm) return target.areas;
+  if (!target.realm) return target.areas; // none when the selection holds none of the player's areas
   const capital = government.capital ?? government.ownedAreas[0];
   return capital === undefined ? [] : [capital];
 }
@@ -54,8 +54,8 @@ export function ArmiesPanel() {
     <>
       <Section title="Soldiers">
         <div className="row">
-          <NumberField label="Recruits" value={recruits} min={1} onChange={setRecruits} />
-          <span className="muted">soldiers at</span>
+          {places.length > 0 && <NumberField label="Recruits" value={recruits} min={1} onChange={setRecruits} />}
+          <span className="muted">{places.length > 0 ? "soldiers at" : "Soldiers are paid"}</span>
           <span
             className="row"
             title="Paid to every soldier of the realm. Soldiers desert when paid less than the realm's average income, or when the treasury cannot pay them."
@@ -68,16 +68,18 @@ export function ArmiesPanel() {
             />
             <span className="muted">mh/day</span>
           </span>
-          <button
-            type="button"
-            className="primary"
-            title={`Recruits form an army ${placesText(data, places)}, and leave the workforce there.`}
-            disabled={places.length === 0}
-            onClick={() => recruitIn(recruits)}
-          >
-            Recruit
-          </button>
+          {places.length > 0 && (
+            <button
+              type="button"
+              className="primary"
+              title={`Recruits form an army ${placesText(data, places)}, and leave the workforce there.`}
+              onClick={() => recruitIn(recruits)}
+            >
+              Recruit
+            </button>
+          )}
         </div>
+        {places.length === 0 && <NoOwnArea />}
         <div className="stats">
           <Stat label="Soldiers" value={count(soldiers)} />
           <Stat label="Pay per day" value={`${fmt(bill)} mh`} testId="army-bill" />
@@ -156,43 +158,46 @@ function Weapons() {
           ))}
         </div>
       )}
-      <div className="row">
-        <NumberField
-          label="Weapons to buy"
-          value={buy.quantity}
-          min={0}
-          onChange={(quantity) => setBuy({ ...buy, quantity })}
-        />
-        <NumberField
-          label="Weapons limit price"
-          value={limit}
-          min={0}
-          onChange={(value) => setBuy({ ...buy, limit: value })}
-        />
-        <button
-          type="button"
-          title={`Bought ${placesText(data, places)}, into the depots there.`}
-          disabled={places.length === 0}
-          onClick={() =>
-            splitByPopulation(buy.quantity, places, view.snapshot.areas.population).forEach((quantity, i) => {
-              if (quantity < 1) return;
-              send({
-                type: "placeMarketOrder",
-                order: {
-                  area: places[i] as number,
-                  good: weapons,
-                  side: "buy",
-                  remainingQuantity: quantity,
-                  limitPrice: limit,
-                  maximumQuantityPerDay: Math.max(1, quantity / 5),
-                },
-              });
-            })
-          }
-        >
-          Buy
-        </button>
-      </div>
+      {places.length === 0 ? (
+        <NoOwnArea />
+      ) : (
+        <div className="row">
+          <NumberField
+            label="Weapons to buy"
+            value={buy.quantity}
+            min={0}
+            onChange={(quantity) => setBuy({ ...buy, quantity })}
+          />
+          <NumberField
+            label="Weapons limit price"
+            value={limit}
+            min={0}
+            onChange={(value) => setBuy({ ...buy, limit: value })}
+          />
+          <button
+            type="button"
+            title={`Bought ${placesText(data, places)}, into the depots there.`}
+            onClick={() =>
+              splitByPopulation(buy.quantity, places, view.snapshot.areas.population).forEach((quantity, i) => {
+                if (quantity < 1) return;
+                send({
+                  type: "placeMarketOrder",
+                  order: {
+                    area: places[i] as number,
+                    good: weapons,
+                    side: "buy",
+                    remainingQuantity: quantity,
+                    limitPrice: limit,
+                    maximumQuantityPerDay: Math.max(1, quantity / 5),
+                  },
+                });
+              })
+            }
+          >
+            Buy
+          </button>
+        </div>
+      )}
       <span className="hint">
         Nobody else uses {good.name.toLowerCase()}, so producers start making them once you buy (labor value{" "}
         {fmt(good.laborValue)} mh). Armies standing in your areas take them from the local depot, one per soldier; an

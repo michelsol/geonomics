@@ -31,14 +31,14 @@ describe("areas near a point", () => {
 });
 
 describe("the action target", () => {
-  it("is the selection's own areas, or the whole realm when it holds none or all of them", () => {
+  it("is the selection's own areas, the whole realm for nothing or all of them, and none for only others' areas", () => {
     const { world, state } = setup();
     const government = buildSnapshot(world, 0).government;
     if (!government) throw new Error("no government");
     const owned = government.ownedAreas;
     const foreign = world.areas.findIndex((area) => area.owner !== 0);
     expect(actionTarget(government, [])).toEqual({ realm: true, areas: owned });
-    expect(actionTarget(government, [foreign])).toEqual({ realm: true, areas: owned });
+    expect(actionTarget(government, [foreign])).toEqual({ realm: false, areas: [] });
     expect(actionTarget(government, [owned[0] as number, foreign])).toEqual({ realm: false, areas: [owned[0]] });
     expect(actionTarget(government, [...owned, foreign])).toEqual({ realm: true, areas: owned });
     expect(state().selection).toEqual([world.governments[0]?.capital]); // a game opens on the capital

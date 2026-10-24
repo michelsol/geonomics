@@ -48,11 +48,15 @@ export function shownAreas(
   return { areas: data.areas.map((_, area) => area), heading: "The world" };
 }
 
-export function goodOptions(data: StaticData, storableOnly = false) {
+/** Goods for a dropdown, sorted by name, optionally only those `keep` accepts. */
+export function goodOptions(data: StaticData, keep: (good: StaticData["goods"][number]) => boolean = () => true) {
   return data.goods
-    .filter((good) => !storableOnly || !good.isService)
-    .map((good) => ({ value: good.id, label: good.name }));
+    .filter(keep)
+    .map((good) => ({ value: good.id, label: good.name }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
+
+export const storable = (good: StaticData["goods"][number]) => !good.isService;
 
 /** Sends a command to the worker; the answer comes back as a snapshot or a rejection toast. */
 export function useSend() {
@@ -107,5 +111,14 @@ export function IncomeStats({
         title={`The local price of a typical basket of needs over its labor value: ×1 when needs cost what they take to make, more where they are dear.${mean}`}
       />
     </>
+  );
+}
+
+/** Shown by the action panels when the selection holds none of the player's areas: there is nothing to act on. */
+export function NoOwnArea() {
+  return (
+    <p className="muted" data-testid="no-own-area">
+      None of your areas is selected. Select some of yours, or clear the selection to act on your whole realm.
+    </p>
   );
 }
