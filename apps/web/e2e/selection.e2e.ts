@@ -56,7 +56,7 @@ test("regions drawn on the map select their areas, add up, and take actions", as
   await expect.poll(() => selected(page)).toBeGreaterThan(1);
   const whole = await selected(page);
   await expect(page.getByTestId("selection-name")).toHaveText(`${whole} areas`);
-  await expect(page.getByTestId("selection-population")).toBeVisible();
+  await expect(page.getByTestId("population")).toBeVisible();
 
   // A Remove polygon cuts the middle out; an Add polygon puts exactly that back.
   await lasso(canvas, small, true);

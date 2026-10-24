@@ -255,9 +255,12 @@ export interface SelectionSummary {
   necessitySatisfaction: number;
   militia: number;
   withDetail: number; // areas whose stocks and flows the snapshot carries
+  detailPopulation: number; // people in the areas with detail
   savings: number; // over the areas with detail
   unemployed: number;
   capacity: Float64Array; // per good: maximum natural capacity, summed
+  capacityNow: Float64Array; // per good: natural capacity left after depletion, over the areas with detail
+  extracted: Float64Array; // per good: primary output per day, over the areas with detail
   market: MarketRow[]; // per good
 }
 
@@ -271,6 +274,9 @@ export function selectionSummary(
   const goods = data.goods.length;
   const owners = new Map<number, number>();
   const capacity = new Float64Array(goods);
+  const capacityNow = new Float64Array(goods);
+  const extracted = new Float64Array(goods);
+  const days = data.config.pace.gameDaysPerTick;
   const market: MarketRow[] = data.goods.map(() => ({ price: 0, stock: 0, made: 0, used: 0, trade: 0 }));
   let population = 0;
   let wage = 0;
@@ -278,6 +284,7 @@ export function selectionSummary(
   let necessities = 0;
   let militia = 0;
   let withDetail = 0;
+  let detailPopulation = 0;
   let savings = 0;
   let unemployed = 0;
   for (const area of areas) {
@@ -292,6 +299,7 @@ export function selectionSummary(
     const detail = detailOf(snapshot, area);
     if (detail) {
       withDetail++;
+      detailPopulation += people;
       savings += detail.savings;
       unemployed += detail.unemployedWorkers;
     }
@@ -300,6 +308,10 @@ export function selectionSummary(
       const row = market[g] as MarketRow;
       row.price += detail ? (detail.price[g] as number) : table ? priceOf(data, table, area, g) : 0;
       if (!detail) continue;
+      if (data.goods[g]?.isPrimary) {
+        capacityNow[g] = (capacityNow[g] as number) + (detail.naturalCapacity[g] as number);
+        extracted[g] = (extracted[g] as number) + (detail.produced[g] as number) / days;
+      }
       row.stock += detail.stock[g] as number;
       row.made += detail.produced[g] as number;
       row.used += detail.consumed[g] as number;
@@ -318,9 +330,12 @@ export function selectionSummary(
     necessitySatisfaction: necessities * weight,
     militia,
     withDetail,
+    detailPopulation,
     savings,
     unemployed,
     capacity,
+    capacityNow,
+    extracted,
     market,
   };
 }

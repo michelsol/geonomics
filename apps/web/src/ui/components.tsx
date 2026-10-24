@@ -39,11 +39,21 @@ export function count(value: number): string {
 
 export const pct = (value: number) => `${(100 * value).toFixed(value < 0.1 && value > -0.1 ? 1 : 0)}%`;
 
-export function Section({ title, children, actions }: { title: string; children: ReactNode; actions?: ReactNode }) {
+export function Section({
+  title,
+  children,
+  actions,
+  hint,
+}: {
+  title: string;
+  children?: ReactNode;
+  actions?: ReactNode;
+  hint?: string; // shown when hovering the title
+}) {
   return (
     <section className="section">
       <div className="row" style={{ justifyContent: "space-between" }}>
-        <h3>{title}</h3>
+        <h3 title={hint}>{title}</h3>
         {actions}
       </div>
       {children}

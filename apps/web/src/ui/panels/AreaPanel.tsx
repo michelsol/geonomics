@@ -1,169 +1,23 @@
-// The selected area, or the totals of several (specification §10, Selection): public figures, defense, resources, a
-// sortable market table, the depot, and one good across the world.
+// The selected areas, one or several (specification §10, Selection): their figures and defense in one grid, natural
+// resources, a sortable market table, the depot, and one good across the world. Explanations show on hover.
 import { useState } from "react";
 import { mapControls } from "../../map/MapView";
-import {
-  capacityMaximum,
-  conquestEstimate,
-  detailOf,
-  policiesInForce,
-  priceOf,
-  selectionSummary,
-} from "../../state/selectors";
+import { type ConquestEstimate, conquestEstimate, type MarketRow, selectionSummary } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { count, fmt, pct, Section, Stat, Swatch } from "../components";
-import { AreaLink, type PanelProps, usePublicView } from "./common";
+import { areaName, usePublicView } from "./common";
 import { Depots } from "./Depots";
 import { GoodSection } from "./GoodSection";
 
-const WAGE_HINT = "Mean value added per private worker-hour, weighted by workers, in man-hours (not a median).";
+const SELECTING =
+  "Click an area to select it. Double-click or double-tap the map to draw a region: tap its corners, then the first " +
+  "one again. Shift-click adds or removes one area.";
 
-export function AreaPanel({ onOpen }: PanelProps) {
+export function AreaPanel() {
   const view = usePublicView();
-  const area = useGame((state) => state.selectedArea);
   const selection = useGame((state) => state.selection);
   if (!view) return <p className="muted">Waiting for the first snapshot…</p>;
-  if (selection.length > 1) return <RegionView areas={selection} />;
-  if (area === null)
-    return (
-      <>
-        <p className="muted">Click an area on the map.</p>
-        <SelectionHint />
-      </>
-    );
-  const { data, snapshot, government } = view;
-  const static_ = data.areas[area];
-  if (!static_) return null;
-  const owner = snapshot.areas.owner[area] as number;
-  const ownerSummary = owner >= 0 ? snapshot.governments[owner] : undefined;
-  const own = government !== null && owner === government.id;
-  const detail = detailOf(snapshot, area);
-  const siege = snapshot.areas.siegeProgress[area] as number;
-  const days = data.config.pace.gameDaysPerTick;
-  const resources = data.goods.filter((good) => good.isPrimary && capacityMaximum(data, area, good.id) > 0);
-  const headTax = government ? policiesInForce(government, area, data.goods.length)?.headTaxPerPersonPerDay : undefined;
-
-  return (
-    <>
-      <Section
-        title="Area"
-        actions={
-          <>
-            <SelectRealm />
-            <button type="button" onClick={() => mapControls.renderer?.centerOn(area)}>
-              Center
-            </button>
-          </>
-        }
-      >
-        <h2 data-testid="area-name">{static_.name}</h2>
-        <div className="muted">
-          {ownerSummary ? (
-            <>
-              <Swatch color={ownerSummary.color} />
-              {ownerSummary.name}
-              {own ? " (you)" : ""}
-            </>
-          ) : (
-            "Neutral"
-          )}{" "}
-          · {static_.terrain}
-          {static_.isCoastal ? " · coast" : ""}
-        </div>
-        <div className="stats">
-          <Stat label="Population" value={count(snapshot.areas.population[area] as number)} testId="population" />
-          <Stat label="Average wage" value={fmt(snapshot.areas.wageLevel[area] as number)} />
-          <Stat label="Necessities met" value={pct(snapshot.areas.necessitySatisfaction[area] as number)} />
-          <Stat label="Satisfaction" value={pct(snapshot.areas.satisfaction[area] as number)} />
-          <Stat
-            label="Port · airport · fort"
-            value={`${snapshot.areas.portLevel[area]} · ${snapshot.areas.airportLevel[area]} · ${snapshot.areas.fortificationLevel[area]}`}
-          />
-          {detail && (
-            <Stat
-              label="Savings per person"
-              value={`${fmt(detail.savings / Math.max(snapshot.areas.population[area] as number, 1))} mh`}
-              title="Average private savings per inhabitant, in man-hours"
-            />
-          )}
-          {detail && <Stat label="Unemployed" value={count(detail.unemployedWorkers)} />}
-          {siege > 0 && <Stat label="Siege" value={pct(siege)} />}
-        </div>
-        <p className="hint">Average wage: {WAGE_HINT}</p>
-        {own && headTax !== undefined && (
-          <div className="row hint">
-            Head tax here: {fmt(headTax)} mh per person per day.
-            <button type="button" className="link" onClick={() => onOpen("policies")}>
-              Taxes are set in Policies
-            </button>
-          </div>
-        )}
-      </Section>
-
-      <Defense area={area} own={own} />
-
-      <Section title="Natural resources">
-        {resources.length === 0 ? (
-          <span className="muted">None: every primary good must be brought in.</span>
-        ) : (
-          <table data-testid="resources">
-            <thead>
-              <tr>
-                <th>Good</th>
-                <th className="num" title="Largest extraction per day, before depletion">
-                  Capacity
-                </th>
-                {detail && (
-                  <>
-                    <th className="num" title="Capacity left after depletion">
-                      Now
-                    </th>
-                    <th className="num">Extracted</th>
-                    <th className="num">Use</th>
-                  </>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {resources.map((good) => {
-                const maximum = capacityMaximum(data, area, good.id);
-                const now = detail ? (detail.naturalCapacity[good.id] as number) : maximum;
-                const extracted = detail ? (detail.produced[good.id] as number) / days : 0;
-                return (
-                  <tr key={good.id}>
-                    <td title={good.unit}>{good.name}</td>
-                    <td className="num">{fmt(maximum)}</td>
-                    {detail && (
-                      <>
-                        <td className="num">{fmt(now)}</td>
-                        <td className="num">{fmt(extracted)}</td>
-                        <td className="num">{now > 0 ? pct(extracted / now) : "—"}</td>
-                      </>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-        <span className="hint">Units per day. See a good across the map with the Resources layer.</span>
-      </Section>
-
-      <MarketTable areas={[area]} />
-      <Depots areas={[area]} />
-      <GoodSection />
-      <SelectionHint />
-    </>
-  );
-}
-
-function SelectionHint() {
-  return (
-    <p className="hint">
-      Double-click or double-tap the map to draw a region: tap its corners, then the first one again. Shift-click adds
-      or removes one area.
-    </p>
-  );
+  return <SelectionView areas={selection} />;
 }
 
 /** Selects every area of the player's realm, for its totals and realm-wide actions. */
@@ -178,106 +32,222 @@ function SelectRealm() {
   );
 }
 
-/** Several selected areas: their totals and population-weighted means. */
-function RegionView({ areas }: { areas: number[] }) {
+/** One area or several: totals, population-weighted means, and what it takes to conquer them. */
+function SelectionView({ areas }: { areas: number[] }) {
   const view = usePublicView();
   const table = useGame((state) => state.priceTable);
   const selectArea = useGame((state) => state.selectArea);
   if (!view) return null;
   const { data, snapshot, government } = view;
-  const summary = selectionSummary(data, snapshot, table, areas);
-  const centroid = areas.reduce(
-    (sum, area) => ({ x: sum.x + (data.areas[area]?.x ?? 0), y: sum.y + (data.areas[area]?.y ?? 0) }),
-    { x: 0, y: 0 },
-  );
-  // The foreign area that takes the most to conquer.
-  let hardest: { area: number; equipped: number } | null = null;
-  for (const area of areas) {
-    if (government && snapshot.areas.owner[area] === government.id) continue;
-    const equipped = conquestEstimate(data, snapshot, area).equippedNeeded;
-    if (!hardest || equipped > hardest.equipped) hardest = { area, equipped };
-  }
-  const resources = data.goods.filter((good) => good.isPrimary && (summary.capacity[good.id] as number) > 0);
-  const partial = summary.withDetail < areas.length;
-
-  return (
-    <>
-      <Section
-        title="Selection"
-        actions={
-          <>
-            <SelectRealm />
-            <button
-              type="button"
-              onClick={() => mapControls.renderer?.centerOnPoint(centroid.x / areas.length, centroid.y / areas.length)}
-            >
-              Center
-            </button>
+  const single = areas.length === 1 ? (areas[0] as number) : null;
+  const center = () => {
+    const targets = areas.length > 0 ? areas : government && government.capital !== null ? [government.capital] : [];
+    if (targets.length === 0) return;
+    let x = 0;
+    let y = 0;
+    for (const area of targets) {
+      x += data.areas[area]?.x ?? 0;
+      y += data.areas[area]?.y ?? 0;
+    }
+    mapControls.renderer?.centerOnPoint(x / targets.length, y / targets.length);
+  };
+  const header = (
+    <Section
+      title="Area"
+      hint={SELECTING}
+      actions={
+        <>
+          <SelectRealm />
+          <button type="button" onClick={center}>
+            Center
+          </button>
+          {areas.length > 1 && (
             <button type="button" onClick={() => selectArea(null)}>
               Clear
             </button>
-          </>
-        }
-      >
-        <h2 data-testid="selection-name">{count(areas.length)} areas</h2>
-        <div className="row muted">
-          {summary.owners.map(({ owner, areas: n }) => {
-            const realm = owner >= 0 ? snapshot.governments[owner] : undefined;
-            return (
-              <span key={owner}>
-                {realm && <Swatch color={realm.color} />}
-                {realm ? realm.name : "Neutral"}
-                {government && owner === government.id ? " (you)" : ""} · {n}
-              </span>
-            );
-          })}
-        </div>
-        <div className="stats">
-          <Stat label="Population" value={count(summary.population)} testId="selection-population" />
-          <Stat label="Average wage" value={fmt(summary.wageLevel)} />
-          <Stat label="Necessities met" value={pct(summary.necessitySatisfaction)} />
-          <Stat label="Satisfaction" value={pct(summary.satisfaction)} />
-          <Stat label="Militia" value={count(summary.militia)} />
-          {summary.withDetail > 0 && <Stat label="Savings" value={`${fmt(summary.savings)} mh`} />}
-          {summary.withDetail > 0 && <Stat label="Unemployed" value={count(summary.unemployed)} />}
-        </div>
-        <p className="hint">
-          Wages and satisfaction are weighted by population.
-          {partial
-            ? ` Savings, unemployment, stocks and flows cover the ${summary.withDetail} of ${areas.length} areas you see in detail: yours and their neighbors.`
-            : ""}
-        </p>
-      </Section>
+          )}
+        </>
+      }
+    >
+      {areas.length === 0 && <p className="muted">No area selected.</p>}
+    </Section>
+  );
+  if (areas.length === 0) return header;
 
-      {hardest && (
-        <Section title="Defense">
-          <p>
-            Hardest to take: <AreaLink area={hardest.area} />, with more than{" "}
-            <strong>{count(Math.ceil(hardest.equipped))}</strong> equipped soldiers.
-          </p>
-        </Section>
-      )}
+  const summary = selectionSummary(data, snapshot, table, areas);
+  const hoursPerDay = data.config.economy.hoursPerWorkerDay;
+  const partial = summary.withDetail < areas.length;
+  const coverage = partial ? ` Over the ${summary.withDetail} of ${areas.length} areas you see in detail.` : "";
+  // The foreign area that takes the most to conquer, and the strongest defense.
+  let hardest: { area: number; estimate: ConquestEstimate } | null = null;
+  let strongest: { area: number; estimate: ConquestEstimate } | null = null;
+  for (const area of areas) {
+    const estimate = conquestEstimate(data, snapshot, area);
+    if (!strongest || estimate.defensePower > strongest.estimate.defensePower) strongest = { area, estimate };
+    if (government && snapshot.areas.owner[area] === government.id) continue;
+    if (!hardest || estimate.equippedNeeded > hardest.estimate.equippedNeeded) hardest = { area, estimate };
+  }
+  const militiaShare = pct(data.config.military.militiaShare);
+  const where = (area: number) => (single === null ? `${areaName(data, area)}: ` : "");
+  const siege = single === null ? 0 : (snapshot.areas.siegeProgress[single] as number);
+  const resources = data.goods.filter((good) => good.isPrimary && (summary.capacity[good.id] as number) > 0);
+  const static_ = single === null ? undefined : data.areas[single];
+  const owner = single === null ? -1 : (snapshot.areas.owner[single] as number);
+  const ownerSummary = owner >= 0 ? snapshot.governments[owner] : undefined;
+
+  return (
+    <>
+      <section className="section">
+        {header}
+        {static_ ? (
+          <>
+            <h2 data-testid="area-name">{static_.name}</h2>
+            <div className="muted">
+              {ownerSummary ? (
+                <>
+                  <Swatch color={ownerSummary.color} />
+                  {ownerSummary.name}
+                  {government && owner === government.id ? " (you)" : ""}
+                </>
+              ) : (
+                "Neutral"
+              )}{" "}
+              · {static_.terrain}
+              {static_.isCoastal ? " · coast" : ""}
+            </div>
+          </>
+        ) : (
+          <>
+            <h2 data-testid="selection-name">{count(areas.length)} areas</h2>
+            <div className="row muted">
+              {summary.owners.map(({ owner, areas: n }) => {
+                const realm = owner >= 0 ? snapshot.governments[owner] : undefined;
+                return (
+                  <span key={owner}>
+                    {realm && <Swatch color={realm.color} />}
+                    {realm ? realm.name : "Neutral"}
+                    {government && owner === government.id ? " (you)" : ""} · {n}
+                  </span>
+                );
+              })}
+            </div>
+          </>
+        )}
+        <div className="stats">
+          <Stat label="Population" value={count(summary.population)} testId="population" />
+          <Stat
+            label="Average wage"
+            value={`${fmt(summary.wageLevel * hoursPerDay)} mh/day`}
+            title={`Mean value added per private worker and day, in man-hours (an hour of an average worker's labor), weighted by workers${single === null ? " and then by population" : ""}; not a median.`}
+          />
+          <Stat
+            label="Necessities met"
+            value={pct(summary.necessitySatisfaction)}
+            title="Share of the need for necessities (food and the like) that people could buy."
+          />
+          <Stat
+            label="Satisfaction"
+            value={pct(summary.satisfaction)}
+            title="Share of every need, comforts and luxuries included, that people could buy."
+          />
+          {single !== null && (
+            <Stat
+              label="Port · airport · fort"
+              value={`${snapshot.areas.portLevel[single]} · ${snapshot.areas.airportLevel[single]} · ${snapshot.areas.fortificationLevel[single]}`}
+              title="Port and airport levels set sea and air route capacity; each fortification level adds 100% to defense."
+            />
+          )}
+          {summary.withDetail > 0 && (
+            <Stat
+              label="Savings per person"
+              value={`${fmt(summary.savings / Math.max(summary.detailPopulation, 1))} mh`}
+              title={`Average private savings per inhabitant, in man-hours.${coverage}`}
+            />
+          )}
+          {summary.withDetail > 0 && (
+            <Stat
+              label="Unemployed"
+              value={count(summary.unemployed)}
+              title={`Workers without a private or government job.${coverage}`}
+            />
+          )}
+          {siege > 0 && <Stat label="Siege" value={pct(siege)} title="The area falls when the siege reaches 100%." />}
+          <Stat
+            label="Militia"
+            value={count(summary.militia)}
+            testId="militia"
+            title={`${militiaShare} of the population, unequipped; it refills while no attacker is present.`}
+          />
+          {strongest && (
+            <Stat
+              label="Defense power"
+              value={fmt(strongest.estimate.defensePower)}
+              title={`${where(strongest.area)}militia ${count(strongest.estimate.militia)} plus the owner's armies here ${fmt(strongest.estimate.armyPower)}, times ${1 + strongest.estimate.fortification} for fortification.${single === null ? " The strongest of the areas." : ""}`}
+            />
+          )}
+          {hardest && (
+            <Stat
+              label="To conquer"
+              value={
+                hardest.estimate.defensePower > 0
+                  ? `> ${count(Math.ceil(hardest.estimate.equippedNeeded))} equipped`
+                  : "Undefended"
+              }
+              testId="soldiers-needed"
+              title={`${where(hardest.area)}${
+                hardest.estimate.defensePower > 0
+                  ? `more than ${count(Math.ceil(hardest.estimate.equippedNeeded))} equipped soldiers, or ${count(Math.ceil(hardest.estimate.unequippedNeeded))} without weapons; bring a margin, the battle costs soldiers. `
+                  : "no defenders, an attacking army besieges it at once. "
+              }Then the siege takes about ${fmt(hardest.estimate.siegeDaysPer1000Equipped)} days with 1,000 equipped soldiers, twice as long with half as many.${single === null ? " The hardest of the areas that are not yours." : ""}`}
+            />
+          )}
+        </div>
+      </section>
 
       <Section title="Natural resources">
         {resources.length === 0 ? (
-          <span className="muted">None.</span>
+          <span className="muted">None: every primary good must be brought in.</span>
         ) : (
           <table data-testid="resources">
             <thead>
               <tr>
                 <th>Good</th>
-                <th className="num" title="Largest extraction per day, summed over the areas">
+                <th className="num" title="Largest extraction per day, before depletion">
                   Capacity
                 </th>
+                {summary.withDetail > 0 && (
+                  <>
+                    <th className="num" title={`Capacity left after depletion.${coverage}`}>
+                      Now
+                    </th>
+                    <th className="num" title={`Units extracted per day.${coverage}`}>
+                      Extracted
+                    </th>
+                    <th className="num" title="Extracted over the capacity left">
+                      Use
+                    </th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
-              {resources.map((good) => (
-                <tr key={good.id}>
-                  <td title={good.unit}>{good.name}</td>
-                  <td className="num">{fmt(summary.capacity[good.id] as number)}</td>
-                </tr>
-              ))}
+              {resources.map((good) => {
+                const now = summary.capacityNow[good.id] as number;
+                const extracted = summary.extracted[good.id] as number;
+                return (
+                  <tr key={good.id}>
+                    <td title={good.unit}>{good.name}</td>
+                    <td className="num">{fmt(summary.capacity[good.id] as number)}</td>
+                    {summary.withDetail > 0 && (
+                      <>
+                        <td className="num">{fmt(now)}</td>
+                        <td className="num">{fmt(extracted)}</td>
+                        <td className="num">{now > 0 ? pct(extracted / now) : "—"}</td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -287,47 +257,6 @@ function RegionView({ areas }: { areas: number[] }) {
       <Depots areas={areas} />
       <GoodSection />
     </>
-  );
-}
-
-/** Defenders of an area that is not the player's, and the force it takes to win. */
-/** Who defends an area: militia, the owner's armies and fortifications, and for others' areas what it takes to win. */
-function Defense({ area, own }: { area: number; own: boolean }) {
-  const view = usePublicView();
-  if (!view) return null;
-  const estimate = conquestEstimate(view.data, view.snapshot, area);
-  const militiaHint = `The militia is ${pct(view.data.config.military.militiaShare)} of the population, unequipped; it refills while no attacker is present.`;
-  const stats = (
-    <div className="stats">
-      <Stat label="Militia" value={count(estimate.militia)} testId="militia" />
-      <Stat label="Army power here" value={fmt(estimate.armyPower)} />
-      <Stat label="Fortification" value={`×${1 + estimate.fortification}`} />
-      <Stat label="Defense power" value={fmt(estimate.defensePower)} />
-    </div>
-  );
-  if (own)
-    return (
-      <Section title="Defense">
-        {stats}
-        <p className="hint">{militiaHint} Your armies standing here and fortifications add to it.</p>
-      </Section>
-    );
-  return (
-    <Section title="Defense">
-      {stats}
-      {estimate.defensePower > 0 ? (
-        <p data-testid="soldiers-needed">
-          Win with more than <strong>{count(Math.ceil(estimate.equippedNeeded))}</strong> equipped soldiers, or{" "}
-          {count(Math.ceil(estimate.unequippedNeeded))} without weapons. Bring a margin: the battle costs soldiers.
-        </p>
-      ) : (
-        <p>No defenders: an attacking army besieges it at once.</p>
-      )}
-      <p className="hint">
-        Then the siege takes about {fmt(estimate.siegeDaysPer1000Equipped)} days with 1,000 equipped soldiers (twice as
-        long with half as many). {militiaHint}
-      </p>
-    </Section>
   );
 }
 
@@ -373,24 +302,10 @@ function MarketTable({ areas }: { areas: number[] }) {
   const [sort, setSort] = useState(storedSort);
   if (!view) return null;
   const { data, snapshot } = view;
-  const single = areas.length === 1 ? (areas[0] as number) : null;
-  const summary = single === null ? selectionSummary(data, snapshot, table, areas) : null;
-  const detail = single === null ? undefined : detailOf(snapshot, single);
-  const hasDetail = summary ? summary.withDetail > 0 : detail !== undefined;
+  const summary = selectionSummary(data, snapshot, table, areas);
+  const hasDetail = summary.withDetail > 0;
   const columns = COLUMNS.filter((c) => hasDetail || !c.detailOnly);
-  const rows = data.goods.map((good) => {
-    const g = good.id;
-    if (summary) return { good, ...(summary.market[g] as (typeof summary.market)[number]) };
-    const area = single as number;
-    return {
-      good,
-      price: detail ? (detail.price[g] as number) : table ? priceOf(data, table, area, g) : 0,
-      stock: detail && !good.isService ? (detail.stock[g] as number) : 0,
-      made: detail ? (detail.produced[g] as number) : 0,
-      used: detail ? (detail.consumed[g] as number) : 0,
-      trade: detail ? (detail.imported[g] as number) - (detail.exported[g] as number) : 0,
-    };
-  });
+  const rows = data.goods.map((good) => ({ good, ...(summary.market[good.id] as MarketRow) }));
   const key = sort.key !== null && columns.some((c) => c.key === sort.key) ? sort.key : null;
   if (key !== null) {
     const sign = sort.descending ? -1 : 1;
@@ -456,11 +371,10 @@ function MarketTable({ areas }: { areas: number[] }) {
           ))}
         </tbody>
       </table>
-      {summary && (
-        <span className="hint">
-          Prices are means over the {areas.length} areas; stocks, production, use and net trade are sums
-          {summary.withDetail < areas.length ? ` over the ${summary.withDetail} areas you see in detail` : ""}. Trade
-          between two selected areas cancels out.
+      {areas.length > 1 && (
+        <span className="muted">
+          Mean prices; sums{summary.withDetail < areas.length ? ` over ${summary.withDetail} areas seen in detail` : ""}
+          , net of trade inside.
         </span>
       )}
       {key !== null && (
