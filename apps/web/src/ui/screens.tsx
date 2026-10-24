@@ -45,8 +45,8 @@ export function NewGame() {
   const menuError = useGame((state) => state.menuError);
   const updateReady = useGame((state) => state.updateReady);
   const openGuide = useGame((state) => state.openGuide);
-  const [catalog, setCatalog] = useState<CatalogName>("medium");
-  const [areas, setAreas] = useState<number>(1000);
+  const [catalog, setCatalog] = useState<CatalogName>("large");
+  const [areas, setAreas] = useState<number>(300);
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e6));
   const [chosenRealms, setRealms] = useState(8);
   const [aiMix, setAiMix] = useState<AiMix>("balanced");
