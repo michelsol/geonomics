@@ -65,9 +65,10 @@ describe("the economy", () => {
   });
 
   it("builds infrastructure its tax income can run", () => {
-    // Cheap staff, so the tiny test realm can afford more than its starting port and airports.
+    // Cheap staff and building, so the tiny test realm can afford several levels.
     const staffPerLevel = { port: 5, airport: 5, roads: 2, fort: 2 };
-    const world = aiWorld({ 0: "builder" }, { infrastructure: { staffPerLevel } });
+    const costPerLevel = { port: 10_000, airport: 20_000, roads: 5_000, fort: 5_000 };
+    const world = aiWorld({ 0: "builder" }, { infrastructure: { staffPerLevel, costPerLevel } });
     days(world, 25);
     const builder = government(world, 0);
     const building = [...builder.areaStates.entries()].filter(([area, state]) => {
@@ -76,6 +77,19 @@ describe("the economy", () => {
       return levels.some((level, k) => (state.targetLevel[k] as number) > level);
     });
     expect(building.length).toBeGreaterThan(0);
+    // As many levels as it can afford, not one at a time.
+    const levels = building.reduce(
+      (sum, [area, state]) =>
+        sum +
+        [
+          world.areas[area]?.portLevel,
+          world.areas[area]?.airportLevel,
+          world.areas[area]?.roadLevel,
+          world.areas[area]?.fortificationLevel,
+        ].filter((level, k) => (state.targetLevel[k] as number) > (level as number)).length,
+      0,
+    );
+    expect(levels).toBeGreaterThan(1);
   });
 
   it("takes infrastructure down when it cannot pay for it", () => {

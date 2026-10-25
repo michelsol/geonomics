@@ -12,7 +12,7 @@ A government is founded on each capital placed by map generation, in capital ord
 - **Color:** each realm in turn takes the palette color (12 colors) least used by its already colored neighbors, then least used overall.
 - **Treasury:** starts at `startingTreasuryDays` of the realm's income, `population × workforceShare × hoursPerWorkerDay × wageLevel` summed over its areas.
 - **Owned areas:** each starts with an empty depot, no jobs, a `wageOffer` of 1, no policies, and its built infrastructure as its target.
-- **Infrastructure:** each realm gets a port of level 1 in its `startingPorts` most populous coastal areas, its capital first, and an airport of level 1 in its capital and then its most populous areas, up to `startingAirports`. A landmass left without any port gets one in its most populous coastal area, so no island is cut off. Then the routes are built and every starting level is fully staffed from the workforce.
+- **Infrastructure:** each coastal area gets a port of level 1 with chance `startingPortShare`, drawn from the seeded generator in area order, and each realm an airport of level 1 in its capital and then its most populous areas, up to `startingAirports`. A landmass left without any port gets one in its most populous coastal area, so no island is cut off. Then the routes are built and every starting level is fully staffed from the workforce.
 - **Relations:** every pair of governments starts at peace.
 - **Controller:** the AI, until a player takes the government over.
 - **Personality:** from the game's AI mix (section 11).

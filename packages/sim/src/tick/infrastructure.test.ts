@@ -173,27 +173,22 @@ describe("staff", () => {
 });
 
 describe("starting infrastructure", () => {
-  it("gives each realm a few ports and an airport at its capital, every landmass a port, all staffed", () => {
+  it("gives a quarter of coasts a port, every landmass one, each capital an airport, all staffed", () => {
     const config = createConfig(smallCatalog, { map: { landAreaCount: 300, governmentCount: 6 } });
     const { world, capitals } = generateMap(smallCatalog, config, 5);
     initializeWorld(world);
     foundGovernments(world, capitals);
-    const { startingPorts } = world.config.infrastructure;
     const coastal = world.areas.filter((area) => area.isCoastal).length;
     const ports = world.areas.filter((area) => area.portLevel > 0);
-    expect(ports.length).toBeGreaterThan(0);
-    expect(ports.length).toBeLessThan(coastal / 2);
+    // A quarter by chance, plus the ports of landmasses that would otherwise have none.
+    expect(ports.length).toBeGreaterThan(0.15 * coastal);
+    expect(ports.length).toBeLessThan(0.4 * coastal);
     for (const government of world.governments) {
       const capital = world.areas[government.capital as number] as Area;
       expect(capital.airportLevel).toBe(1);
       expect(capital.staffing[1]).toBeCloseTo(1, 9);
-      expect(government.ownedAreas.filter((id) => world.areas[id]?.portLevel).length).toBeGreaterThanOrEqual(
-        Math.min(1, government.ownedAreas.filter((id) => world.areas[id]?.isCoastal).length),
-      );
     }
     expect(world.areas.filter((area) => area.airportLevel > 0)).toHaveLength(world.governments.length);
-    // Beyond each realm's own ports, only cut-off landmasses get one.
-    expect(ports.length).toBeLessThanOrEqual(startingPorts * world.governments.length + 20);
     for (const area of ports) expect(area.staffing[0]).toBeCloseTo(1, 9);
     // Sea routes join the ports along the lanes, and carry goods; the lanes carry nothing.
     const routes = world.edges.filter((edge) => edge.mode === "sea" && !edge.isLane && edge.isActive);

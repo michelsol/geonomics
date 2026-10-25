@@ -70,7 +70,7 @@ export interface WorldConfig {
     staffPerLevel: Record<InfrastructureKind, number>; // workers each built level needs to run
     defaultStaffWageShare: number; // staff pay as a share of the local wage level, where no policy sets it
     minimumTransportCostFactor: number; // land transport cost between two areas with roads at the maximum level
-    startingPorts: number; // ports of level 1 each realm starts with, in its most populous coastal areas
+    startingPortShare: number; // chance that a coastal area starts with a port of level 1
     startingAirports: number; // airports of level 1 each realm starts with: the capital, then the most populous
   };
   network: {
@@ -180,7 +180,7 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
     staffPerLevel: { port: 100, airport: 150, roads: 25, fort: 50 },
     defaultStaffWageShare: 1.1,
     minimumTransportCostFactor: 0.3,
-    startingPorts: 2,
+    startingPortShare: 0.25,
     startingAirports: 1,
   },
   network: {

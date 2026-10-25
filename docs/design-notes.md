@@ -422,6 +422,10 @@ Roads were per border, an area having about six. A road level per area keeps one
 
 With ports in only a few areas, the sea routes laid by map generation between neighboring coasts almost never had a port at both ends: in a two-year AI-only game, sea trade fell to nothing. Those links became lanes, which armies sail but goods do not, and sea routes are rebuilt between ports along them, like air routes between airports. The same game then carried about 1,700 to 3,200 tonnes a day by sea over 29 to 32 routes. Trade also stopped counting edges that carry nothing (lanes, routes of idle ports) when splitting an area's surplus between its edges, which had diverted part of it to them.
 
+### A quarter of coasts with a port
+
+Ports then started with each coastal area at a 1-in-4 chance instead of two per realm, and the AI lost its caps on ports and airports, starting as many levels as its budget allows. In the same two-year game, the map started with 30 ports of 142 coasts instead of 15, and 74 sea routes instead of 29. Sea tonnage barely changed, about 1,750 rising to 3,300 tonnes a day: sea trade is limited by the price gaps between distant coasts more than by the number of routes. Without the caps the AIs build far more, almost all of it roads (a builder reached 107 road levels), since roads score on population and land trade in every area while ports score only on coasts.
+
 ### A new save version
 
 Old saves held construction progress in worker-days and road steps per border, which have no equivalent in levels, so version 1 saves are refused with a message rather than converted.

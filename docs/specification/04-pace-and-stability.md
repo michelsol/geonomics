@@ -154,7 +154,7 @@ interface WorldConfig {
     staffPerLevel: Record<InfrastructureKind, number>;     // workers each built level needs to run (port 100, airport 150, roads 25, fort 50)
     defaultStaffWageShare: number;      // staff pay as a share of the local wage level, where no policy sets it (default 1.1)
     minimumTransportCostFactor: number; // land transport cost between two areas with roads at the maximum level (default 0.3)
-    startingPorts: number;              // ports of level 1 each realm starts with (default 2)
+    startingPortShare: number;          // chance that a coastal area starts with a port of level 1 (default 0.25)
     startingAirports: number;           // airports of level 1 each realm starts with (default 1)
   };
   network: {

@@ -12,7 +12,6 @@ const MAXIMUM_WAGE = 10; // the highest wage a command accepts
 const MINIMUM_WAGE = 0.1; // war can push an area's wage level below zero
 const TAX_STEP_DOWN = 0.01;
 const WAGE_PREMIUM = 1.1; // soldiers are paid above the realm's wage level, so nobody deserts
-const MAXIMUM_CONSTRUCTIONS = 2; // levels under construction at once
 const GRANARIES = 5; // a builder keeps staples in this many of its most populous areas
 
 export function decideEconomy(
@@ -67,9 +66,9 @@ interface Option {
 
 /**
  * Infrastructure within a budget (specification §11, Infrastructure): a share of tax income after soldiers' pay covers
- * the staff of what stands and the payments of what is being built. With room in the budget and a treasury above
- * half its reserve, it starts the best next level; short of money, it stops construction, then takes down its least
- * valuable level.
+ * the staff of what stands and the payments of what is being built. With a treasury above half its reserve, it starts
+ * as many of the best next levels as the budget allows; short of money, it stops construction, then takes down its
+ * least valuable level.
  */
 function manageInfrastructure(view: AiView, realm: Realm, traits: Traits, commands: Command[]): void {
   if (realm.incomePerDay <= 0) return; // no tax yet: building starts at the next decision
@@ -94,12 +93,10 @@ function manageInfrastructure(view: AiView, realm: Realm, traits: Traits, comman
   // What the realm spends now, and on what.
   let spending = 0;
   const building: Option[] = [];
-  const counts: Record<InfrastructureKind, number> = { port: 0, airport: 0, roads: 0, fort: 0 };
   for (const state of government.areaStates) {
     const coastal = view.data.areas[state.area]?.isCoastal ?? false;
     for (const [k, kind] of INFRASTRUCTURE_KINDS.entries()) {
       const level = snapshotLevel(areas, state.area, kind);
-      if (level > 0) counts[kind]++;
       spending += staffPerDay(state.area, kind, level);
       const target = Math.min(state.targetLevel[k] as number, inf.maximumLevel);
       if (target > level && canBuild({ isCoastal: coastal }, kind)) {
@@ -127,10 +124,8 @@ function manageInfrastructure(view: AiView, realm: Realm, traits: Traits, comman
     for (const kind of INFRASTRUCTURE_KINDS) {
       const level = snapshotLevel(areas, area, kind);
       let value = 0;
-      if (kind === "port") value = coastal && (level > 0 || counts.port < traits.maximumPorts) ? people : 0;
-      else if (kind === "airport")
-        value =
-          level > 0 || counts.airport < traits.maximumAirports ? people * (area === government.capital ? 2 : 1) : 0;
+      if (kind === "port") value = coastal ? people : 0;
+      else if (kind === "airport") value = people * (area === government.capital ? 2 : 1);
       else if (kind === "roads") value = people + (tonnage[area] as number) / busiest;
       else value = border.has(area) ? people : 0;
       if (value > 0)
@@ -151,16 +146,18 @@ function manageInfrastructure(view: AiView, realm: Realm, traits: Traits, comman
     }
     return;
   }
-  if (treasury < realm.reserve / 2 || building.length >= MAXIMUM_CONSTRUCTIONS) return;
+  if (treasury < realm.reserve / 2) return;
+  // As many next levels as the budget can pay and then run, best first; one level per area and kind at a time.
   const underWay = new Set(building.map((option) => `${option.area}:${option.kind}`));
-  const best = options
+  const candidates = options
     .filter((option) => option.level < inf.maximumLevel && !underWay.has(`${option.area}:${option.kind}`))
-    .filter(
-      (option) =>
-        spending + staffPerDay(option.area, option.kind, 1) + paymentPerDay(option.kind, option.level + 1) <= budget,
-    )
-    .sort((a, b) => b.score - a.score || a.area - b.area)[0];
-  if (best) set(best.area, best.kind, best.level + 1);
+    .sort((a, b) => b.score - a.score || a.area - b.area);
+  for (const option of candidates) {
+    const cost = staffPerDay(option.area, option.kind, 1) + paymentPerDay(option.kind, option.level + 1);
+    if (spending + cost > budget) continue;
+    spending += cost;
+    set(option.area, option.kind, option.level + 1);
+  }
 }
 
 /** The goods the realm consumes most, by value, never services; `filter` narrows the choice. */

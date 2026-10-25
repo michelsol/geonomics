@@ -3,6 +3,7 @@
 
 import { MinHeap } from "../heap";
 import { INFRASTRUCTURE_KINDS, isBuilding, kindIndex, levelOf, setLevel, staffQuota } from "../infrastructure";
+import { nextRandom } from "../random";
 import { edgeCapacityPerDay, edgeTransportCost } from "../routes";
 import type { Area, AreaId, Edge, GovernmentAreaState, InfrastructureKind, World } from "../types";
 import { addEdge } from "../world";
@@ -110,25 +111,22 @@ export function staffFully(world: World): void {
 }
 
 /**
- * A new game's infrastructure, once the realms are founded: ports of level 1 in each realm's startingPorts most
- * populous coastal areas, its capital first, and airports of level 1 in its capital and then its most populous
- * areas, up to startingAirports. A landmass left without any port gets one in its most populous coastal area, so no
- * island is cut off. Everything starts fully staffed.
+ * A new game's infrastructure, once the realms are founded: a port of level 1 in each coastal area with chance
+ * startingPortShare (seeded), and airports of level 1 in each realm's capital and then its most populous areas, up
+ * to startingAirports. A landmass left without any port gets one in its most populous coastal area, so no island is
+ * cut off. Everything starts fully staffed.
  */
 export function placeStartingInfrastructure(world: World): void {
-  const { startingPorts, startingAirports } = world.config.infrastructure;
+  const { startingPortShare, startingAirports } = world.config.infrastructure;
   const byPopulation = (a: Area, b: Area) => b.population - a.population || a.id - b.id;
+  for (const area of world.areas)
+    if (area.isCoastal && nextRandom(world) < startingPortShare) area.portLevel = Math.max(area.portLevel, 1);
   for (const government of world.governments) {
     if (government.isEliminated) continue;
     const owned = government.ownedAreas.map((id) => world.areas[id] as Area).sort(byPopulation);
-    const capitalFirst = (areas: Area[]) => {
-      const capital = areas.find((area) => area.id === government.capital);
-      return capital ? [capital, ...areas.filter((area) => area !== capital)] : areas;
-    };
-    for (const area of capitalFirst(owned.filter((a) => a.isCoastal)).slice(0, startingPorts))
-      area.portLevel = Math.max(area.portLevel, 1);
-    for (const area of capitalFirst(owned).slice(0, startingAirports))
-      area.airportLevel = Math.max(area.airportLevel, 1);
+    const capital = owned.find((area) => area.id === government.capital);
+    const capitalFirst = capital ? [capital, ...owned.filter((area) => area !== capital)] : owned;
+    for (const area of capitalFirst.slice(0, startingAirports)) area.airportLevel = Math.max(area.airportLevel, 1);
   }
   for (const landmass of landmasses(world)) {
     if (landmass.some((area) => area.portLevel >= 1)) continue;
