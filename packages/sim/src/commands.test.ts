@@ -151,32 +151,70 @@ describe("jobs and wages", () => {
     expect(
       send(world, { type: "setJobTarget", area: 1, job: { kind: "produce", good: bread }, targetWorkers: 80 }),
     ).toBeNull();
-    expect(send(world, { type: "setJobTarget", area: 1, job: { kind: "fortify" }, targetWorkers: 10 })).toBeNull();
+    const grain = goodId(world, "grain");
+    expect(
+      send(world, { type: "setJobTarget", area: 1, job: { kind: "produce", good: grain }, targetWorkers: 10 }),
+    ).toBeNull();
     expect(stateOf(world, 1).jobs).toEqual([
       { job: { kind: "produce", good: bread }, targetWorkers: 80, workers: 0 },
-      { job: { kind: "fortify" }, targetWorkers: 10, workers: 0 },
+      { job: { kind: "produce", good: grain }, targetWorkers: 10, workers: 0 },
     ]);
-    expect(
-      send(world, { type: "setJobTarget", area: 0, job: { kind: "buildInfrastructure", edge: 0 }, targetWorkers: 5 }),
-    ).toBeNull();
-    expect(send(world, { type: "setJobTarget", area: 0, job: { kind: "buildPort" }, targetWorkers: 5 })).toBeNull();
-    expect(send(world, { type: "setJobTarget", area: 1, job: { kind: "buildAirport" }, targetWorkers: 5 })).toBeNull();
   });
 
-  it("rejects ports inland, roads on routes or far edges, services, missing resources and bad numbers", () => {
+  it("rejects old infrastructure jobs, services, missing resources and bad numbers", () => {
     const world = realmWorld();
+    const bread = goodId(world, "bread");
     const job = (area: number, job: object, targetWorkers = 5) =>
       send(world, { type: "setJobTarget", area, job, targetWorkers } as Command);
-    expect(job(1, { kind: "buildPort" })).toMatch(/coastal/);
-    expect(job(0, { kind: "buildInfrastructure", edge: 2 })).toMatch(/land edges/);
-    expect(job(0, { kind: "buildInfrastructure", edge: 1 })).toMatch(/does not touch/);
-    expect(job(0, { kind: "buildInfrastructure", edge: 99 })).toMatch(/unknown edge/);
     (world.areas[1] as World["areas"][number]).naturalCapacityMaximum[goodId(world, "fish")] = 0;
     expect(job(1, { kind: "produce", good: goodId(world, "fish") })).toMatch(/natural capacity/);
     expect(job(1, { kind: "produce", good: 99 })).toMatch(/unknown good/);
-    expect(job(1, { kind: "dig" })).toMatch(/unknown job/);
-    expect(job(1, { kind: "fortify" }, -3)).toMatch(/non-negative/);
-    expect(job(3, { kind: "fortify" })).toMatch(/not owned/);
+    expect(job(1, { kind: "fortify" })).toMatch(/unknown job/);
+    expect(job(1, { kind: "produce", good: bread }, -3)).toMatch(/non-negative/);
+    expect(job(3, { kind: "produce", good: bread })).toMatch(/not owned/);
+  });
+});
+
+describe("infrastructure", () => {
+  it("sets a target to build up to, and takes levels down at once", () => {
+    const world = realmWorld();
+    const set = (area: number, kind: string, level: number) =>
+      send(world, { type: "setInfrastructureTarget", area, kind, level } as Command);
+    expect(set(1, "fort", 2)).toBeNull();
+    expect(Array.from(stateOf(world, 1).targetLevel)).toEqual([0, 0, 0, 2]);
+    expect(world.areas[1]?.fortificationLevel).toBe(0); // built over time
+    const harbor = world.areas[0] as World["areas"][number];
+    const unemployed = harbor.unemployedWorkers;
+    expect(set(0, "port", 0)).toBeNull();
+    expect(harbor.portLevel).toBe(0);
+    expect(stateOf(world, 0).staff[0]).toBe(0);
+    expect(harbor.unemployedWorkers).toBeCloseTo(unemployed + world.config.infrastructure.staffPerLevel.port, 6);
+    expect(world.edges[2]?.capacityPerDay).toBe(0); // the sea route to the Isle stops
+  });
+
+  it("rejects ports inland, unknown kinds, levels out of range and others' areas", () => {
+    const world = realmWorld();
+    const set = (area: number, kind: string, level: number) =>
+      send(world, { type: "setInfrastructureTarget", area, kind, level } as Command);
+    expect(set(1, "port", 1)).toMatch(/coastal/);
+    expect(set(1, "port", 0)).toBeNull(); // nothing to take down, but harmless
+    expect(set(1, "canal", 1)).toMatch(/unknown infrastructure/);
+    expect(set(1, "roads", 4)).toMatch(/within/);
+    expect(set(1, "roads", 1.5)).toMatch(/whole number/);
+    expect(set(3, "roads", 1)).toMatch(/not owned/);
+  });
+
+  it("accepts a staff wage share realm-wide or per area, within bounds", () => {
+    const world = realmWorld();
+    const setting = (value: number | null) => ({ policy: "staffWageShare" as const, good: null, value });
+    expect(send(world, { type: "setRealmPolicy", setting: setting(1.3) })).toBeNull();
+    expect(stateOf(world, 1).resolvedPolicies.staffWageShare).toBe(1.3);
+    expect(send(world, { type: "setAreaPolicy", area: 1, setting: setting(0.9) })).toBeNull();
+    expect(stateOf(world, 1).resolvedPolicies.staffWageShare).toBe(0.9);
+    expect(send(world, { type: "setRealmPolicy", setting: setting(6) })).toMatch(/within/);
+    expect(send(world, { type: "setRealmPolicy", setting: { policy: "staffWageShare", good: 0, value: 1 } })).toMatch(
+      /not a good/,
+    );
   });
 
   it("sets wage offers within [0, 10]", () => {

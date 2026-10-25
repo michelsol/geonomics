@@ -2,6 +2,7 @@
 // snapshots of the dynamic state as seen by one government. Typed arrays are Float32Array, and every value is
 // structured-clone friendly, so snapshots cross a worker boundary as transferables or go through msgpack unchanged.
 import type { WorldConfig } from "./config";
+import { kindIndex } from "./infrastructure";
 import { incomeOf } from "./tick/labor";
 import { lastMigration, lastNaturalChange } from "./tick/population";
 import { scratchOf } from "./tick/scratch";
@@ -13,6 +14,7 @@ import type {
   Good,
   GoodId,
   GovernmentId,
+  InfrastructureKind,
   JobAssignment,
   MapLayout,
   MarketOrder,
@@ -49,6 +51,9 @@ export interface AreaStateView {
   depot: Float32Array;
   jobs: JobAssignment[];
   wageOffer: number;
+  targetLevel: number[]; // per InfrastructureKind: the level to build up to
+  buildDays: number[]; // per InfrastructureKind: days of construction done toward the next level
+  staff: number[]; // per InfrastructureKind: workers running the built levels
   policyOverrides: PolicySetting[]; // with the realm policies, enough to resolve the policies in force (resolveSettings)
 }
 
@@ -113,7 +118,9 @@ export interface Snapshot {
     necessitySatisfaction: Float32Array;
     portLevel: Uint8Array;
     airportLevel: Uint8Array;
+    roadLevel: Uint8Array;
     fortificationLevel: Uint8Array;
+    staffing: Float32Array; // area-major: area × 4 + kind (INFRASTRUCTURE_KINDS), the staffed share of each kind
     siegeProgress: Float32Array;
     besieger: Int16Array; // -1 when not besieged
     militia: Float32Array; // militia defending each area
@@ -134,6 +141,25 @@ export interface Snapshot {
   peaceProposals: PeaceProposal[];
   government: GovernmentView | null; // the viewer's own government
   governments: GovernmentSummary[];
+}
+
+/** Built level of a kind in an area, from a snapshot. */
+export function snapshotLevel(areas: Snapshot["areas"], area: AreaId, kind: InfrastructureKind): number {
+  switch (kind) {
+    case "port":
+      return areas.portLevel[area] as number;
+    case "airport":
+      return areas.airportLevel[area] as number;
+    case "roads":
+      return areas.roadLevel[area] as number;
+    case "fort":
+      return areas.fortificationLevel[area] as number;
+  }
+}
+
+/** What a kind delivers in an area, from a snapshot: its built level times its staffed share. */
+export function runningLevel(areas: Snapshot["areas"], area: AreaId, kind: InfrastructureKind): number {
+  return snapshotLevel(areas, area, kind) * (areas.staffing[4 * area + kindIndex(kind)] as number);
 }
 
 export const EDGE_ACTIVE = 1;
@@ -199,7 +225,9 @@ export function buildSnapshot(
     necessitySatisfaction: new Float32Array(n),
     portLevel: new Uint8Array(n),
     airportLevel: new Uint8Array(n),
+    roadLevel: new Uint8Array(n),
     fortificationLevel: new Uint8Array(n),
+    staffing: new Float32Array(4 * n),
     siegeProgress: new Float32Array(n),
     besieger: new Int16Array(n),
     militia: new Float32Array(n),
@@ -225,7 +253,9 @@ export function buildSnapshot(
     areas.necessitySatisfaction[i] = area.necessitySatisfaction;
     areas.portLevel[i] = area.portLevel;
     areas.airportLevel[i] = area.airportLevel;
+    areas.roadLevel[i] = area.roadLevel;
     areas.fortificationLevel[i] = area.fortificationLevel;
+    areas.staffing.set(area.staffing, 4 * i);
     areas.siegeProgress[i] = area.siegeProgress;
     areas.besieger[i] = area.besiegingGovernment ?? -1;
     areas.militia[i] = area.militia;
@@ -340,6 +370,9 @@ function governmentView(government: World["governments"][number]): GovernmentVie
       depot: Float32Array.from(state.depot),
       jobs: state.jobs.map((job) => ({ ...job, job: { ...job.job } })),
       wageOffer: state.wageOffer,
+      targetLevel: Array.from(state.targetLevel),
+      buildDays: Array.from(state.buildDays),
+      staff: Array.from(state.staff),
       policyOverrides: state.policyOverrides.map((s) => ({ ...s })),
     })),
     realmPolicies: government.realmPolicies.map((s) => ({ ...s })),

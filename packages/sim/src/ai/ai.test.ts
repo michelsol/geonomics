@@ -3,6 +3,7 @@ import { createConfig, type DeepPartial, type WorldConfig } from "../config";
 import { aiPersonalities } from "../government";
 import { hashWorld } from "../hash";
 import { realmWorld, send, smallCatalog } from "../testing";
+import { staffFully } from "../tick/infrastructure";
 import { runTick } from "../tick/tick";
 import type { Government, Personality, World } from "../types";
 import { createWorld } from "../world";
@@ -63,14 +64,34 @@ describe("the economy", () => {
     expect(taxOf(builder)).toBeGreaterThan(TRAITS.builder.baseTax);
   });
 
-  it("staffs jobs from its tax income, with wages that hire", () => {
-    const world = aiWorld({ 0: "builder" });
+  it("builds infrastructure its tax income can run", () => {
+    // Cheap staff, so the tiny test realm can afford more than its starting port and airports.
+    const staffPerLevel = { port: 5, airport: 5, roads: 2, fort: 2 };
+    const world = aiWorld({ 0: "builder" }, { infrastructure: { staffPerLevel } });
     days(world, 25);
     const builder = government(world, 0);
-    const states = [...builder.areaStates.entries()].filter(([, state]) => state.jobs.length > 0);
-    expect(states.length).toBeGreaterThan(0);
-    for (const [area, state] of states)
-      expect(state.wageOffer).toBeGreaterThanOrEqual(world.areas[area]?.wageLevel as number);
+    const building = [...builder.areaStates.entries()].filter(([area, state]) => {
+      const built = world.areas[area] as World["areas"][number];
+      const levels = [built.portLevel, built.airportLevel, built.roadLevel, built.fortificationLevel];
+      return levels.some((level, k) => (state.targetLevel[k] as number) > level);
+    });
+    expect(building.length).toBeGreaterThan(0);
+  });
+
+  it("takes infrastructure down when it cannot pay for it", () => {
+    const world = aiWorld({ 0: "builder" });
+    const valley = world.areas[1] as World["areas"][number];
+    valley.roadLevel = 3;
+    valley.fortificationLevel = 3;
+    const state = government(world, 0).areaStates.get(1);
+    state?.targetLevel.set([0, 0, 3, 3]);
+    staffFully(world);
+    const levels = () =>
+      world.areas.reduce((sum, a) => sum + a.portLevel + a.airportLevel + a.roadLevel + a.fortificationLevel, 0);
+    const before = levels();
+    government(world, 0).treasury = 1000;
+    days(world, 60);
+    expect(levels()).toBeLessThan(before);
   });
 });
 

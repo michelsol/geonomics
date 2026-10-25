@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { neutralPolicies, resolveSettings } from "./government";
+import { infrastructureBillPerDay } from "./infrastructure";
 import {
   buildSnapshot,
   buildStaticData,
@@ -9,6 +10,7 @@ import {
   snapshotTransferables,
 } from "./snapshot";
 import { realmWorld, send } from "./testing";
+import { rebuildAirRoutes } from "./tick/infrastructure";
 import { lastMigration, lastNaturalChange } from "./tick/population";
 import { runTick } from "./tick/tick";
 import { lastTradeFlows, lastTradeTonnage } from "./tick/trade";
@@ -65,8 +67,9 @@ describe("snapshots", () => {
     const world = realmWorld();
     const known = buildStaticData(world).edges.length;
     (world.edges[1] as (typeof world.edges)[number]).isBlocked = true;
-    (world.areas[1] as (typeof world.areas)[number]).airportProgress = world.config.transport.airportWorkerDaysPerLevel;
-    runTick(world); // the new airport makes air routes
+    (world.areas[1] as (typeof world.areas)[number]).airportLevel = 1;
+    rebuildAirRoutes(world); // the new airport makes air routes
+    runTick(world);
     const snapshot = buildSnapshot(world, 0, known);
     expect(snapshot.newEdges.length).toBeGreaterThan(0);
     expect(snapshot.newEdges.length).toBe(world.edges.length - known);
@@ -79,7 +82,7 @@ describe("snapshots", () => {
     const buffers = snapshotTransferables(snapshot);
     expect(new Set(buffers).size).toBe(buffers.length);
     // Areas, edges (transport cost, capacity, flags, tonnage, migration), area details, depots.
-    expect(buffers.length).toBe(15 + 5 + 4 * 11 + 3);
+    expect(buffers.length).toBe(17 + 5 + 4 * 11 + 3);
     expect(snapshotTransferables(buildSnapshot(realmWorld(), 0, undefined, { flowGood: 0 })).length).toBe(
       buffers.length + 1,
     );
@@ -150,7 +153,7 @@ describe("snapshots", () => {
 
   it("carry each area's gross and net income per member of the workforce, and the wage of each private job", () => {
     const world = realmWorld();
-    send(world, { type: "setJobTarget", area: 0, job: { kind: "fortify" }, targetWorkers: 50 });
+    send(world, { type: "setJobTarget", area: 0, job: { kind: "produce", good: 0 }, targetWorkers: 50 });
     runTick(world);
     const { hoursPerWorkerDay, workforceShare } = world.config.economy;
     const area = world.areas[0] as (typeof world.areas)[number];
@@ -166,8 +169,12 @@ describe("snapshots", () => {
       earned += (area.privateWorkers[good.id] as number) * (detail?.wage[good.id] as number);
       workers += area.privateWorkers[good.id] as number;
     }
-    // Without taxes, gross and net income are the same: private wages and government wages over the workforce.
-    const governmentPay = governmentWorkers * (state?.wageOffer ?? 0) * hoursPerWorkerDay;
+    // Without taxes, gross and net income are the same: private wages, government wages and the pay of the port and
+    // airport staff, over the workforce.
+    const staffShare = world.config.infrastructure.defaultStaffWageShare;
+    const staffPay = state ? infrastructureBillPerDay(world.config, area, state, staffShare).staff : 0;
+    expect(staffPay).toBeGreaterThan(0);
+    const governmentPay = governmentWorkers * (state?.wageOffer ?? 0) * hoursPerWorkerDay + staffPay;
     expect(snapshot.areas.grossIncome[0]).toBeCloseTo((earned + governmentPay) / workforce, 3);
     expect(snapshot.areas.netIncome[0]).toBeCloseTo(snapshot.areas.grossIncome[0] as number, 5);
     // The wage level is the private wages' mean, per hour, from before the tick's last moves between jobs.

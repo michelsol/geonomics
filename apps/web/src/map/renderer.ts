@@ -300,7 +300,14 @@ export class MapRenderer {
     const g = this.routes.clear();
     const flags = state.snapshot?.edges.flags;
     const position = (area: number) => this.data.areas[area] as StaticData["areas"][number];
-    const open = (id: number) => (flags ? (flags[id] ?? EDGE_ACTIVE) : EDGE_ACTIVE);
+    const capacity = state.snapshot?.edges.capacityPerDay;
+    // Sea and air routes show only while they run: a port or airport at each end, with staff.
+    const open = (id: number) =>
+      capacity && state.edges[id]?.mode !== "land" && !((capacity[id] ?? 0) > 0)
+        ? 0
+        : flags
+          ? (flags[id] ?? EDGE_ACTIVE)
+          : EDGE_ACTIVE;
     // One pass per style, so each style is a single stroke.
     const styles = [
       { mode: "sea", dash: 8, gap: 8, width: 1, color: SEA_ROUTE },

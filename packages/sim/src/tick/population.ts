@@ -66,9 +66,12 @@ export function lastNaturalChange(world: World): Float64Array {
   return scratchOf(world).naturalChange;
 }
 
+/** Migration over an edge relative to a land border; sea and air routes carry migrants only while they run. */
 function modeFactor(world: World, edge: Edge): number {
   const t = world.config.transport;
-  return edge.mode === "land" ? 1 : edge.mode === "sea" ? t.migrationFactorBySea : t.migrationFactorByAir;
+  if (edge.mode === "land") return 1;
+  if (!(edge.capacityPerDay > 0)) return 0;
+  return edge.mode === "sea" ? t.migrationFactorBySea : t.migrationFactorByAir;
 }
 
 function openEdgeCount(world: World, area: Area): number {

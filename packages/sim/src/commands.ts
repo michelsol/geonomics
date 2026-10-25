@@ -2,7 +2,9 @@
 import { armyPath, disbandArmy, planningOrigin, returnSoldiers } from "./army";
 import { resolvePolicies, settleRealm, transferArea, upsertSetting } from "./government";
 import type { Path } from "./graph";
+import { canBuild, INFRASTRUCTURE_KINDS, kindIndex, levelOf } from "./infrastructure";
 import { EPSILON } from "./math";
+import { lowerInfrastructure } from "./tick/infrastructure";
 import { takeWorkers } from "./tick/population";
 import type {
   Area,
@@ -10,7 +12,6 @@ import type {
   Army,
   Command,
   CommandEnvelope,
-  Edge,
   Government,
   GovernmentAreaState,
   GovernmentJob,
@@ -28,6 +29,7 @@ export const MAXIMUM_STANDING_ORDERS = 200;
 const MINIMUM_TAX_RATE = -1;
 const MAXIMUM_TAX_RATE = 5;
 const MAXIMUM_WAGE_OFFER = 10;
+const MAXIMUM_STAFF_WAGE_SHARE = 5;
 
 const PER_GOOD_POLICIES: readonly PolicyName[] = [
   "productionTaxRate",
@@ -120,6 +122,17 @@ function validate(world: World, government: Government, command: Command): strin
       if (reason) return reason;
       if (!isAmount(command.wageOffer) || command.wageOffer > MAXIMUM_WAGE_OFFER)
         return `wage offer must be within [0, ${MAXIMUM_WAGE_OFFER}]`;
+      return null;
+    }
+    case "setInfrastructureTarget": {
+      const reason = ownedState(world, government, command.area).reason;
+      if (reason) return reason;
+      if (!INFRASTRUCTURE_KINDS.includes(command.kind)) return "unknown infrastructure";
+      const maximum = world.config.infrastructure.maximumLevel;
+      if (!Number.isInteger(command.level) || command.level < 0 || command.level > maximum)
+        return `level must be a whole number within [0, ${maximum}]`;
+      if (command.level > 0 && !canBuild(world.areas[command.area] as Area, command.kind))
+        return "ports can only be built in coastal areas";
       return null;
     }
     case "addStandingOrder": {
@@ -219,6 +232,12 @@ function validateSetting(world: World, setting: PolicySetting): string | null {
     if (value !== null && (typeof value !== "number" || !Number.isFinite(value))) return "head tax must be finite";
     return null;
   }
+  if (policy === "staffWageShare") {
+    if (good !== null) return "the staff wage applies to an area, not a good";
+    if (value !== null && (!isAmount(value) || value > MAXIMUM_STAFF_WAGE_SHARE))
+      return `the staff wage must be within [0, ${MAXIMUM_STAFF_WAGE_SHARE}] times the local wage`;
+    return null;
+  }
   if (!PER_GOOD_POLICIES.includes(policy)) return "unknown policy";
   if (good !== null && !isIndex(good, world.goods.length)) return "unknown good"; // null: every good
   if (value === null) return null;
@@ -232,30 +251,13 @@ function validateSetting(world: World, setting: PolicySetting): string | null {
 
 function validateJob(world: World, area: Area, job: GovernmentJob): string | null {
   if (!job || typeof job !== "object") return "malformed job";
-  switch (job.kind) {
-    case "produce": {
-      if (!isIndex(job.good, world.goods.length)) return "unknown good";
-      const good = world.goods[job.good] as World["goods"][number];
-      if (good.isService) return "a government cannot produce a service";
-      if (good.isPrimary && (area.naturalCapacityMaximum[good.id] as number) <= 0)
-        return "the area has no natural capacity for this good";
-      return null;
-    }
-    case "buildInfrastructure": {
-      if (!isIndex(job.edge, world.edges.length)) return "unknown edge";
-      const edge = world.edges[job.edge] as Edge;
-      if (edge.areaA !== area.id && edge.areaB !== area.id) return "the edge does not touch the area";
-      if (edge.mode !== "land") return "infrastructure is built on land edges only";
-      return null;
-    }
-    case "buildPort":
-      return area.isCoastal ? null : "ports can only be built in coastal areas";
-    case "fortify":
-    case "buildAirport":
-      return null;
-    default:
-      return "unknown job";
-  }
+  if (job.kind !== "produce") return "unknown job"; // infrastructure is built with setInfrastructureTarget
+  if (!isIndex(job.good, world.goods.length)) return "unknown good";
+  const good = world.goods[job.good] as World["goods"][number];
+  if (good.isService) return "a government cannot produce a service";
+  if (good.isPrimary && (area.naturalCapacityMaximum[good.id] as number) <= 0)
+    return "the area has no natural capacity for this good";
+  return null;
 }
 
 function validateRule(world: World, rule: StandingRule): string | null {
@@ -326,10 +328,7 @@ export function expireProposals(world: World): void {
 
 // Application
 
-const sameJob = (a: GovernmentJob, b: GovernmentJob): boolean =>
-  a.kind === b.kind &&
-  (a.kind !== "produce" || a.good === (b as typeof a).good) &&
-  (a.kind !== "buildInfrastructure" || a.edge === (b as typeof a).edge);
+const sameJob = (a: GovernmentJob, b: GovernmentJob): boolean => a.kind === b.kind && a.good === b.good;
 
 function execute(world: World, government: Government, command: Command): void {
   switch (command.type) {
@@ -381,6 +380,15 @@ function execute(world: World, government: Government, command: Command): void {
     case "setWageOffer":
       stateOf(government, command.area).wageOffer = command.wageOffer;
       return;
+    case "setInfrastructureTarget": {
+      // Building up waits for construction; taking down is at once, and also stops any construction.
+      const area = world.areas[command.area] as Area;
+      const state = stateOf(government, command.area);
+      state.targetLevel[kindIndex(command.kind)] = command.level;
+      if (command.level <= levelOf(area, command.kind))
+        lowerInfrastructure(world, area, state, command.kind, command.level);
+      return;
+    }
     case "addStandingOrder": {
       const { order } = command;
       government.standingOrders.push({

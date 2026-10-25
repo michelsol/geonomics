@@ -13,6 +13,7 @@ import {
   initializeWorld,
   nextRandom,
   referenceDemandPerPerson,
+  updateInfrastructureEffects,
   type World,
   type WorldConfig,
 } from "@geonomics/sim";
@@ -181,6 +182,9 @@ function buildIslands(options: ScenarioOptions, mode: "sea" | "air"): World {
       const island = k % 2 === 0 ? [0, 1, 2] : [3, 4, 5];
       spreadCapacity(world, good.id, new Map(island.map((area) => [area, 1])));
     }
+    // No realm here to staff the port or airport: they run as if fully staffed.
+    for (const coast of [2, 3]) (world.areas[coast] as World["areas"][number]).staffing.fill(1);
+    updateInfrastructureEffects(world);
   });
 }
 

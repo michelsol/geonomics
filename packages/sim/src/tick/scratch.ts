@@ -83,6 +83,8 @@ function createScratch(world: World, previous: Scratch | undefined): Scratch {
   const goodCount = world.goods.length;
   const areaCount = world.areas.length;
   const perGood = () => new Float64Array(goodCount);
+  // A new edge does not change the areas: what the last production pass and tax phase left for them carries over.
+  const sameAreas = previous !== undefined && previous.marginalOutput.length === areaCount;
   const needGoods: GoodId[][] = world.needs.map(() => []);
   const users: { good: GoodId; quantity: number }[][] = world.goods.map(() => []);
   for (const good of world.goods) {
@@ -100,8 +102,8 @@ function createScratch(world: World, previous: Scratch | undefined): Scratch {
     spoilageLoss: perGood(),
     used: world.areas.map(() => perGood()),
     neutralPolicies: previous?.neutralPolicies ?? neutralPolicies(goodCount),
-    marginalOutput: world.areas.map(() => perGood()),
-    producible: world.areas.map(() => new Uint8Array(goodCount)),
+    marginalOutput: sameAreas ? previous.marginalOutput : world.areas.map(() => perGood()),
+    producible: sameAreas ? previous.producible : world.areas.map(() => new Uint8Array(goodCount)),
     maximumByLabor: perGood(),
     ration: perGood(),
     weights: perGood(),
@@ -120,7 +122,7 @@ function createScratch(world: World, previous: Scratch | undefined): Scratch {
     stateWorkers: world.areas.map(() => null),
     taxDue: new Float64Array(areaCount),
     paymentDue: new Float64Array(areaCount),
-    paidShare: [],
+    paidShare: previous?.paidShare ?? [],
     standingTrades: [],
   };
 }

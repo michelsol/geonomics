@@ -1,13 +1,15 @@
 // The three AI personalities (specification §11): the same rules, tuned differently.
-import type { Personality } from "../types";
+import type { InfrastructureKind, Personality } from "../types";
 
 export interface Traits {
   baseTax: number; // realm production tax rate at the first decision
   minimumTax: number; // the tax never goes below this
   maximumTax: number; // nor above this
   reserveDays: number; // days of tax income the treasury should hold
-  jobShare: number; // share of tax income, after soldiers' wages, spent on government jobs
-  jobWeights: { infrastructure: number; ports: number; fortify: number };
+  infrastructureShare: number; // share of tax income, after soldiers' wages, spent on infrastructure staff and building
+  infrastructureWeights: Record<InfrastructureKind, number>; // how much each kind matters next to the others
+  maximumPorts: number; // areas with a port the realm builds up to
+  maximumAirports: number; // areas with an airport the realm builds up to
   armyShare: number; // standing army as a share of the realm's population
   aggressive: boolean; // declares wars of conquest
   firstWarDelayDays: number; // days after its first decision before a first war
@@ -32,8 +34,10 @@ export const TRAITS: Record<Exclude<Personality, "idle">, Traits> = {
     minimumTax: 0.02,
     maximumTax: 0.2,
     reserveDays: 60,
-    jobShare: 0.4,
-    jobWeights: { infrastructure: 0.5, ports: 0.45, fortify: 0.05 },
+    infrastructureShare: 0.4,
+    infrastructureWeights: { port: 0.35, airport: 0.2, roads: 0.4, fort: 0.05 },
+    maximumPorts: 4,
+    maximumAirports: 2,
     armyShare: 0.005,
     ...PEACEFUL,
   },
@@ -42,8 +46,10 @@ export const TRAITS: Record<Exclude<Personality, "idle">, Traits> = {
     minimumTax: 0.03,
     maximumTax: 0.25,
     reserveDays: 60,
-    jobShare: 0.6,
-    jobWeights: { infrastructure: 0.55, ports: 0.15, fortify: 0.3 },
+    infrastructureShare: 0.6,
+    infrastructureWeights: { port: 0.15, airport: 0.15, roads: 0.45, fort: 0.25 },
+    maximumPorts: 3,
+    maximumAirports: 2,
     armyShare: 0.01,
     ...PEACEFUL,
   },
@@ -52,8 +58,10 @@ export const TRAITS: Record<Exclude<Personality, "idle">, Traits> = {
     minimumTax: 0.05,
     maximumTax: 0.3,
     reserveDays: 45,
-    jobShare: 0.25,
-    jobWeights: { infrastructure: 0.3, ports: 0.05, fortify: 0.65 },
+    infrastructureShare: 0.25,
+    infrastructureWeights: { port: 0.05, airport: 0.05, roads: 0.3, fort: 0.6 },
+    maximumPorts: 2,
+    maximumAirports: 1,
     armyShare: 0.015,
     aggressive: true,
     firstWarDelayDays: 90,

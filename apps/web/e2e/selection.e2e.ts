@@ -99,11 +99,11 @@ test("the brush paints areas into the selection, and actions follow it", async (
 
   // Workers hired for the selection are a total, split over its areas.
   await page.getByRole("navigation").getByRole("button", { name: "Jobs", exact: true }).click();
-  await page.getByLabel("Job", { exact: true }).selectOption("fortify");
+  await page.getByLabel("Job good").selectOption({ label: "Bread" });
   await page.getByLabel("New job workers").fill("1000");
   await page.getByRole("button", { name: "Hire" }).click();
   const job = page.getByTestId("job").first();
-  await expect(job).toContainText("Fortify");
+  await expect(job).toContainText("Produce Bread");
   if (owned > 1) await expect(job).toContainText(`${owned} areas`);
   await expect(job).toContainText("/ 1,000 workers");
 

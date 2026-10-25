@@ -1,5 +1,8 @@
-// An AI's economy (specification §11): the realm tax, wages, government jobs and the personality's standing orders.
-import type { AiMemory, AreaId, Command, GovernmentJob, Personality, StandingRule } from "../types";
+// An AI's economy (specification §11): the realm tax, the soldier wage, infrastructure and the personality's standing
+// orders.
+import { canBuild, INFRASTRUCTURE_KINDS, levelCost } from "../infrastructure";
+import { snapshotLevel } from "../snapshot";
+import type { AiMemory, AreaId, Command, InfrastructureKind, Personality, StandingRule } from "../types";
 import type { Traits } from "./personalities";
 import type { Realm } from "./realm";
 import type { AiView } from "./view";
@@ -8,13 +11,8 @@ const TAX_STEP_UP = 0.02;
 const MAXIMUM_WAGE = 10; // the highest wage a command accepts
 const MINIMUM_WAGE = 0.1; // war can push an area's wage level below zero
 const TAX_STEP_DOWN = 0.01;
-const WAGE_PREMIUM = 1.1; // offers above the local wage level, so hiring goes ahead and nobody quits
-const JOB_WORKFORCE_SHARE = 0.01; // government jobs take at most this share of the realm's workforce
-const MINIMUM_JOB_WORKERS = 5;
-const RETARGET_SHARE = 0.1; // job targets change only when they move by more than this share
-const INFRASTRUCTURE_EDGES = 3;
-const PORT_AREAS = 2;
-const FORTIFIED_AREAS = 3;
+const WAGE_PREMIUM = 1.1; // soldiers are paid above the realm's wage level, so nobody deserts
+const MAXIMUM_CONSTRUCTIONS = 2; // levels under construction at once
 const GRANARIES = 5; // a builder keeps staples in this many of its most populous areas
 
 export function decideEconomy(
@@ -27,7 +25,7 @@ export function decideEconomy(
 ): void {
   setTax(realm, memory, traits, commands);
   setSoldierWage(realm, commands);
-  staffJobs(view, realm, traits, commands);
+  manageInfrastructure(view, realm, traits, commands);
   placeStandingOrders(view, realm, memory, traits, personality, commands);
 }
 
@@ -59,101 +57,110 @@ function setSoldierWage(realm: Realm, commands: Command[]): void {
     commands.push({ type: "setSoldierWage", wage });
 }
 
-interface Candidate {
+/** One level of one kind in one area, as the AI weighs it. */
+interface Option {
   area: AreaId;
-  job: GovernmentJob;
+  kind: InfrastructureKind;
+  level: number; // the built level
+  score: number; // the personality's weight times what the area gains, less for each level already built
 }
 
-const jobKey = (area: AreaId, job: GovernmentJob) =>
-  `${area}:${job.kind}:${job.kind === "produce" ? job.good : job.kind === "buildInfrastructure" ? job.edge : ""}`;
-
-/** Where each kind of job helps most, by the personality's weights; kinds with nowhere to go are dropped. */
-function jobCandidates(view: AiView, realm: Realm): Record<keyof Traits["jobWeights"], Candidate[]> {
+/**
+ * Infrastructure within a budget (specification §11, Infrastructure): a share of tax income after soldiers' pay covers
+ * the staff of what stands and the payments of what is being built. With room in the budget and a treasury above
+ * half its reserve, it starts the best next level; short of money, it stops construction, then takes down its least
+ * valuable level.
+ */
+function manageInfrastructure(view: AiView, realm: Realm, traits: Traits, commands: Command[]): void {
+  if (realm.incomePerDay <= 0) return; // no tax yet: building starts at the next decision
+  const { config } = view.data;
+  const inf = config.infrastructure;
   const { areas, edges } = view.snapshot;
-  const { transport, government } = view.data.config;
-  const capital = realm.government.capital;
-  const byPopulation = (a: AreaId, b: AreaId) => (areas.population[b] as number) - (areas.population[a] as number);
-  const infrastructure: { candidate: Candidate; tonnage: number }[] = [];
+  const government = realm.government;
+  const share =
+    government.realmPolicies.find((s) => s.policy === "staffWageShare" && s.good === null)?.value ??
+    inf.defaultStaffWageShare;
+  const staffPerDay = (area: AreaId, kind: InfrastructureKind, levels: number) =>
+    levels *
+    inf.staffPerLevel[kind] *
+    share *
+    Math.max(areas.wageLevel[area] as number, 0) *
+    config.economy.hoursPerWorkerDay;
+  const paymentPerDay = (kind: InfrastructureKind, level: number) =>
+    levelCost(config, kind, level) / inf.buildDaysPerLevel[kind];
+  const set = (area: AreaId, kind: InfrastructureKind, level: number) =>
+    commands.push({ type: "setInfrastructureTarget", area, kind, level });
+
+  // What the realm spends now, and on what.
+  let spending = 0;
+  const building: Option[] = [];
+  const counts: Record<InfrastructureKind, number> = { port: 0, airport: 0, roads: 0, fort: 0 };
+  for (const state of government.areaStates) {
+    const coastal = view.data.areas[state.area]?.isCoastal ?? false;
+    for (const [k, kind] of INFRASTRUCTURE_KINDS.entries()) {
+      const level = snapshotLevel(areas, state.area, kind);
+      if (level > 0) counts[kind]++;
+      spending += staffPerDay(state.area, kind, level);
+      const target = Math.min(state.targetLevel[k] as number, inf.maximumLevel);
+      if (target > level && canBuild({ isCoastal: coastal }, kind)) {
+        spending += paymentPerDay(kind, level + 1);
+        building.push({ area: state.area, kind, level, score: 0 });
+      }
+    }
+  }
+
+  // What each area would gain: people served, and for roads the land trade passing through.
+  const largest = Math.max(1, ...[...realm.owned].map((area) => areas.population[area] as number));
+  const tonnage = new Float64Array(view.data.areas.length);
   view.data.edges.forEach((edge, id) => {
-    if (edge.mode !== "land" || !realm.owned.has(edge.areaA) || !realm.owned.has(edge.areaB)) return;
-    const tonnage = (edges.tonnage[2 * id] as number) + (edges.tonnage[2 * id + 1] as number);
-    if (tonnage <= 0) return;
-    const area = byPopulation(edge.areaA, edge.areaB) <= 0 ? edge.areaA : edge.areaB;
-    infrastructure.push({ candidate: { area, job: { kind: "buildInfrastructure", edge: id } }, tonnage });
+    if (edge.mode !== "land") return;
+    const carried = (edges.tonnage[2 * id] as number) + (edges.tonnage[2 * id + 1] as number);
+    tonnage[edge.areaA] = (tonnage[edge.areaA] as number) + carried;
+    tonnage[edge.areaB] = (tonnage[edge.areaB] as number) + carried;
   });
-  infrastructure.sort((a, b) => b.tonnage - a.tonnage);
-  const ports: Candidate[] = [...realm.owned]
+  const busiest = Math.max(1e-9, ...[...realm.owned].map((area) => tonnage[area] as number));
+  const border = new Set(realm.border);
+  const options: Option[] = [];
+  for (const area of realm.owned) {
+    const people = (areas.population[area] as number) / largest;
+    const coastal = view.data.areas[area]?.isCoastal ?? false;
+    for (const kind of INFRASTRUCTURE_KINDS) {
+      const level = snapshotLevel(areas, area, kind);
+      let value = 0;
+      if (kind === "port") value = coastal && (level > 0 || counts.port < traits.maximumPorts) ? people : 0;
+      else if (kind === "airport")
+        value =
+          level > 0 || counts.airport < traits.maximumAirports ? people * (area === government.capital ? 2 : 1) : 0;
+      else if (kind === "roads") value = people + (tonnage[area] as number) / busiest;
+      else value = border.has(area) ? people : 0;
+      if (value > 0)
+        options.push({ area, kind, level, score: (traits.infrastructureWeights[kind] * value) / (level + 1) });
+    }
+  }
+
+  const budget = traits.infrastructureShare * Math.max(0, realm.incomePerDay - realm.soldierSpendingPerDay);
+  const treasury = government.treasury;
+  if (realm.netPerDay !== null && realm.netPerDay < 0 && treasury < realm.reserve / 2) {
+    // Short of money: stop building, and if nothing is being built, take down the least valuable level.
+    if (building.length > 0) for (const option of building) set(option.area, option.kind, option.level);
+    else {
+      const built = options
+        .filter((option) => option.level > 0)
+        .sort((a, b) => a.score - b.score || a.area - b.area)[0];
+      if (built) set(built.area, built.kind, built.level - 1);
+    }
+    return;
+  }
+  if (treasury < realm.reserve / 2 || building.length >= MAXIMUM_CONSTRUCTIONS) return;
+  const underWay = new Set(building.map((option) => `${option.area}:${option.kind}`));
+  const best = options
+    .filter((option) => option.level < inf.maximumLevel && !underWay.has(`${option.area}:${option.kind}`))
     .filter(
-      (area) => view.data.areas[area]?.isCoastal && (areas.portLevel[area] as number) < transport.maximumPortLevel,
+      (option) =>
+        spending + staffPerDay(option.area, option.kind, 1) + paymentPerDay(option.kind, option.level + 1) <= budget,
     )
-    .sort(byPopulation)
-    .slice(0, PORT_AREAS)
-    .map((area) => ({ area, job: { kind: "buildPort" } }));
-  if (capital !== null && (areas.airportLevel[capital] as number) < transport.maximumAirportLevel)
-    ports.push({ area: capital, job: { kind: "buildAirport" } });
-  return {
-    infrastructure: infrastructure.slice(0, INFRASTRUCTURE_EDGES).map((entry) => entry.candidate),
-    ports,
-    fortify: realm.border
-      .filter((area) => (areas.fortificationLevel[area] as number) < government.maximumFortificationLevel)
-      .slice(0, FORTIFIED_AREAS)
-      .map((area) => ({ area, job: { kind: "fortify" } })),
-  };
-}
-
-function staffJobs(view: AiView, realm: Realm, traits: Traits, commands: Command[]): void {
-  if (realm.incomePerDay <= 0) return; // no tax yet: jobs start at the next decision
-  const { economy } = view.data.config;
-  const { areas } = view.snapshot;
-  const wage = WAGE_PREMIUM * realm.wageLevel * economy.hoursPerWorkerDay;
-  let budget = traits.jobShare * Math.max(0, realm.incomePerDay - realm.soldierSpendingPerDay);
-  if (realm.netPerDay !== null && realm.netPerDay < 0 && realm.government.treasury < realm.reserve)
-    budget = Math.min(budget, 0.5 * realm.jobSpendingPerDay); // short of money: cut back
-  const workforce = realm.population * economy.workforceShare;
-  const workers = Math.min(budget / Math.max(wage, 1e-9), JOB_WORKFORCE_SHARE * workforce);
-
-  const candidates = jobCandidates(view, realm);
-  const weights = { ...traits.jobWeights };
-  // Kinds with nowhere to go drop out; the others share the budget in proportion.
-  for (const kind of Object.keys(weights) as (keyof typeof weights)[])
-    if (candidates[kind].length === 0) weights[kind] = 0;
-  const weightSum = Object.values(weights).reduce((sum, w) => sum + w, 0);
-  const desired = new Map<string, { candidate: Candidate; target: number }>();
-  if (weightSum > 0)
-    for (const kind of Object.keys(weights) as (keyof typeof weights)[]) {
-      const list = candidates[kind];
-      const each = (workers * weights[kind]) / weightSum / Math.max(list.length, 1);
-      if (each < MINIMUM_JOB_WORKERS) continue;
-      for (const candidate of list)
-        desired.set(jobKey(candidate.area, candidate.job), { candidate, target: Math.round(each) });
-    }
-
-  for (const state of realm.government.areaStates) {
-    for (const assignment of state.jobs) {
-      const { job, targetWorkers } = assignment;
-      const key = jobKey(state.area, job);
-      const want = desired.get(key);
-      if (want) {
-        desired.delete(key);
-        if (Math.abs(want.target - targetWorkers) > RETARGET_SHARE * targetWorkers)
-          commands.push({ type: "setJobTarget", area: state.area, job, targetWorkers: want.target });
-      } else if (targetWorkers > 0) commands.push({ type: "setJobTarget", area: state.area, job, targetWorkers: 0 });
-    }
-  }
-  for (const { candidate, target } of desired.values())
-    commands.push({ type: "setJobTarget", area: candidate.area, job: candidate.job, targetWorkers: target });
-
-  // Wages that hire: a little above the local wage level wherever the government employs.
-  const staffed = new Set<AreaId>();
-  for (const state of realm.government.areaStates) if (state.jobs.length > 0) staffed.add(state.area);
-  for (const command of commands)
-    if (command.type === "setJobTarget" && command.targetWorkers > 0) staffed.add(command.area);
-  for (const state of realm.government.areaStates) {
-    if (!staffed.has(state.area)) continue;
-    const offer = wageFor(areas.wageLevel[state.area] as number);
-    if (Number.isFinite(offer) && Math.abs(offer - state.wageOffer) > 0.05 * state.wageOffer)
-      commands.push({ type: "setWageOffer", area: state.area, wageOffer: offer });
-  }
+    .sort((a, b) => b.score - a.score || a.area - b.area)[0];
+  if (best) set(best.area, best.kind, best.level + 1);
 }
 
 /** The goods the realm consumes most, by value, never services; `filter` narrows the choice. */

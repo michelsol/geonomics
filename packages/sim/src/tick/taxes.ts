@@ -1,6 +1,7 @@
-// Phase 5: taxes, subsidies and wages of workers and soldiers (specification §6, Tax collection, Hiring and wages;
-// specification §7, Armies).
+// Phase 5: taxes, subsidies, wages of workers, staff and soldiers, and construction payments (specification §6, Tax
+// collection, Hiring and wages, Infrastructure; specification §7, Armies).
 import { armyArea } from "../army";
+import { infrastructureBillPerDay, staffWageShareOf } from "../infrastructure";
 import { EPSILON } from "../math";
 import type { Area, GovernmentAreaState, World } from "../types";
 import { policiesOf, type Scratch, scratchOf } from "./scratch";
@@ -21,7 +22,12 @@ export function runTaxes(world: World): void {
       government.treasury += collect(world, scratch, area, state);
       let workers = 0;
       for (const job of state.jobs) workers += job.workers;
-      paymentDue[id] = (paymentDue[id] as number) + workers * state.wageOffer * wagePerWorker;
+      const share = staffWageShareOf(world.config, state.resolvedPolicies);
+      const infrastructure = infrastructureBillPerDay(world.config, area, state, share);
+      paymentDue[id] =
+        (paymentDue[id] as number) +
+        workers * state.wageOffer * wagePerWorker +
+        (infrastructure.staff + infrastructure.construction) * days;
     }
     let bill = 0;
     for (const id of government.ownedAreas) bill += paymentDue[id] as number;

@@ -9,7 +9,7 @@ The rules of the game, one file per section. Section numbers are stable: code co
 | 3 | [Data model](03-data-model.md) | Identifiers and world, Needs and goods, Areas and edges, Governments, Armies and diplomacy, Commands, Command validation |
 | 4 | [Pace, stability and convergence](04-pace-and-stability.md) | Rule 1: two separate clocks, Rule 2: rates become fractions through an exponential, Rule 3: separate the time scales, Rule 4: decide jobs on smoothed prices, Rule 5: hard limits per tick, Rule 6: start near equilibrium, then warm up, Global pace parameters, Diagnostics, WorldConfig |
 | 5 | [Economy mechanics](05-economy.md) | Workforce, Production, Consumption, Trade, Sea and air routes, Prices, Labor allocation, Population, Map generation, Goods catalogs |
-| 6 | [Government mechanics](06-government.md) | Founding, Policies, Tax collection, Market orders, Depots, Hiring and wages, Government jobs, Standing orders |
+| 6 | [Government mechanics](06-government.md) | Founding, Policies, Tax collection, Market orders, Depots, Hiring and wages, Government jobs, Infrastructure, Standing orders |
 | 7 | [War and conquest](07-war.md) | Relations, Militia, Armies, Equipment and desertion, Power, Combat, Siege and capture, Peace |
 | 8 | [Simulation tick](08-tick.md) | — |
 | 9 | [Architecture and stack](09-architecture.md) | Stack, Packages, Host loop, Messages, Encoding, Snapshots, Price table, Joining, Hosting on mobile, Save and load, Offline and install, Single player |

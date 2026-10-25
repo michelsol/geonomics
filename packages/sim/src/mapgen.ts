@@ -8,7 +8,6 @@ import { MinHeap } from "./heap";
 import { referenceDemandPerPerson } from "./init";
 import { nextRandom, seedFrom } from "./random";
 import { LAND_DISTANCE_PER_TRAVEL_DAY } from "./routes";
-import { rebuildAirRoutes } from "./tick/infrastructure";
 import type { AreaId, Terrain, World } from "./types";
 import { type AreaSpec, addEdge, createEmptyWorld, createWorld } from "./world";
 
@@ -144,7 +143,6 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
       productivity: TERRAIN_EFFECTS[terrain].productivity * (0.9 + 0.2 * local),
       terrain,
       isCoastal: coastal[id] as boolean,
-      portLevel: coastal[id] ? 1 : 0,
     };
   });
 
@@ -173,7 +171,8 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
     }
   }
 
-  // 7. Sea routes: each port to its nearest ports by distance over water, then enough routes to join every island.
+  // 7. Sea lanes: each coastal area to its nearest coasts by distance over water, then enough lanes to join every
+  // island. Sea routes between ports follow them once the realms have ports (rebuildSeaRoutes).
   const seaRoutes = new Map<string, { a: AreaId; b: AreaId; distance: number }>();
   for (const [id, cell] of landCells.entries()) {
     if (!coastal[id]) continue;
@@ -188,7 +187,7 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
     }
   }
   for (const route of [...seaRoutes.values()].sort((p, q) => p.a - q.a || p.b - q.b)) {
-    addEdge(world, { a: route.a, b: route.b, mode: "sea", distance: route.distance });
+    addEdge(world, { a: route.a, b: route.b, mode: "sea", distance: route.distance, lane: true });
   }
   joinIslands();
 
@@ -253,13 +252,7 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
     }
   }
 
-  // 9. Airports in the most populous areas, linked by air routes.
-  const byPopulation = [...world.areas].sort((a, b) => b.population - a.population || a.id - b.id);
-  const airports = Math.max(2, Math.ceil(config.transport.initialAirportShare * world.areas.length));
-  for (const area of byPopulation.slice(0, airports)) area.airportLevel = 1;
-  rebuildAirRoutes(world);
-
-  // 10. Capitals: the most populous area, then each next one far from the others and populous. An area no capital
+  // 9. Capitals: the most populous area, then each next one far from the others and populous. An area no capital
   // reaches over land or sea counts as one hop beyond the farthest reachable area, so islands come early but are
   // still ranked by population.
   const capitals: AreaId[] = [];
@@ -335,7 +328,13 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
       if (!nearest) throw new Error("Map generation: an island cannot be reached by sea");
       const from = areaOf[nearest.from] as number;
       const to = areaOf[nearest.cell] as number;
-      addEdge(world, { a: Math.min(from, to), b: Math.max(from, to), mode: "sea", distance: nearest.distance });
+      addEdge(world, {
+        a: Math.min(from, to),
+        b: Math.max(from, to),
+        mode: "sea",
+        distance: nearest.distance,
+        lane: true,
+      });
     }
   }
 }

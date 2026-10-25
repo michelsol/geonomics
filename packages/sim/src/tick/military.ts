@@ -1,6 +1,7 @@
 // Phases 3, 7 and 8: equipment, desertion, marching, combat, sieges and captures (specification §7).
 import { canMarch, disbandArmy, returnSoldiers } from "../army";
 import { transferArea } from "../government";
+import { effectiveLevel } from "../infrastructure";
 import { EPSILON, fractionPerTick } from "../math";
 import type { Area, Army, Edge, Government, GovernmentId, World } from "../types";
 import { changePopulation } from "./population";
@@ -163,7 +164,7 @@ function fight(world: World, area: Area, attackers: Army[], defenders: Army[]): 
     defendSoldiers += army.soldiers;
     defendPower += army.soldiers * powerPerSoldier(army);
   }
-  const defensePower = defendPower * (1 + area.fortificationLevel);
+  const defensePower = defendPower * (1 + effectiveLevel(area, "fort"));
   const attackersLost = Math.min(attackSoldiers, (k * defensePower) / (attackPower / attackSoldiers));
   const defendersLost = Math.min(defendSoldiers, (k * attackPower) / Math.max(defendPower / defendSoldiers, EPSILON));
 
@@ -206,7 +207,7 @@ function besiege(world: World, area: Area, attackers: Army[]): void {
   }
   area.siegeProgress +=
     (m.siegeRatePerDay * militaryResponsiveness * days * leaderPower) /
-    ((1 + area.fortificationLevel) * Math.max(area.population, 1));
+    ((1 + effectiveLevel(area, "fort")) * Math.max(area.population, 1));
   if (area.siegeProgress >= 1) transferArea(world, area, leader);
 }
 

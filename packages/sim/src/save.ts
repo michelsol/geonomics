@@ -4,7 +4,7 @@ import { decode, ExtensionCodec, encode } from "@msgpack/msgpack";
 import type { World } from "./types";
 
 const MAGIC = "geonomics-save";
-export const SAVE_FORMAT_VERSION = 1;
+export const SAVE_FORMAT_VERSION = 2; // 2: leveled infrastructure with staff (specification §6, Infrastructure)
 
 /** What a save says about itself, readable without decoding the world. */
 export interface SaveInfo {
@@ -73,6 +73,8 @@ function unpack(bytes: Uint8Array): [SaveInfo, World] {
   const version = decoded[1];
   if (typeof version !== "number" || version > SAVE_FORMAT_VERSION)
     throw new Error(`This save is from a newer version of the game (format ${version})`);
+  if (version < SAVE_FORMAT_VERSION)
+    throw new Error(`This save is from an older version of the game (format ${version}) and can no longer be loaded`);
   return [decoded[2] as SaveInfo, decoded[3] as World];
 }
 

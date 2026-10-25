@@ -69,13 +69,14 @@ describe("generateMap", () => {
     }
   });
 
-  it("gives coastal areas ports and sea routes, and the most populous areas airports", () => {
+  it("links coastal areas by sea lanes, with no port, route or airport until realms are founded", () => {
     const coastal = world.areas.filter((area) => area.isCoastal);
     expect(coastal.length).toBeGreaterThan(0);
-    for (const area of coastal) expect(area.portLevel).toBe(1);
-    expect(world.edges.some((edge) => edge.mode === "sea")).toBe(true);
-    expect(world.edges.some((edge) => edge.mode === "air" && edge.isActive)).toBe(true);
-    for (const area of world.areas.filter((a) => !a.isCoastal)) expect(area.portLevel).toBe(0);
+    const sea = world.edges.filter((edge) => edge.mode === "sea");
+    expect(sea.length).toBeGreaterThan(0);
+    for (const edge of sea) expect([edge.isLane, edge.capacityPerDay]).toEqual([true, 0]);
+    expect(world.edges.some((edge) => edge.mode === "air")).toBe(false);
+    for (const area of world.areas) expect([area.portLevel, area.airportLevel, area.roadLevel]).toEqual([0, 0, 0]);
   });
 
   it("builds consistent edges, positions and populations", () => {

@@ -1,8 +1,9 @@
 // An AI's wars (specification §11): defense for every personality; conquest, armies and weapons for the conqueror;
 // peace when a war has run its course.
+import { runningLevel } from "../snapshot";
 import type { AiMemory, AiWar, AreaId, Army, Command, GovernmentId } from "../types";
 import type { Traits } from "./personalities";
-import { armyArea, armyPower, defenseOf, ownerOf, type Realm, recruitable } from "./realm";
+import { armyArea, armyPower, canReach, defenseOf, ownerOf, type Realm, recruitable } from "./realm";
 import type { AiView } from "./view";
 
 const PROPOSAL_DAYS = 30; // a peace proposal expires after this long, and the next one waits as long
@@ -166,7 +167,7 @@ function defend(view: AiView, realm: Realm, memory: AiMemory, commands: Command[
   const { areas } = view.snapshot;
   const sent = new Set<number>();
   for (const [area, power] of [...threat].sort((a, b) => b[1] - a[1])) {
-    const fortification = 1 + (areas.fortificationLevel[area] as number);
+    const fortification = 1 + runningLevel(areas, area, "fort");
     const defense = defenseOf(view, area);
     if (power <= 0.8 * defense) continue;
     const wanted = Math.ceil((1.2 * power - defense) / fortification);
@@ -176,7 +177,13 @@ function defend(view: AiView, realm: Realm, memory: AiMemory, commands: Command[
     if (soldiers >= MINIMUM_RECRUITS) commands.push({ type: "recruitArmy", area, soldiers });
     // The nearest idle army at home joins in.
     const helper = realm.armies
-      .filter((army) => idle(army) && !sent.has(army.id) && !threat.has(armyArea(view, army)))
+      .filter(
+        (army) =>
+          idle(army) &&
+          !sent.has(army.id) &&
+          !threat.has(armyArea(view, army)) &&
+          canReach(view, armyArea(view, army), area),
+      )
       .sort((a, b) => distance(view, armyArea(view, a), area) - distance(view, armyArea(view, b), area))[0];
     if (helper) {
       sent.add(helper.id);
@@ -242,6 +249,7 @@ function attack(view: AiView, realm: Realm, memory: AiMemory, traits: Traits, co
   if (!target) return;
   for (const war of wars) if (war.enemy === ownerOf(view, target.area)) war.target = target.area;
   for (const army of ready) {
+    if (!canReach(view, armyArea(view, army), target.area)) continue;
     if (army.stance !== "attack") commands.push({ type: "setArmyStance", army: army.id, stance: "attack" });
     commands.push({ type: "moveArmy", army: army.id, destination: target.area });
   }
@@ -286,7 +294,8 @@ function considerWar(
   memory.wars.push(war);
   for (const army of ready) {
     commands.push({ type: "setArmyStance", army: army.id, stance: "attack" });
-    commands.push({ type: "moveArmy", army: army.id, destination: choice.weakest.area });
+    if (canReach(view, armyArea(view, army), choice.weakest.area))
+      commands.push({ type: "moveArmy", army: army.id, destination: choice.weakest.area });
   }
 }
 
@@ -296,7 +305,7 @@ function standDown(view: AiView, realm: Realm, traits: Traits, commands: Command
   for (const army of realm.armies) {
     if (!idle(army)) continue;
     if (army.stance === "attack") commands.push({ type: "setArmyStance", army: army.id, stance: "hold" });
-    if (!realm.owned.has(armyArea(view, army)) && capital !== null)
+    if (!realm.owned.has(armyArea(view, army)) && capital !== null && canReach(view, armyArea(view, army), capital))
       commands.push({ type: "moveArmy", army: army.id, destination: capital });
   }
   let excess = realm.soldiers - 1.5 * traits.armyShare * realm.population;

@@ -423,7 +423,8 @@ td {
   border-bottom: 1px solid var(--line);
 }
 .table-scroll td,
-.table-scroll th {
+.table-scroll th,
+td.nowrap {
   white-space: nowrap;
 }
 tr.chosen td {

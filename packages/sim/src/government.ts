@@ -1,7 +1,9 @@
 // Governments: founding, ownership, captures and policy resolution (specifications §6 and §7).
 import { disbandArmy } from "./army";
 import { MinHeap } from "./heap";
+import { INFRASTRUCTURE_KINDS, levelOf } from "./infrastructure";
 import { nextRandom } from "./random";
+import { placeStartingInfrastructure, updateRouteCapacities } from "./tick/infrastructure";
 import type {
   AiMix,
   Area,
@@ -74,7 +76,8 @@ export function createGovernment(world: World, init: GovernmentInit): Government
 /**
  * Founds one government per capital and splits the whole map between them: each area joins the capital nearest by
  * travel distance over active land and sea edges (ties to the earlier capital), and an area with no such path joins
- * the capital nearest in a straight line. Neighboring realms get different colors where the palette allows.
+ * the capital nearest in a straight line. Neighboring realms get different colors where the palette allows. Then
+ * each realm gets its starting ports and airports (see placeStartingInfrastructure).
  */
 export function foundGovernments(world: World, capitals: readonly AreaId[], mix: AiMix = "balanced"): Government[] {
   const realmOf = nearestCapitals(world, capitals);
@@ -82,7 +85,7 @@ export function foundGovernments(world: World, capitals: readonly AreaId[], mix:
   for (const area of world.areas) realms[realmOf[area.id] as number]?.push(area.id);
   const colors = realmColors(world, realmOf, capitals.length);
   const personalities = aiPersonalities(world, mix, capitals.length);
-  return capitals.map((capital, i) =>
+  const governments = capitals.map((capital, i) =>
     createGovernment(world, {
       capital,
       areas: realms[i] as AreaId[],
@@ -90,6 +93,8 @@ export function foundGovernments(world: World, capitals: readonly AreaId[], mix:
       personality: personalities[i] as Personality,
     }),
   );
+  placeStartingInfrastructure(world);
+  return governments;
 }
 
 const MIXES: Record<AiMix, readonly Personality[]> = {
@@ -198,12 +203,18 @@ export function realmIncomePerDay(world: World, government: GovernmentId): numbe
   return income;
 }
 
-/** A fresh state for a newly owned area: empty depot, no jobs, the reference wage and no overrides. */
-export function createAreaState(world: World): GovernmentAreaState {
+/**
+ * A fresh state for a newly owned area: empty depot, no jobs, the reference wage, no overrides, no staff yet, and the
+ * built infrastructure as its target.
+ */
+export function createAreaState(world: World, area: Area): GovernmentAreaState {
   return {
     depot: new Float64Array(world.goods.length),
     jobs: [],
     wageOffer: 1,
+    targetLevel: Uint8Array.from(INFRASTRUCTURE_KINDS, (kind) => levelOf(area, kind)),
+    buildDays: new Float64Array(INFRASTRUCTURE_KINDS.length),
+    staff: new Float64Array(INFRASTRUCTURE_KINDS.length),
     policyOverrides: [],
     resolvedPolicies: neutralPolicies(world.goods.length),
   };
@@ -211,7 +222,7 @@ export function createAreaState(world: World): GovernmentAreaState {
 
 /**
  * Changes an area's owner: updates the owned-area caches and gives the new owner a fresh area state with its realm
- * policies. The old owner's state is dropped; captures handle its depot and jobs first.
+ * policies. The old owner's state is dropped; captures handle its depot, jobs and staff first.
  */
 export function setOwner(world: World, area: Area, owner: GovernmentId | null): void {
   if (area.owner === owner) return;
@@ -221,11 +232,12 @@ export function setOwner(world: World, area: Area, owner: GovernmentId | null): 
     previous.areaStates.delete(area.id);
   }
   area.owner = owner;
+  area.staffing.fill(0); // nobody runs the infrastructure until the new owner hires staff
   if (owner === null) return;
   const government = world.governments[owner] as Government;
   government.ownedAreas.push(area.id);
   government.ownedAreas.sort((a, b) => a - b);
-  government.areaStates.set(area.id, createAreaState(world));
+  government.areaStates.set(area.id, createAreaState(world, area));
   resolvePolicies(government, area.id);
 }
 
@@ -236,6 +248,7 @@ export function neutralPolicies(goodCount: number): ResolvedPolicies {
     importTariffRate: new Float64Array(goodCount),
     exportTariffRate: new Float64Array(goodCount),
     headTaxPerPersonPerDay: 0,
+    staffWageShare: null,
     priceCeiling: new Float64Array(goodCount).fill(Number.POSITIVE_INFINITY),
     priceFloor: new Float64Array(goodCount),
   };
@@ -264,6 +277,7 @@ export function resolveSettings(
   resolved.importTariffRate.fill(0);
   resolved.exportTariffRate.fill(0);
   resolved.headTaxPerPersonPerDay = 0;
+  resolved.staffWageShare = null;
   resolved.priceCeiling.fill(Number.POSITIVE_INFINITY);
   resolved.priceFloor.fill(0);
   for (const settings of [realmPolicies, overrides]) {
@@ -272,11 +286,15 @@ export function resolveSettings(
   }
 }
 
-/** A null value restores the neutral value: no tax, no ceiling, no floor. */
+/** A null value restores the neutral value: no tax, no ceiling, no floor, the default staff wage. */
 function applySetting(resolved: ResolvedPolicies, setting: PolicySetting): void {
   const { value } = setting;
   if (setting.policy === "headTaxPerPersonPerDay") {
     resolved.headTaxPerPersonPerDay = value ?? 0;
+    return;
+  }
+  if (setting.policy === "staffWageShare") {
+    resolved.staffWageShare = value;
     return;
   }
   const neutral = setting.policy === "priceCeiling" ? Number.POSITIVE_INFINITY : 0;
@@ -294,19 +312,23 @@ export function upsertSetting(settings: PolicySetting[], setting: PolicySetting)
 
 /**
  * Hands an area to a new owner after a capture or a peace treaty: its fortification level drops by one, the old
- * owner's jobs end and their workers become unemployed, its depot passes to the new owner and its orders on the area
- * are cancelled. Unless `settle` is false, the old owner's capital then moves if needed (see settleRealm).
+ * owner's jobs and staff end and their workers become unemployed, its construction stops, its depot passes to the new
+ * owner and its orders on the area are cancelled. The infrastructure stands idle until the new owner staffs it.
+ * Unless `settle` is false, the old owner's capital then moves if needed (see settleRealm).
  */
 export function transferArea(world: World, area: Area, newOwner: GovernmentId, settle = true): void {
   const previous = area.owner === null ? undefined : world.governments[area.owner];
   const state = previous?.areaStates.get(area.id);
   area.fortificationLevel = Math.max(0, area.fortificationLevel - 1);
-  area.fortificationProgress = 0;
   area.siegeProgress = 0;
   area.besiegingGovernment = null;
   area.militia = 0;
-  if (state) for (const job of state.jobs) area.unemployedWorkers += job.workers;
+  if (state) {
+    for (const job of state.jobs) area.unemployedWorkers += job.workers;
+    for (const staff of state.staff) area.unemployedWorkers += staff;
+  }
   setOwner(world, area, newOwner);
+  updateRouteCapacities(world, area);
   const depot = world.governments[newOwner]?.areaStates.get(area.id)?.depot as Float64Array;
   if (state) for (let g = 0; g < depot.length; g++) depot[g] = (depot[g] as number) + (state.depot[g] as number);
   if (!previous) return;

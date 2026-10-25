@@ -403,3 +403,25 @@ The transport flows first had their own good choice in the legend, with "all goo
 ### Every realm at the end
 
 The end screen compares every realm from the figures snapshots already carry, plus each realm's peak population recorded during the session. Treasuries and depots stay private even then: a joined player who leaves gets the same table as the host without a final message from the host's world, and nothing private ever leaves the host.
+
+## Infrastructure
+
+### Money and time instead of worker jobs
+
+Ports, airports, roads and forts were built by government jobs: the player hired builders, and worker-days turned into levels or road steps. Nothing needed running once built, so infrastructure only grew, and every coastal area started with a port. Building now costs money paid into the area's savings over a fixed time, and every built level needs staff. Infrastructure has a running cost, so a realm chooses where it pays off, and a short treasury slows construction and empties the staff.
+
+### Staff paid a share of the local wage
+
+The staff wage is set as a share of the area's average private wage, not in man-hours. Local wages differ several-fold across a realm and drift over time; a fixed wage would leave staff quitting in rich areas and overpaid in poor ones, needing constant adjustment. At 110% by default, staff stay wherever the treasury pays. Running at the staffed share, rather than all or nothing, keeps capacity, road costs and defense from jumping when a few workers quit.
+
+### Roads per area
+
+Roads were per border, an area having about six. A road level per area keeps one line per area in the panel and for the AI, and a border gains from both sides: half the way from its own side alone, so roads at a border with a neighbor still help.
+
+### Sea lanes and routes between ports
+
+With ports in only a few areas, the sea routes laid by map generation between neighboring coasts almost never had a port at both ends: in a two-year AI-only game, sea trade fell to nothing. Those links became lanes, which armies sail but goods do not, and sea routes are rebuilt between ports along them, like air routes between airports. The same game then carried about 1,700 to 3,200 tonnes a day by sea over 29 to 32 routes. Trade also stopped counting edges that carry nothing (lanes, routes of idle ports) when splitting an area's surplus between its edges, which had diverted part of it to them.
+
+### A new save version
+
+Old saves held construction progress in worker-days and road steps per border, which have no equivalent in levels, so version 1 saves are refused with a message rather than converted.

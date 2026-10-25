@@ -123,18 +123,20 @@ Sea and air traffic reuse edges instead of adding a separate system. A route is 
 
 | | Sea routes | Air routes |
 | --- | --- | --- |
-| Endpoints | Two coastal areas, both with `portLevel` ≥ 1 | Two areas, both with `airportLevel` ≥ 1 |
-| Created by | Map generation: each coastal area is linked to its `seaRoutesPerPort` nearest coastal areas by distance over water | Rebuilt whenever an airport opens or grows: each airport is linked to its `airRoutesPerAirport` nearest airports, and airports at `maximumAirportLevel` are all linked to each other as hubs |
+| Endpoints | Two areas with a port (`portLevel` ≥ 1) | Two areas with an airport (`airportLevel` ≥ 1) |
+| Created by | Rebuilt whenever a port opens or closes: each port is linked to its `seaRoutesPerPort` nearest ports by distance along the sea lanes, without sailing past another port | Rebuilt whenever an airport opens, closes or reaches the maximum level: each airport is linked to its `airRoutesPerAirport` nearest airports, and airports at `maximumLevel` are all linked to each other as hubs |
 | Base transport cost | `seaCostPerDistance × distance` | `airBaseCost + airCostPerDistance × distance` |
-| Capacity per day and direction | `seaCapacityPerPortLevel × min(portLevel)` | `airCapacityPerAirportLevel × min(airportLevel)` |
+| Capacity per day and direction | `seaCapacityPerPortLevel × min(running port level)` | `airCapacityPerAirportLevel × min(running airport level)` |
 | Suits | Heavy bulk goods over long distances | Light, valuable or perishable goods |
-| Armies | Can embark from a port owned by their government; crossing takes `seaTravelDaysPerDistance × distance` | Cannot use them |
+| Armies | Can embark from a running port owned by their government; crossing takes `seaTravelDaysPerDistance × distance` | Cannot use them |
 | Migration | Multiplied by `migrationFactorBySea` | Multiplied by `migrationFactorByAir` |
 
-- Map generation gives every coastal area a port of level 1, so the base economy trades by sea with no players. It also gives an airport of level 1 to the `initialAirportShare` most populous areas.
-- Governments raise port and airport levels with the `buildPort` and `buildAirport` jobs. Captures leave port and airport levels intact. An air route dropped by a rebuild is deactivated (`isActive` set to false) instead of deleted, so edge ids stay stable, and it is reactivated if a later rebuild picks the same pair again.
-- Infrastructure jobs do not lower route costs; they raise route capacity through port and airport levels.
-- Rebuilding air routes runs only on a change of airport level, which is rare. It is a nearest-neighbor search over the airports by straight-line distance, ties going to the lower area id, done in phase 10, never as part of the normal per-tick work. Every port or airport level change also recomputes the capacity of the routes touching that area.
+- A **running level** is the built level times the staffed share (section 6, Infrastructure), so a route whose port or airport has no staff carries nothing.
+- **Sea lanes** are laid by map generation between neighboring coasts (`isLane`). They carry no goods and no migrants; armies sail them from a running port of their own, and sea routes are measured along them. A world built without lanes keeps the sea routes it was given.
+- Built and taken down by governments (section 6, Infrastructure); captures leave port and airport levels intact. A route dropped by a rebuild is deactivated (`isActive` set to false) instead of deleted, so edge ids stay stable, and it is reactivated if a later rebuild picks the same pair again.
+- Rebuilds run only when a port or airport opens or closes (or an airport reaches the maximum level), done in phase 10 or when a command takes a level down, never as part of the normal per-tick work. Ties go to the lower area id.
+- Capacities and land transport costs follow the running levels in phase 10 of every tick.
+- An edge with no capacity (a lane, or a route whose ports stand idle) takes no part in trade, so it takes no share of an area's surplus.
 - Blocking works as on land: a route is blocked when its two endpoints belong to governments at war, or when either endpoint is under siege. Naval combat and blockades are possible future additions.
 
 ### Prices
@@ -229,12 +231,11 @@ A map is generated from a seed, the catalog and `WorldConfig.map`. Every random 
 | Mountains | 0.7 | 4 | 0.3 |
 | Desert | 0.8 | 1.5 | 0.35 |
 
-4. **Areas.** Each land cell is an area. An area is coastal when it borders a water cell; coastal areas get `portLevel` 1. Productivity is the terrain value times 0.9 to 1.1 from noise. Population is the terrain density, ×1.3 on coasts, times 0.6 to 1.4 from noise, scaled to a mean of `meanAreaPopulation`.
+4. **Areas.** Each land cell is an area. An area is coastal when it borders a water cell. Productivity is the terrain value times 0.9 to 1.1 from noise. Population is the terrain density, ×1.3 on coasts, times 0.6 to 1.4 from noise, scaled to a mean of `meanAreaPopulation`.
 5. **Land edges** join neighboring land cells. Distance is between cell centers; `terrainFactor` is the mean land cost factor of the two areas; `travelDays` is `distance / 25 × terrainFactor`.
-6. **Sea routes.** Each coastal area is linked to its `seaRoutesPerPort` nearest coastal areas by distance over water (a search over water cells), skipping areas it already shares a land edge with. Then, while some areas cannot reach the others, the shortest water route from the group of area 0 to another group is added.
+6. **Sea lanes.** Each coastal area is linked by a lane to its `seaRoutesPerPort` nearest coastal areas by distance over water (a search over water cells), skipping areas it already shares a land edge with. Then, while some areas cannot reach the others, the shortest water lane from the group of area 0 to another group is added. Ports, airports and their routes come with the realms (section 6, Founding).
 7. **Natural capacity.** For each primary good, the eligible areas are those whose terrain is in the good's `terrains` (`coast` meaning coastal areas), or all areas if none match. A noise field per good ranks them. The top areas are chosen until both `presence[abundance]` of the eligible areas and enough population to supply world demand with `extractionLaborShare` of its workforce are reached. An area that holds no primary good gets its best-scoring common good, preferring one suited to its terrain. Capacity totals `capacityHeadroom` × reference demand × world population, split in proportion to population × (noise above the cut + 0.2).
-8. **Airports.** The `initialAirportShare` most populous areas get airport level 1, then air routes are built (section 5, Sea and air routes).
-9. **Capitals.** `governmentCount` capitals: the most populous area, then each next one maximizing hops to the nearest capital over land and sea edges × √population. An area no capital reaches counts one hop beyond the farthest reachable area.
+8. **Capitals.** `governmentCount` capitals: the most populous area, then each next one maximizing hops to the nearest capital over land and sea edges × √population. An area no capital reaches counts one hop beyond the farthest reachable area.
 
 The world is then initialized (Rule 6), a government is founded on each capital (section 6, Founding), and the world is warmed up.
 

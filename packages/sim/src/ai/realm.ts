@@ -1,6 +1,6 @@
 // What an AI works out about its own realm from its view: size, money, armies and borders.
 import { EPSILON } from "../math";
-import type { GovernmentView } from "../snapshot";
+import { type GovernmentView, runningLevel } from "../snapshot";
 import type { AiMemory, AreaId, Army, GovernmentId } from "../types";
 import type { Traits } from "./personalities";
 import type { AiView } from "./view";
@@ -38,13 +38,13 @@ export const ownerOf = (view: AiView, area: AreaId): GovernmentId | null => {
   return owner < 0 ? null : owner;
 };
 
-/** Defense of an area against attackers: its militia and its owner's armies there, times its fortification. */
+/** Defense of an area against attackers: its militia and its owner's armies there, times its running fortification. */
 export function defenseOf(view: AiView, area: AreaId): number {
   const { areas, armies } = view.snapshot;
   const owner = areas.owner[area] as number;
   let power = areas.militia[area] as number;
   for (const army of armies) if (army.owner === owner && armyArea(view, army) === area) power += armyPower(army);
-  return power * (1 + (areas.fortificationLevel[area] as number));
+  return power * (1 + runningLevel(areas, area, "fort"));
 }
 
 export function assess(view: AiView, memory: AiMemory, traits: Traits): Realm {
@@ -99,6 +99,29 @@ export function assess(view: AiView, memory: AiMemory, traits: Traits): Realm {
     reserve: traits.reserveDays * incomePerDay,
     border,
   };
+}
+
+/**
+ * Whether an army of this realm can march from one area to another, as the host checks it (see canMarch): across any
+ * land border, and by sea only from a running port the realm holds.
+ */
+export function canReach(view: AiView, from: AreaId, to: AreaId): boolean {
+  if (from === to) return true;
+  const { areas } = view.snapshot;
+  const seen = new Set([from]);
+  const queue = [from];
+  while (queue.length > 0) {
+    const area = queue.pop() as AreaId;
+    const land = view.landNeighbors[area] ?? [];
+    const sails = (areas.owner[area] as number) === view.me && runningLevel(areas, area, "port") > 0;
+    for (const next of sails ? (view.neighbors[area] ?? []) : land) {
+      if (seen.has(next)) continue;
+      if (next === to) return true;
+      seen.add(next);
+      queue.push(next);
+    }
+  }
+  return false;
 }
 
 /** Workers an area could give up to an army: its unemployed and half its private workers. */

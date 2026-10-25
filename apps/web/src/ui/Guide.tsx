@@ -55,8 +55,12 @@ export function Guide() {
               market, produced by government jobs or taken as taxes in kind.
             </li>
             <li>
-              <b>Jobs</b>: hire workers to build roads, ports, airports and fortifications, or to produce goods. Better
-              roads and ports carry more trade for less.
+              <b>Jobs</b>: hire workers to produce goods for your depots.
+            </li>
+            <li>
+              <b>Infrastructure</b>: build ports, airports, roads and forts up to level 3, paying from the treasury into
+              the area as it is built, or take them down at once. Each level needs staff, paid a share of the local
+              wage; without them it does not run. Better roads and ports carry more trade for less.
             </li>
           </ul>
         </section>

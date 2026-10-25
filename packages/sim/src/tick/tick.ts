@@ -5,8 +5,7 @@ import type { Area, CommandEnvelope, World } from "../types";
 import { runConsumption } from "./consumption";
 import { runDecay } from "./decay";
 import { runHiring } from "./hiring";
-import { advanceInfrastructure } from "./infrastructure";
-import { runJobs } from "./jobs";
+import { runConstruction } from "./infrastructure";
 import { runLabor } from "./labor";
 import { evaluateStandingOrders, runMarket } from "./market";
 import { runDesertion, runEquipment, runMilitary, wearWeapons } from "./military";
@@ -45,8 +44,7 @@ export function runTick(
   runPopulation(world); // 9
   runDecay(world); // 10
   wearWeapons(world); // 10
-  runJobs(world); // 10
-  advanceInfrastructure(world); // 10
+  runConstruction(world); // 10
   world.tick += 1;
   world.gameDay += world.config.pace.gameDaysPerTick;
   return rejections;

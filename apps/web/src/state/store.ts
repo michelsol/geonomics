@@ -28,6 +28,7 @@ export type PanelName =
   | "resources"
   | "policies"
   | "jobs"
+  | "infrastructure"
   | "armies"
   | "diplomacy"
   | "game";
@@ -40,6 +41,7 @@ export const PANEL_LAYERS: Record<PanelName, Layer> = {
   resources: "resources",
   policies: "income",
   jobs: "employment",
+  infrastructure: "realms",
   armies: "realms",
   diplomacy: "realms",
   game: "realms",

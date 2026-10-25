@@ -1,5 +1,6 @@
 // Armies: where they stand, the paths they march and returning soldiers to the population (specification §7).
 import { type Path, shortestPath } from "./graph";
+import { effectiveLevel } from "./infrastructure";
 import type { Area, AreaId, Army, Edge, GovernmentId, World } from "./types";
 
 /** The area an army stands in, or the area it left while marching along an edge. */
@@ -8,14 +9,14 @@ export function armyArea(army: Army): AreaId {
 }
 
 /**
- * Whether an army of `owner` can set out along an edge from an area: never by air, and by sea only from a port the
- * army's own government holds.
+ * Whether an army of `owner` can set out along an edge from an area: never by air, and by sea only from a running
+ * port (built and staffed) the army's own government holds.
  */
 export function canMarch(world: World, owner: GovernmentId, edge: Edge, from: AreaId): boolean {
   if (!edge.isActive || edge.mode === "air") return false;
   if (edge.mode === "land") return true;
   const area = world.areas[from] as Area;
-  return area.owner === owner && area.portLevel >= 1;
+  return area.owner === owner && effectiveLevel(area, "port") > 0;
 }
 
 /** Fastest path by travel days for an army of `owner`, or null when the destination cannot be reached. */

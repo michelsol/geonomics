@@ -171,6 +171,7 @@ describe("combat and sieges", () => {
     const defender = raise(world, 3, 400, 1);
     defender.weapons = 400;
     areaOf(world, 3).fortificationLevel = 1;
+    areaOf(world, 3).staffing[3] = 1; // the fort runs fully staffed
     const k = world.config.military.combatLethalityPerDay;
     const attackPower = 1000 * 1.5;
     const defensePower = 400 * 2 * 2;
@@ -198,7 +199,7 @@ describe("combat and sieges", () => {
     const defender = world.governments[1] as World["governments"][number];
     const state = stateOf(world, 3, 1);
     state.depot[0] = 50;
-    state.jobs.push({ job: { kind: "fortify" }, targetWorkers: 30, workers: 30 });
+    state.staff[3] = 30; // the fort's staff
     defender.marketOrders.push({
       id: 99,
       area: 3,
@@ -217,6 +218,7 @@ describe("combat and sieges", () => {
     runMilitary(world);
     expect(march.owner).toBe(0);
     expect(march.fortificationLevel).toBe(0);
+    expect(Array.from(march.staffing)).toEqual([0, 0, 0, 0]); // idle until the new owner hires staff
     expect(stateOf(world, 3).depot[0]).toBe(50);
     expect(march.unemployedWorkers).toBeGreaterThanOrEqual(unemployed + 30 - 1e-9);
     expect(defender.isEliminated).toBe(true);

@@ -1,5 +1,6 @@
 // The selected areas, one or several (specification §10, Selection): their figures and defense in one grid, a
 // sortable market table and the depot. Explanations show on hover.
+import { INFRASTRUCTURE_KINDS, snapshotLevel } from "@geonomics/sim";
 import { useState } from "react";
 import {
   type ConquestEstimate,
@@ -101,9 +102,14 @@ function SelectionView({ areas, onOpen }: { areas: number[] } & PanelProps) {
           />
           {single !== null && (
             <Stat
-              label="Port · airport · fort"
-              value={`${snapshot.areas.portLevel[single]} · ${snapshot.areas.airportLevel[single]} · ${snapshot.areas.fortificationLevel[single]}`}
-              title="Port and airport levels set sea and air route capacity; each fortification level adds 100% to defense."
+              label="Port · airport · roads · fort"
+              value={INFRASTRUCTURE_KINDS.map((kind) => snapshotLevel(snapshot.areas, single, kind)).join(" · ")}
+              testId="infrastructure-levels"
+              title={`Built levels, 0 to ${data.config.infrastructure.maximumLevel}, each running as far as it is staffed: ${INFRASTRUCTURE_KINDS.map(
+                (kind, k) => `${kind} ${pct(snapshot.areas.staffing[4 * single + k] as number)}`,
+              ).join(
+                ", ",
+              )}. Ports and airports set sea and air route capacity, roads lower land transport costs, and each fort level adds 100% to defense.`}
             />
           )}
           {summary.withDetail > 0 && (
@@ -131,7 +137,7 @@ function SelectionView({ areas, onOpen }: { areas: number[] } & PanelProps) {
             <Stat
               label="Defense power"
               value={fmt(strongest.estimate.defensePower)}
-              title={`${where(strongest.area)}militia ${count(strongest.estimate.militia)} plus the owner's armies here ${fmt(strongest.estimate.armyPower)}, times ${1 + strongest.estimate.fortification} for fortification.${single === null ? " The strongest of the areas." : ""}`}
+              title={`${where(strongest.area)}militia ${count(strongest.estimate.militia)} plus the owner's armies here ${fmt(strongest.estimate.armyPower)}, times ${fmt(1 + strongest.estimate.fortification)} for the running fort.${single === null ? " The strongest of the areas." : ""}`}
             />
           )}
           {hardest && (

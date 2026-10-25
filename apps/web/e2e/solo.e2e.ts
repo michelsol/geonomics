@@ -205,6 +205,32 @@ test("each panel shows its map layer, and flows when its checkbox is on", async 
   await expect(legend).toHaveCount(0);
 });
 
+test("infrastructure is built level by level with money, and taken down at once", async ({ page }) => {
+  await startGame(page);
+  await openTab(page, "Infrastructure");
+  await expect(page.getByTestId("action-target")).toHaveText(/^Actions: /);
+  const fort = page.getByTestId("level-fort");
+  await expect(fort).toHaveText("0");
+  await expect(page.getByTestId("construction-spending")).toHaveText("0 mh/day");
+  // The capital starts with an airport, fully staffed.
+  await expect(page.getByTestId("level-airport")).toHaveText("1");
+  await expect(page.getByTestId("infrastructure-staff")).not.toHaveText(/^0 \//);
+
+  await expect(page.getByRole("button", { name: "Build Fort up" })).toHaveAttribute("title", /mh over \d+ days/);
+  await page.getByRole("button", { name: "Build Fort up" }).click();
+  await expect(fort).toContainText("0 → 1");
+  await expect(page.getByTestId("construction-spending")).not.toHaveText("0 mh/day");
+  await page.getByRole("button", { name: "Take Fort down" }).click();
+  await expect(fort).toHaveText("0");
+
+  // The staff wage is a share of the local private wage; it stays out of the Policies table.
+  await page.getByLabel("Staff wage", { exact: true }).fill("150");
+  await page.getByRole("button", { name: "Set", exact: true }).click();
+  await expect(page.getByLabel("Staff wage", { exact: true })).toHaveValue("150");
+  await openTab(page, "Policies");
+  await expect(page.getByTestId("policies")).not.toContainText("staff");
+});
+
 test("a good in the market table opens it in the Goods panel", async ({ page }) => {
   await startGame(page);
   const name = (await page.getByTestId("market").locator("tbody tr button").nth(1).textContent()) as string;

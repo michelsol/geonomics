@@ -30,14 +30,13 @@ export function createArea(init: AreaInit, goodCount: number, needCount: number)
     savings: 0,
     productivity: init.productivity ?? 1,
     unemployedWorkers: 0,
-    fortificationLevel: 0,
-    fortificationProgress: 0,
     terrain: init.terrain ?? "plains",
     isCoastal: init.isCoastal ?? false,
     portLevel: init.portLevel ?? 0,
-    portProgress: 0,
     airportLevel: init.airportLevel ?? 0,
-    airportProgress: 0,
+    roadLevel: 0,
+    fortificationLevel: 0,
+    staffing: new Float64Array(4),
     siegeProgress: 0,
     militia: 0,
     besiegingGovernment: null,
@@ -96,6 +95,7 @@ export interface EdgeSpec {
   terrainFactor?: number; // land only: multiplies landCostPerDistance (default 1)
   baseTransportCost?: number; // overrides the cost derived from mode and distance
   travelDays?: number; // overrides the default derived from mode and distance
+  lane?: boolean; // sea only: a lane between coasts rather than a route between ports (default false)
 }
 
 export interface WorldSpec {
@@ -135,12 +135,12 @@ export function addEdge(world: World, spec: EdgeSpec): Edge {
   const edge: Edge = {
     id: world.edges.length,
     mode: spec.mode,
+    isLane: spec.mode === "sea" && (spec.lane ?? false),
     areaA: a.id,
     areaB: b.id,
     distance,
     baseTransportCost,
     transportCost: baseTransportCost,
-    infrastructureProgress: 0,
     capacityPerDay: 0,
     travelDays: spec.travelDays ?? edgeTravelDays(world.config, spec.mode, distance),
     isActive: true,

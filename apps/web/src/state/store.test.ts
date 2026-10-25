@@ -180,7 +180,7 @@ describe("conquest estimate", () => {
 });
 
 describe("employment", () => {
-  it("sums private workers, government jobs and the unemployed over areas", () => {
+  it("sums private workers, government jobs, infrastructure staff and the unemployed over areas", () => {
     const { world } = setup();
     const snapshot = buildSnapshot(world, 0);
     const government = snapshot.government as NonNullable<typeof snapshot.government>;
@@ -188,14 +188,17 @@ describe("employment", () => {
     const employment = employmentOf(data, snapshot, government, government.ownedAreas);
     let privateWorkers = 0;
     let unemployed = 0;
+    let staff = 0;
     for (const id of government.ownedAreas) {
       const area = world.areas[id] as World["areas"][number];
       for (const workers of area.privateWorkers) privateWorkers += workers;
       unemployed += area.unemployedWorkers;
+      for (const workers of world.governments[0]?.areaStates.get(id)?.staff ?? []) staff += workers;
     }
     expect(employment.privateTotal).toBeCloseTo(privateWorkers, -1);
     expect(employment.unemployed).toBeCloseTo(unemployed, 0);
-    expect(employment.government).toBe(0);
+    expect(staff).toBeGreaterThan(0); // the starting port and airport
+    expect(employment.government).toBeCloseTo(staff, 3);
   });
 });
 

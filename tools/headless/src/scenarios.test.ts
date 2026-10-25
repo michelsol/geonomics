@@ -18,6 +18,9 @@ describe.each(SCENARIO_NAMES)("%s", (scenario) => {
         expect(area.stock[good.id]).toBeCloseTo(good.isService ? 0 : reserveDaysOf(good, world.config) * used, 6);
         employed += area.privateWorkers[good.id] as number;
       }
+      // Infrastructure staff of a realm's starting ports and airports are part of the workforce too.
+      const state = area.owner === null ? undefined : world.governments[area.owner]?.areaStates.get(area.id);
+      for (const staff of state?.staff ?? []) employed += staff;
       expect(employed + area.unemployedWorkers).toBeCloseTo(area.population * workforceShare, 6);
       expect(area.savings).toBeGreaterThan(0);
     }

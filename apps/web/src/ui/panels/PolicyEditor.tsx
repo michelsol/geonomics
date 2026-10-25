@@ -61,7 +61,12 @@ export function PolicyEditor() {
   const labelOf = (s: PolicySetting) =>
     s.policy === "headTaxPerPersonPerDay" ? policyLabel(s.policy) : `${policyLabel(s.policy)} · ${goodName(s.good)}`;
 
-  const overrides = government.areaStates.filter((s) => s.policyOverrides.length > 0);
+  // The staff wage is set and shown in the Infrastructure panel.
+  const listed = (settings: PolicySetting[]) => settings.filter((s) => s.policy !== "staffWageShare");
+  const realmPolicies = listed(government.realmPolicies);
+  const overrides = government.areaStates
+    .map((state) => ({ area: state.area, policyOverrides: listed(state.policyOverrides) }))
+    .filter((s) => s.policyOverrides.length > 0);
 
   const setting = (): PolicySetting => ({ policy, good: settingGood, value: isRate(policy) ? value / 100 : value });
   const apply = () => {
@@ -76,14 +81,14 @@ export function PolicyEditor() {
           <tr>
             <th colSpan={3}>Every area</th>
           </tr>
-          {government.realmPolicies.length === 0 && (
+          {realmPolicies.length === 0 && (
             <tr>
               <td colSpan={3} className="muted">
                 No realm-wide tax or price control.
               </td>
             </tr>
           )}
-          {government.realmPolicies.map((s) => (
+          {realmPolicies.map((s) => (
             <tr key={`realm-${s.policy}-${s.good}`}>
               <td>{labelOf(s)}</td>
               <td className="num">{show(s)}</td>

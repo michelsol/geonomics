@@ -72,7 +72,8 @@ export function runTrade(world: World): void {
 
   // Pass 1: count, per area and good, the edges where trading pays, so surplus and demand are split between them.
   for (const edge of edges) {
-    if (!edge.isActive || edge.isBlocked) continue;
+    // An edge that carries nothing (a sea lane, a route whose ports stand idle) takes no share of anyone's trade.
+    if (!edge.isActive || edge.isBlocked || !(edge.capacityPerDay > 0)) continue;
     const a = areas[edge.areaA] as Area;
     const b = areas[edge.areaB] as Area;
     const border = a.owner !== b.owner;
@@ -111,7 +112,7 @@ export function runTrade(world: World): void {
   for (const edge of edges) {
     const a = areas[edge.areaA] as Area;
     const b = areas[edge.areaB] as Area;
-    const open = edge.isActive && !edge.isBlocked;
+    const open = edge.isActive && !edge.isBlocked && edge.capacityPerDay > 0;
     const border = a.owner !== b.owner;
     const rates = edge.tradeFlowPerDay;
     const priceA = a.price;

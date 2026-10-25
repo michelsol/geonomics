@@ -10,6 +10,7 @@ export * from "./government";
 export { neutralPolicies, resolveSettings } from "./government";
 export * from "./graph";
 export * from "./hash";
+export * from "./infrastructure";
 export * from "./init";
 export * from "./mapgen";
 export * from "./math";
@@ -18,8 +19,15 @@ export * from "./routes";
 export * from "./save";
 export * from "./snapshot";
 export { purchasingPower } from "./tick/consumption";
-export { advanceInfrastructure, rebuildAirRoutes, updateRouteCapacities } from "./tick/infrastructure";
-export { buildInfrastructure } from "./tick/jobs";
+export {
+  placeStartingInfrastructure,
+  rebuildAirRoutes,
+  rebuildSeaRoutes,
+  runConstruction,
+  staffFully,
+  updateInfrastructureEffects,
+  updateRouteCapacities,
+} from "./tick/infrastructure";
 export { realmWageLevel } from "./tick/military";
 export { lastMigration, lastNaturalChange } from "./tick/population";
 export { hourlyOutputPerWorker } from "./tick/production";

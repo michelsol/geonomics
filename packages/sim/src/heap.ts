@@ -1,4 +1,4 @@
-// Binary min-heap used by the path searches (map generation, depot transfers, marching).
+// Binary min-heap used by the path searches (map generation, sea routes, marching).
 
 /** Binary min-heap of (priority, value) pairs. */
 export class MinHeap {

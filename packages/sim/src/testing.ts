@@ -5,6 +5,7 @@ import { applyCommand } from "./commands";
 import { createConfig, type DeepPartial, type WorldConfig } from "./config";
 import { createGovernment } from "./government";
 import { initializeWorld, referenceDemandPerPerson } from "./init";
+import { staffFully } from "./tick/infrastructure";
 import type { Command, World } from "./types";
 import { createWorld } from "./world";
 
@@ -15,7 +16,8 @@ export const PLAYER = "p1";
 /**
  * Four areas of 10,000 people, each able to produce every primary good at twice its own demand:
  * 0 "Harbor" (port and airport) — land — 1 "Valley" — land — 3 "March"; 0 — sea and air — 2 "Isle" (port and airport).
- * Government 0 (human player p1) owns 0, 1 and 2 with its capital at 0; government 1 (AI) owns 3.
+ * Government 0 (human player p1) owns 0, 1 and 2 with its capital at 0; government 1 (AI) owns 3. The port and
+ * airports start fully staffed.
  */
 export function realmWorld(config?: DeepPartial<WorldConfig>): World {
   const probe = createWorld(smallCatalog, createConfig(smallCatalog), {
@@ -56,6 +58,7 @@ export function realmWorld(config?: DeepPartial<WorldConfig>): World {
   initializeWorld(world);
   createGovernment(world, { capital: 0, areas: [0, 1, 2], controller: { kind: "human", player: PLAYER } });
   createGovernment(world, { capital: 3 });
+  staffFully(world);
   return world;
 }
 

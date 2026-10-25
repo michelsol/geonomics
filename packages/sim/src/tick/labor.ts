@@ -1,4 +1,5 @@
 // Phase 7: labor allocation (specification §5, Labor allocation). Government hiring joins this phase in stage 6.
+import { infrastructureBillPerDay, staffWageShareOf } from "../infrastructure";
 import { EPSILON, fractionPerTick } from "../math";
 import type { Area, World } from "../types";
 import { savingsFactor } from "./consumption";
@@ -35,8 +36,9 @@ export function computeValueAdded(world: World, area: Area, scratch: Scratch, ou
 /**
  * Gross and net income of an area per member of the workforce and day, the unemployed included (specification §10,
  * Income), with the wage of each private job, its value added per worker-day after production tax, into `wages`.
- * Gross income is private value added before production tax plus the government wages paid; net income takes off
- * production, consumption and head taxes, and adds the subsidies and allowances paid. NaN without a workforce.
+ * Gross income is private value added before production tax plus the government wages, staff wages and construction
+ * payments paid; net income takes off production, consumption and head taxes, and adds the subsidies and allowances
+ * paid. NaN without a workforce.
  */
 export function incomeOf(
   world: World,
@@ -68,7 +70,16 @@ export function incomeOf(
       ((policies.consumptionTaxRate[g] as number) * (area.consumed[g] as number) * (area.price[g] as number)) / days;
   }
   const state = owner?.areaStates.get(area.id);
-  for (const job of state?.jobs ?? []) gross += job.workers * (state?.wageOffer ?? 0) * hoursPerWorkerDay * paidShare;
+  if (state) {
+    for (const job of state.jobs) gross += job.workers * state.wageOffer * hoursPerWorkerDay * paidShare;
+    const bill = infrastructureBillPerDay(
+      world.config,
+      area,
+      state,
+      staffWageShareOf(world.config, state.resolvedPolicies),
+    );
+    gross += (bill.staff + bill.construction) * paidShare;
+  }
   if (workforce <= 0) return { gross: Number.NaN, net: Number.NaN };
   const net =
     gross - paid(productionTax) - paid(consumptionTax) - paid(policies.headTaxPerPersonPerDay * area.population);

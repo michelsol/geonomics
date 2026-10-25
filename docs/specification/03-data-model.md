@@ -110,14 +110,14 @@ interface Area {
   savings: number;                      // private money held by the inhabitants, in man-hours
   productivity: number;                 // local multiplier on labor output (terrain, local know-how)
   unemployedWorkers: number;            // workers without a private or government job
-  fortificationLevel: number;           // defensive multiplier built by government fortification jobs
-  fortificationProgress: number;        // worker-days accumulated toward the next fortification level
   terrain: Terrain;                     // set by map generation: sets productivity and land transport cost
   isCoastal: boolean;                   // set by map generation: the area touches navigable water
-  portLevel: number;                    // 0 = no port; raises the capacity of the area's sea routes
-  portProgress: number;                 // worker-days accumulated toward the next port level
-  airportLevel: number;                 // 0 = no airport; raises the capacity of the area's air routes
-  airportProgress: number;              // worker-days accumulated toward the next airport level
+  // Infrastructure (section 6, Infrastructure): built levels, 0 (none) to infrastructure.maximumLevel
+  portLevel: number;                    // coastal areas only: raises the capacity of the area's sea routes
+  airportLevel: number;                 // raises the capacity of the area's air routes
+  roadLevel: number;                    // lowers the transport cost of the area's land edges
+  fortificationLevel: number;           // multiplies the area's defense
+  staffing: Float64Array;               // per kind (port, airport, roads, fort): staffed share of the quota, 0 to 1
   siegeProgress: number;                // 0 to 1; the area changes owner when it reaches 1
   militia: number;                      // militia still standing (section 7, Militia)
   besiegingGovernment: GovernmentId | null; // government currently besieging the area, if any
@@ -151,31 +151,28 @@ type EdgeMode = "land" | "sea" | "air";
 interface Edge {
   id: EdgeId;                           // index of this edge in World.edges
   mode: EdgeMode;                       // land border, sea route between two ports, or air route between two airports
+  isLane: boolean;                      // sea lane between neighboring coasts: armies sail it, goods and migrants do not
   areaA: AreaId;                        // first connected area (edges are undirected)
   areaB: AreaId;                        // second connected area
   distance: number;                     // map distance; sea routes use the distance over water
-  baseTransportCost: number;            // man-hours to move one tonne across, before infrastructure
-  transportCost: number;                // current cost, lowered by infrastructure work (land only)
-  infrastructureProgress: number;       // worker-days of road building accumulated toward the next step (land only)
+  baseTransportCost: number;            // man-hours to move one tonne across, before roads
+  transportCost: number;                // current cost, lowered by the roads of both areas (land only)
   capacityPerDay: number;               // largest tonnage carried per game day in each direction; Infinity on land
   travelDays: number;                   // game days an army needs to cross this edge; Infinity on air routes
-  isActive: boolean;                    // false for an air route dropped by a rebuild; edges are never deleted
+  isActive: boolean;                    // false for a route dropped by a rebuild; edges are never deleted
   isBlocked: boolean;                   // recomputed each tick: true when war or a siege stops all traffic
   tradeFlowPerDay: Float64Array;        // per good and direction (index 2 × GoodId, + 1 for B to A): current shipping rate, units per day
 }
 ```
 
-Land edges join neighboring areas and never change. Sea and air edges are **routes**: map generation creates the sea routes, and air routes are rebuilt when airports open or grow (section 5, Sea and air routes). Every system that walks edges, including trade, migration and marching, handles all three modes the same way, apart from the rules listed for each mode. `Area.edges` lists edges of all modes.
+Land edges join neighboring areas and never change. Map generation lays **sea lanes** between neighboring coasts. Sea and air edges between ports or airports are **routes**, rebuilt when ports or airports open, close or grow (section 5, Sea and air routes). Every system that walks edges, including trade, migration and marching, handles all three modes the same way, apart from the rules listed for each mode. `Area.edges` lists edges of all modes.
 
 ### Governments
 
 ```typescript
-type GovernmentJob =
-  | { kind: "produce"; good: GoodId }               // state production; output goes to the local depot
-  | { kind: "buildInfrastructure"; edge: EdgeId }   // lowers the transport cost of an adjacent edge
-  | { kind: "fortify" }                             // raises the area's fortification level
-  | { kind: "buildPort" }                           // coastal areas only: raises the area's port level
-  | { kind: "buildAirport" };                       // raises the area's airport level
+type GovernmentJob = { kind: "produce"; good: GoodId }; // state production; output goes to the local depot
+
+type InfrastructureKind = "port" | "airport" | "roads" | "fort"; // per-kind arrays follow this order
 
 interface JobAssignment {
   job: GovernmentJob;                   // what these workers do
@@ -189,6 +186,7 @@ type PolicyName =
   | "importTariffRate"                  // per good: share of the price charged on goods entering across a border
   | "exportTariffRate"                  // per good: share of the price charged on goods leaving across a border
   | "headTaxPerPersonPerDay"            // per area: flat tax per inhabitant per game day, in man-hours
+  | "staffWageShare"                    // per area: infrastructure staff pay, as a share of the area's wage level
   | "priceCeiling"                      // per good: maximum allowed local price
   | "priceFloor";                       // per good: minimum allowed local price
 
@@ -204,6 +202,7 @@ interface ResolvedPolicies {            // flat arrays used by the tick; rebuilt
   importTariffRate: Float64Array;       // per good
   exportTariffRate: Float64Array;       // per good
   headTaxPerPersonPerDay: number;       // for this area
+  staffWageShare: number | null;        // for this area; null: infrastructure.defaultStaffWageShare
   priceCeiling: Float64Array;           // per good; Infinity when there is no ceiling
   priceFloor: Float64Array;             // per good; 0 when there is no floor
 }
@@ -212,6 +211,9 @@ interface GovernmentAreaState {
   depot: Float64Array;                  // goods owned by the government in this area, indexed by GoodId
   jobs: JobAssignment[];                // government jobs in this area
   wageOffer: number;                    // wage paid per worker-hour, in man-hours (1 = reference wage)
+  targetLevel: Uint8Array;              // per InfrastructureKind: the level to build up to
+  buildDays: Float64Array;              // per InfrastructureKind: days of construction done toward the next level
+  staff: Float64Array;                  // per InfrastructureKind: workers running the built levels
   policyOverrides: PolicySetting[];     // exceptions to the realm defaults for this area
   resolvedPolicies: ResolvedPolicies;   // realm defaults merged with overrides, ready for the tick
 }
@@ -301,6 +303,7 @@ type Command =
   | { type: "cancelMarketOrder"; orderId: number }
   | { type: "setJobTarget"; area: AreaId; job: GovernmentJob; targetWorkers: number }
   | { type: "setWageOffer"; area: AreaId; wageOffer: number }
+  | { type: "setInfrastructureTarget"; area: AreaId; kind: InfrastructureKind; level: number }
   | { type: "recruitArmy"; area: AreaId; soldiers: number }
   | { type: "disbandArmy"; army: ArmyId; soldiers: number }
   | { type: "moveArmy"; army: ArmyId; destination: AreaId }
@@ -330,11 +333,12 @@ The host validates every command before applying it. A rejected command changes 
 | Sender | `player` must be the controller of `government` (`"ai"` for an AI government; the host never accepts that id from the network), and the government must not be eliminated |
 | Ownership | Every area, army, order or depot a command references must belong to the sending government |
 | Numbers | Every number must be finite; quantities, worker targets, soldiers and prices must be ≥ 0 |
-| Policies | Production and consumption tax rates and tariffs must be within [−1, 5]; head tax any finite number (negative: an allowance); ceilings and floors ≥ 0. Head tax takes no good; every other policy takes one good, or none for every good |
+| Policies | Production and consumption tax rates and tariffs must be within [−1, 5]; head tax any finite number (negative: an allowance); ceilings and floors ≥ 0; the staff wage within [0, 5]. Head tax and the staff wage take no good; every other policy takes one good, or none for every good |
 | Wages | `wageOffer` and the soldier wage must be within [0, 10] |
 | Recruiting | At least one soldier, and no more than the area's unemployed and private workers |
 | Armies | `moveArmy` needs a reachable destination under the marching rules; `disbandArmy` at most the army's soldiers |
-| Jobs | `buildPort` only in coastal areas; `buildInfrastructure` only on a land edge touching the area; `produce` never a service, and a primary good only where the area has natural capacity for it |
+| Jobs | `produce` never a service, and a primary good only where the area has natural capacity for it |
+| Infrastructure | A level is a whole number within [0, `maximumLevel`]; a port above 0 only in a coastal area |
 | Goods | Market orders and standing rules never name a service |
 | Diplomacy | No war on oneself, an eliminated government or one already at war; peace only with a government at war, from the sending government, expiring in the future, with each listed area going from one side to the other; when accepted, a payment must fit in the payer's treasury and the listed areas must still belong to their side |
 | Limits | At most 1,000 open market orders and 200 standing orders per government, so a client cannot slow the host down |

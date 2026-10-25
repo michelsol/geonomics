@@ -11,7 +11,8 @@ A government is founded on each capital placed by map generation, in capital ord
 - **Realm:** the realms split the whole map. Each area joins the capital nearest by distance over active land and sea edges, the earlier capital on a tie; an area with no such path joins the capital nearest in a straight line. No area starts neutral.
 - **Color:** each realm in turn takes the palette color (12 colors) least used by its already colored neighbors, then least used overall.
 - **Treasury:** starts at `startingTreasuryDays` of the realm's income, `population × workforceShare × hoursPerWorkerDay × wageLevel` summed over its areas.
-- **Owned areas:** each starts with an empty depot, no jobs, a `wageOffer` of 1 and no policies.
+- **Owned areas:** each starts with an empty depot, no jobs, a `wageOffer` of 1, no policies, and its built infrastructure as its target.
+- **Infrastructure:** each realm gets a port of level 1 in its `startingPorts` most populous coastal areas, its capital first, and an airport of level 1 in its capital and then its most populous areas, up to `startingAirports`. A landmass left without any port gets one in its most populous coastal area, so no island is cut off. Then the routes are built and every starting level is fully staffed from the workforce.
 - **Relations:** every pair of governments starts at peace.
 - **Controller:** the AI, until a player takes the government over.
 - **Personality:** from the game's AI mix (section 11).
@@ -27,6 +28,7 @@ Each policy plugs into exactly one phase of the tick.
 | `importTariffRate` | Good | Trade | Added to the cost of goods entering across a border. |
 | `exportTariffRate` | Good | Trade | Added to the cost of goods leaving across a border. A very high value acts as a ban. |
 | `headTaxPerPersonPerDay` | Area | Taxes | Flat tax per inhabitant. Reliable revenue that drains savings and drives people away. Negative, it is an allowance paid to every inhabitant, as a subsidy. |
+| `staffWageShare` | Area | Taxes, Labor | Infrastructure staff pay as a share of the area's wage level (`defaultStaffWageShare` when unset). Staff come at 1 or more and leave below it (Infrastructure). |
 | `priceCeiling`, `priceFloor` | Good | Prices | Clamp the local price. Ceilings cause shortages; floors cause gluts. |
 
 The player sets **realm policies** once and adds **area overrides** where needed.
@@ -36,7 +38,7 @@ The player sets **realm policies** once and adds **area overrides** where needed
 - In an override, a null value stands for the neutral value (no tax, no ceiling, no floor), so an override can lift a realm ceiling in one area. A null realm setting removes it.
 - Clearing an override falls back to the realm setting.
 - Realm settings and overrides are merged into `resolvedPolicies` only when a setting changes or an area changes owner, never during a normal tick.
-- Neutral areas have all policies at zero.
+- Neutral areas have all policies at zero, and no infrastructure staff.
 
 ### Tax collection
 
@@ -55,11 +57,14 @@ shortfall   = taxDue - paidInMoney
 // shortfall taken in kind: goods move from area stock to the depot, highest price first, valued at local price
 ```
 
-The **bill** of a government is the subsidies and wages it owes this tick:
+The **bill** of a government is the subsidies, wages and construction payments it owes this tick:
 - the subsidies of every owned area;
-- government wages, `workers × wageOffer × hoursPerWorkerDay × days` per job.
+- government wages, `workers × wageOffer × hoursPerWorkerDay × days` per job;
+- infrastructure staff wages, `staff × staffWageShare × max(wageLevel, 0) × hoursPerWorkerDay × days` per kind;
+- construction payments, `n × costPerLevel / buildDaysPerLevel × days` per kind building its level `n`;
+- soldiers' wages (section 7, Armies).
 
-It is paid from the treasury after taxes are collected. If the treasury cannot pay the whole bill, every payment is scaled by the same `paidShare = treasury / bill`.
+It is paid from the treasury into the areas' savings after taxes are collected. If the treasury cannot pay the whole bill, every payment is scaled by the same `paidShare = treasury / bill`.
 
 ### Market orders
 
@@ -103,19 +108,28 @@ if (targetWorkers > workers && wageAttractiveness >= 1)
 - Hiring, quitting and firing use `economyResponsiveness`.
 - Fired and quitting workers return to `unemployedWorkers`.
 - A job whose target and workers are both zero is removed.
-- If the area's workforce shrinks below its government workers, they are scaled down to fit.
+- If the area's workforce shrinks below its government workers and infrastructure staff, they are all scaled down to fit.
 
 ### Government jobs
 
-| Job | Effect |
-| --- | --- |
-| `produce` | Produces a good with the normal recipe in phase 1. On a primary good, government and private workers share the natural capacity and its output in proportion to workers. A crafted good draws its inputs from the depot, rationed between the government's recipes like private inputs, and adds its output to the depot. |
-| `buildInfrastructure` | Adds worker-days to an adjacent land edge. Each `infrastructureWorkerDaysPerStep` multiplies its transport cost by `infrastructureStepFactor`, down to `minimumTransportCostFactor` of the base. |
-| `fortify` | Adds worker-days toward the next fortification level of the area, up to `maximumFortificationLevel`. |
-| `buildPort` | Coastal areas only. Each `portWorkerDaysPerLevel` raises `portLevel` by one, up to `maximumPortLevel`, which raises the capacity of the area's sea routes. |
-| `buildAirport` | Each `airportWorkerDaysPerLevel` raises `airportLevel` by one, up to `maximumAirportLevel`. The first level opens air routes; the maximum level makes the airport a hub. |
+The one job is `produce`: it produces a good with the normal recipe in phase 1. On a primary good, government and private workers share the natural capacity and its output in proportion to workers. A crafted good draws its inputs from the depot, rationed between the government's recipes like private inputs, and adds its output to the depot.
 
-Worker-days are `workers × days`, accumulated in phase 10.
+### Infrastructure
+
+Each owned area has four kinds of infrastructure, each at a level from 0 (none) to `maximumLevel`:
+
+| Kind | Effect of its running level |
+| --- | --- |
+| Port | Coastal areas only. Each level adds `seaCapacityPerPortLevel` to the area's sea routes; armies embark only from a running port (section 5, Sea and air routes). |
+| Airport | Each level adds `airCapacityPerAirportLevel` to the area's air routes; the first level opens air routes, the maximum level makes the airport a hub. |
+| Roads | A land edge's transport cost is `baseTransportCost × (1 − (1 − minimumTransportCostFactor) × mean of its two areas' running road levels / maximumLevel)`. |
+| Fort | Defense is multiplied by `1 + running fort level` (section 7, Combat and Siege). |
+
+- **Building.** `setInfrastructureTarget` sets the level to build up to. Levels are built one at a time: level `n` takes `buildDaysPerLevel` days and costs `n × costPerLevel`, paid in equal parts every day into the area's savings as part of the bill. When the treasury pays only `paidShare` of the bill, construction advances by `paidShare × days`. A level is complete in phase 10 when its days are done; construction stops at the target.
+- **Taking down.** A target below the built level lowers it at once, for free, and stops construction of that kind. Staff beyond the new quota become unemployed at once.
+- **Staff.** Each built level needs `staffPerLevel` workers. They are hired, quit and fired in phase 7 like government workers (Hiring and wages), with the staff wage `staffWageShare × wageLevel` as their offer, so their attractiveness is `staffWageShare`: they come while it is at least 1, and quit at the shortfall or the unpaid share, whichever is larger.
+- **Running level.** The staffed share is `min(1, staff / quota)`, and the running level is the built level times the staffed share. Half the staff gives half the effect.
+- **Captures.** Built levels stay with the area (a fort loses one level). The old owner's staff become unemployed and its construction stops; the infrastructure stands idle until the new owner hires staff.
 
 ### Standing orders
 

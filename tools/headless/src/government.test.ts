@@ -143,7 +143,7 @@ describe("determinism", () => {
         world,
         { type: "setRealmPolicy", setting: { policy: "consumptionTaxRate", good: grain, value: 0.1 } },
         { type: "setWageOffer", area: 0, wageOffer: 2 },
-        { type: "setJobTarget", area: 0, job: { kind: "buildInfrastructure", edge: 0 }, targetWorkers: 200 },
+        { type: "setInfrastructureTarget", area: 0, kind: "roads", level: 2 },
         {
           type: "addStandingOrder",
           order: {

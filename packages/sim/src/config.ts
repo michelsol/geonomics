@@ -1,6 +1,6 @@
 // WorldConfig and its defaults (specification §4). Defaults are starting points for tuning in the headless runner.
 import type { Catalog } from "./catalog";
-import type { GoodId } from "./types";
+import type { GoodId, InfrastructureKind } from "./types";
 
 export interface WorldConfig {
   pace: {
@@ -46,11 +46,6 @@ export interface WorldConfig {
     airRoutesPerAirport: number; // each airport links to this many nearest airports
     seaCapacityPerPortLevel: number; // tonnes per day per direction on a sea route, per level of its smaller port
     airCapacityPerAirportLevel: number; // tonnes per day per direction on an air route, per level of its smaller airport
-    portWorkerDaysPerLevel: number; // work needed per port level
-    airportWorkerDaysPerLevel: number; // work needed per airport level
-    maximumPortLevel: number; // highest port level
-    maximumAirportLevel: number; // highest airport level; airports at this level link to each other as hubs
-    initialAirportShare: number; // share of the most populous areas given an airport of level 1 at start
     seaTravelDaysPerDistance: number; // game days an army needs per unit of sea distance
     migrationFactorBySea: number; // migration over a sea route, relative to a land edge
     migrationFactorByAir: number; // migration over an air route, relative to a land edge
@@ -65,13 +60,18 @@ export interface WorldConfig {
   government: {
     hiringRatePerDay: number; // share of the gap to target government jobs filled per day
     quitRatePerDay: number; // quitting speed per unit of wage shortfall or unpaid share
-    infrastructureWorkerDaysPerStep: number; // road work needed for one transport cost step
-    infrastructureStepFactor: number; // transport cost multiplier per step
-    minimumTransportCostFactor: number; // transport cost never falls below this share of base
-    fortificationWorkerDaysPerLevel: number; // work needed per fortification level
-    maximumFortificationLevel: number; // highest fortification level
     startingTreasuryDays: number; // starting treasury, in days of the realm's income
     standingOrderShareOfDemandPerDay: number; // pacing of standing orders, as a share of the area's total demand per day
+  };
+  infrastructure: {
+    maximumLevel: number; // highest level of every kind; airports at this level link to each other as hubs
+    costPerLevel: Record<InfrastructureKind, number>; // man-hours: building level n costs n times this
+    buildDaysPerLevel: Record<InfrastructureKind, number>; // game days to build one level
+    staffPerLevel: Record<InfrastructureKind, number>; // workers each built level needs to run
+    defaultStaffWageShare: number; // staff pay as a share of the local wage level, where no policy sets it
+    minimumTransportCostFactor: number; // land transport cost between two areas with roads at the maximum level
+    startingPorts: number; // ports of level 1 each realm starts with, in its most populous coastal areas
+    startingAirports: number; // airports of level 1 each realm starts with: the capital, then the most populous
   };
   network: {
     priceTableRate: number; // global price table broadcasts per wall-clock second
@@ -156,11 +156,6 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
     airRoutesPerAirport: 3,
     seaCapacityPerPortLevel: 1000,
     airCapacityPerAirportLevel: 20,
-    portWorkerDaysPerLevel: 4000,
-    airportWorkerDaysPerLevel: 6000,
-    maximumPortLevel: 3,
-    maximumAirportLevel: 3,
-    initialAirportShare: 0.05,
     seaTravelDaysPerDistance: 0.01,
     migrationFactorBySea: 0.5,
     migrationFactorByAir: 0.25,
@@ -175,13 +170,18 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
   government: {
     hiringRatePerDay: 0.1,
     quitRatePerDay: 0.1,
-    infrastructureWorkerDaysPerStep: 2000,
-    infrastructureStepFactor: 0.9,
-    minimumTransportCostFactor: 0.3,
-    fortificationWorkerDaysPerLevel: 3000,
-    maximumFortificationLevel: 3,
     startingTreasuryDays: 30,
     standingOrderShareOfDemandPerDay: 0.2,
+  },
+  infrastructure: {
+    maximumLevel: 3,
+    costPerLevel: { port: 150_000, airport: 300_000, roads: 60_000, fort: 80_000 },
+    buildDaysPerLevel: { port: 60, airport: 90, roads: 45, fort: 30 },
+    staffPerLevel: { port: 100, airport: 150, roads: 25, fort: 50 },
+    defaultStaffWageShare: 1.1,
+    minimumTransportCostFactor: 0.3,
+    startingPorts: 2,
+    startingAirports: 1,
   },
   network: {
     priceTableRate: 1,

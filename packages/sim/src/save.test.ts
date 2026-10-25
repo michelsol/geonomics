@@ -39,7 +39,7 @@ function commandsAt(world: World, offset: number): CommandEnvelope[] {
   const commands: Record<number, Command> = {
     0: { type: "setRealmPolicy", setting: { policy: "productionTaxRate", good: null, value: 0.07 } },
     3: { type: "recruitArmy", area: capital, soldiers: 150 },
-    7: { type: "setJobTarget", area: capital, job: { kind: "fortify" }, targetWorkers: 40 },
+    7: { type: "setInfrastructureTarget", area: capital, kind: "fort", level: 2 },
     12: {
       type: "placeMarketOrder",
       order: { area: capital, good: 0, side: "buy", remainingQuantity: 50, limitPrice: 10, maximumQuantityPerDay: 10 },
@@ -86,14 +86,17 @@ describe("saves", () => {
     expect(readSaveInfo(bytes)).toEqual(saved);
   });
 
-  it("reject other files and newer formats", () => {
+  it("reject other files, and formats older or newer than this one", () => {
     expect(() => readSaveInfo(new Uint8Array([1, 2, 3, 4]))).toThrow("not a Geonomics save");
     expect(() => readSaveInfo(new Uint8Array([0x80])) /* an empty msgpack map */).toThrow("not a Geonomics save");
+    // The version follows the magic: a float64 2 (0xcb 40 00 00…) becomes 3 (0xcb 40 08 00…) or 1 (0xcb 3f f0 00…).
+    const at = bytes.indexOf(0xcb);
     const future = bytes.slice();
-    // The version follows the magic: a float64 1 (0xcb 3f f0 00…) becomes 2 (0xcb 40 00 00…).
-    const at = future.indexOf(0xcb);
-    future[at + 1] = 0x40;
-    future[at + 2] = 0x00;
-    expect(() => readSaveInfo(future)).toThrow("newer version of the game (format 2)");
+    future[at + 2] = 0x08;
+    expect(() => readSaveInfo(future)).toThrow("newer version of the game (format 3)");
+    const past = bytes.slice();
+    past[at + 1] = 0x3f;
+    past[at + 2] = 0xf0;
+    expect(() => readSaveInfo(past)).toThrow("older version of the game (format 1)");
   });
 });

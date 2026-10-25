@@ -7,6 +7,7 @@ import {
   type Personality,
   type ResolvedPolicies,
   resolveSettings,
+  runningLevel,
   type Snapshot,
   type StaticData,
   type StaticEdge,
@@ -163,7 +164,7 @@ export interface ConquestEstimate {
  */
 export function conquestEstimate(data: StaticData, snapshot: Snapshot, area: number): ConquestEstimate {
   const owner = snapshot.areas.owner[area] as number;
-  const fortification = snapshot.areas.fortificationLevel[area] as number;
+  const fortification = runningLevel(snapshot.areas, area, "fort"); // the built level as far as it is staffed
   const militia = snapshot.areas.militia[area] as number;
   let armyPower = 0;
   for (const army of snapshot.armies) {
@@ -225,6 +226,7 @@ export function employmentOf(
     }
     const state = government.areaStates.find((s) => s.area === area);
     for (const job of state?.jobs ?? []) result.government += job.workers;
+    for (const staff of state?.staff ?? []) result.government += staff; // infrastructure staff
   }
   for (let g = 0; g < goods; g++) {
     const workers = result.privateWorkers[g] as number;

@@ -33,6 +33,7 @@ import type { PanelProps } from "./panels/common";
 import { DiplomacyPanel } from "./panels/DiplomacyPanel";
 import { GamePanel } from "./panels/GamePanel";
 import { GoodsPanel } from "./panels/GoodsPanel";
+import { InfrastructurePanel } from "./panels/InfrastructurePanel";
 import { JobsPanel } from "./panels/JobsPanel";
 import { NeedsPanel } from "./panels/NeedsPanel";
 import { PoliciesPanel } from "./panels/PoliciesPanel";
@@ -49,6 +50,7 @@ const PANELS = {
   resources: { label: "Resources", view: ResourcesPanel },
   policies: { label: "Policies", view: PoliciesPanel },
   jobs: { label: "Jobs", view: JobsPanel },
+  infrastructure: { label: "Infrastructure", view: InfrastructurePanel },
   armies: { label: "Armies", view: ArmiesPanel },
   diplomacy: { label: "Diplomacy", view: DiplomacyPanel },
   game: { label: "Game", view: GamePanel },

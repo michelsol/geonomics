@@ -3,8 +3,6 @@ import { reserveDaysOf } from "../math";
 import { goodId, realmWorld, send, totalMoney } from "../testing";
 import type { GovernmentAreaState, JobAssignment, World } from "../types";
 import { runHiring } from "./hiring";
-import { advanceInfrastructure } from "./infrastructure";
-import { buildInfrastructure, runJobs } from "./jobs";
 import { evaluateStandingOrders, runMarket } from "./market";
 import { hourlyOutputPerWorker, runProduction } from "./production";
 import { privateUsedPerTick, scratchOf } from "./scratch";
@@ -17,6 +15,13 @@ const stateOf = (world: World, area: number, government = 0) =>
 const government = (world: World, id = 0) => world.governments[id] as World["governments"][number];
 const areaOf = (world: World, id: number) => world.areas[id] as Area;
 const governmentWorkers = (state: GovernmentAreaState) => state.jobs.reduce((sum, job) => sum + job.workers, 0);
+const staffOf = (state: GovernmentAreaState) => state.staff.reduce((sum, staff) => sum + staff, 0);
+const GRAIN_JOB = { kind: "produce", good: 0 } as const;
+/** Lets the port and airport staff go, so the bill holds only what a test sets up. */
+const withoutStaff = (world: World) => {
+  for (const state of government(world).areaStates.values()) state.staff.fill(0);
+  return world;
+};
 
 describe("market orders (phase 2)", () => {
   it("buys only stock above the reserve, paced per day, moving goods and money", () => {
@@ -78,7 +83,7 @@ describe("market orders (phase 2)", () => {
       type: "addStandingOrder",
       order: { areas: [1], rule: { kind: "keepDepotStock", good: grain, targetDaysOfDemand: 3, maximumBuyPrice: 100 } },
     });
-    for (let i = 0; i < 150; i++) runTick(world);
+    for (let i = 0; i < 60; i++) runTick(world);
     const target = (3 * privateUsedPerTick(areaOf(world, 1), grain)) / world.config.pace.gameDaysPerTick;
     expect(stateOf(world, 1).depot[grain]).toBeGreaterThan(0.8 * target);
     expect(stateOf(world, 1).depot[grain]).toBeLessThan(1.1 * target);
@@ -129,7 +134,7 @@ describe("policies", () => {
 
 describe("taxes, subsidies and wages (phase 5)", () => {
   it("collects head tax from savings into the treasury", () => {
-    const world = realmWorld();
+    const world = withoutStaff(realmWorld());
     send(world, { type: "setRealmPolicy", setting: { policy: "headTaxPerPersonPerDay", good: null, value: 0.1 } });
     const treasury = government(world).treasury;
     scratchOf(world);
@@ -138,7 +143,7 @@ describe("taxes, subsidies and wages (phase 5)", () => {
   });
 
   it("pays a negative head tax to every inhabitant from the treasury, as far as it goes", () => {
-    const world = realmWorld();
+    const world = withoutStaff(realmWorld());
     send(world, { type: "setRealmPolicy", setting: { policy: "headTaxPerPersonPerDay", good: null, value: -0.1 } });
     const treasury = government(world).treasury;
     const savings = areaOf(world, 1).savings;
@@ -180,8 +185,8 @@ describe("taxes, subsidies and wages (phase 5)", () => {
 
   it("scales wages down together when the treasury runs short", () => {
     const world = realmWorld();
-    for (const id of [0, 1])
-      stateOf(world, id).jobs.push({ job: { kind: "fortify" }, targetWorkers: 100, workers: 100 });
+    withoutStaff(world); // only the jobs are on the bill
+    for (const id of [0, 1]) stateOf(world, id).jobs.push({ job: GRAIN_JOB, targetWorkers: 100, workers: 100 });
     const bill = 2 * 100 * world.config.economy.hoursPerWorkerDay;
     government(world).treasury = bill / 4;
     const savings = [areaOf(world, 0).savings, areaOf(world, 1).savings];
@@ -192,7 +197,7 @@ describe("taxes, subsidies and wages (phase 5)", () => {
   });
 
   it("pays production subsidies and collects production taxes", () => {
-    const world = realmWorld();
+    const world = withoutStaff(realmWorld());
     const grain = goodId(world, "grain");
     send(world, { type: "setAreaPolicy", area: 0, setting: { policy: "productionTaxRate", good: grain, value: -0.5 } });
     send(world, { type: "setAreaPolicy", area: 1, setting: { policy: "productionTaxRate", good: grain, value: 0.5 } });
@@ -211,13 +216,13 @@ describe("hiring, quitting and firing (phase 7)", () => {
     const world = realmWorld();
     const area = areaOf(world, 1);
     send(world, { type: "setWageOffer", area: 1, wageOffer: 3 });
-    send(world, { type: "setJobTarget", area: 1, job: { kind: "fortify" }, targetWorkers: 200 });
+    send(world, { type: "setJobTarget", area: 1, job: GRAIN_JOB, targetWorkers: 200 });
     const unemployed = area.unemployedWorkers;
     runHiring(world);
     const job = stateOf(world, 1).jobs[0] as JobAssignment;
     expect(job.workers).toBeCloseTo(200 * (1 - Math.exp(-0.1)), 9);
     expect(area.unemployedWorkers).toBeCloseTo(unemployed - job.workers, 6);
-    send(world, { type: "setJobTarget", area: 1, job: { kind: "fortify" }, targetWorkers: 0 });
+    send(world, { type: "setJobTarget", area: 1, job: GRAIN_JOB, targetWorkers: 0 });
     runHiring(world);
     expect(stateOf(world, 1).jobs).toHaveLength(0);
     expect(area.unemployedWorkers).toBeCloseTo(unemployed, 6);
@@ -226,7 +231,7 @@ describe("hiring, quitting and firing (phase 7)", () => {
   it("does not hire below the wage level, and workers quit an underpaying job", () => {
     const world = realmWorld();
     send(world, { type: "setWageOffer", area: 1, wageOffer: 0.5 });
-    send(world, { type: "setJobTarget", area: 1, job: { kind: "fortify" }, targetWorkers: 200 });
+    send(world, { type: "setJobTarget", area: 1, job: GRAIN_JOB, targetWorkers: 200 });
     runHiring(world);
     expect(governmentWorkers(stateOf(world, 1))).toBe(0);
     (stateOf(world, 1).jobs[0] as JobAssignment).workers = 100;
@@ -238,12 +243,12 @@ describe("hiring, quitting and firing (phase 7)", () => {
     const world = realmWorld();
     for (const id of [0, 1, 2]) {
       send(world, { type: "setWageOffer", area: id, wageOffer: 2 });
-      send(world, { type: "setJobTarget", area: id, job: { kind: "fortify" }, targetWorkers: 300 });
+      send(world, { type: "setJobTarget", area: id, job: GRAIN_JOB, targetWorkers: 300 });
     }
     for (let i = 0; i < 100; i++) runTick(world);
     for (const id of [0, 1, 2]) {
       const area = areaOf(world, id);
-      let workers = area.unemployedWorkers + governmentWorkers(stateOf(world, id));
+      let workers = area.unemployedWorkers + governmentWorkers(stateOf(world, id)) + staffOf(stateOf(world, id));
       for (const good of world.goods) workers += area.privateWorkers[good.id] as number;
       expect(workers).toBeCloseTo(area.population * world.config.economy.workforceShare, 6);
       expect(governmentWorkers(stateOf(world, id))).toBeGreaterThan(250);
@@ -290,51 +295,8 @@ describe("government production (phase 1)", () => {
   });
 });
 
-describe("government jobs (phase 10)", () => {
-  it("lowers transport cost step by step down to the floor", () => {
-    const world = realmWorld();
-    const edge = world.edges[0] as World["edges"][number];
-    const g = world.config.government;
-    const costs: number[] = [];
-    for (let step = 0; step < 15; step++) {
-      buildInfrastructure(world, edge, g.infrastructureWorkerDaysPerStep);
-      costs.push(edge.transportCost / edge.baseTransportCost);
-    }
-    expect(costs[0]).toBeCloseTo(0.9, 12);
-    expect(costs[1]).toBeCloseTo(0.81, 12);
-    expect(costs[2]).toBeCloseTo(0.729, 12);
-    for (let i = 1; i < costs.length; i++) expect(costs[i]).toBeLessThanOrEqual(costs[i - 1] as number);
-    expect(costs.at(-1)).toBe(g.minimumTransportCostFactor);
-  });
-
-  it("builds roads, fortifications, ports and airports with worker-days", () => {
-    const world = realmWorld();
-    const g = world.config.government;
-    const t = world.config.transport;
-    const assign = (area: number, job: JobAssignment["job"], workerDays: number) =>
-      stateOf(world, area).jobs.push({ job, targetWorkers: workerDays, workers: workerDays });
-    assign(1, { kind: "buildInfrastructure", edge: 0 }, g.infrastructureWorkerDaysPerStep);
-    assign(1, { kind: "fortify" }, g.fortificationWorkerDaysPerLevel);
-    assign(0, { kind: "buildPort" }, t.portWorkerDaysPerLevel);
-    assign(1, { kind: "buildAirport" }, t.airportWorkerDaysPerLevel);
-    const sea = world.edges[2] as World["edges"][number];
-    const seaCapacity = sea.capacityPerDay;
-    runJobs(world);
-    advanceInfrastructure(world);
-    expect((world.edges[0] as World["edges"][number]).transportCost).toBeCloseTo(
-      0.9 * (world.edges[0] as World["edges"][number]).baseTransportCost,
-      12,
-    );
-    expect(areaOf(world, 1).fortificationLevel).toBe(1);
-    expect(areaOf(world, 0).portLevel).toBe(2);
-    expect(sea.capacityPerDay).toBe(seaCapacity); // the isle's port is still level 1
-    expect(areaOf(world, 1).airportLevel).toBe(1);
-    expect(world.edges.some((edge) => edge.mode === "air" && (edge.areaA === 1 || edge.areaB === 1))).toBe(true);
-  });
-});
-
 describe("money", () => {
-  it("is conserved between savings and treasuries under taxes, allowances, tariffs, wages and orders", () => {
+  it("is conserved between savings and treasuries under taxes, allowances, tariffs, wages, building and orders", () => {
     const world = realmWorld();
     const grain = goodId(world, "grain");
     send(world, { type: "setRealmPolicy", setting: { policy: "headTaxPerPersonPerDay", good: null, value: 0.2 } });
@@ -342,7 +304,8 @@ describe("money", () => {
     send(world, { type: "setRealmPolicy", setting: { policy: "productionTaxRate", good: grain, value: -0.2 } });
     send(world, { type: "setRealmPolicy", setting: { policy: "exportTariffRate", good: grain, value: 0.2 } });
     send(world, { type: "setWageOffer", area: 1, wageOffer: 2 });
-    send(world, { type: "setJobTarget", area: 1, job: { kind: "fortify" }, targetWorkers: 300 });
+    send(world, { type: "setJobTarget", area: 1, job: GRAIN_JOB, targetWorkers: 300 });
+    send(world, { type: "setInfrastructureTarget", area: 1, kind: "fort", level: 1 });
     send(world, {
       type: "addStandingOrder",
       order: {
@@ -360,6 +323,7 @@ describe("money", () => {
     });
     for (let i = 0; i < 20; i++) runTick(world);
     expect(totalMoney(world)).toBeCloseTo(money, 3);
-    expect(areaOf(world, 1).fortificationProgress).toBeGreaterThan(0); // the government workers were paid and worked
+    expect(areaOf(world, 1).fortificationLevel).toBe(1); // construction and staff were paid along the way
+    expect(staffOf(stateOf(world, 1))).toBeGreaterThan(0);
   });
 });
