@@ -429,3 +429,23 @@ Ports then started with each coastal area at a 1-in-4 chance instead of two per 
 ### A new save version
 
 Old saves held construction progress in worker-days and road steps per border, which have no equivalent in levels, so version 1 saves are refused with a message rather than converted.
+
+## Water cells
+
+### The sea as cells with resources
+
+Generated maps already tiled a rectangle with Voronoi cells, but kept only the water cells' centers, to shape the coasts; the sea was drawn as a flat background. Water cells are now part of the world: they fill the rectangle with land, have a depth (hops from land), and can hold natural capacity. They have no people, owner, market or edges, so the tick still loops over areas only; an area simply extracts from its share of the cells its port reaches, added to its own capacity. Depletion and regeneration act on the cells themselves, so a fishing ground worked by several ports is depleted by all of them.
+
+### Reach by built level, shared equally, and a port required
+
+A port reaches one more ring of water cells per level, counted over water so a port does not reach the far side of a peninsula. The reach follows the built level, which changes rarely, rather than the running level, which moves with staff; staffing scales the catch instead, as it scales every other effect. A cell several ports reach is split equally, idle ports included, so building a port next to a rival's takes half of its fishing ground at once, and an empty port still holds its claim. Without a port an area works no water: the sea is what ports are for, beyond trade. The reach is a pure function of the water graph and the public port levels, so the interface computes the same reach without a new snapshot field.
+
+### Fish at sea, and a smaller share of food
+
+Fish moved from coastal land to the sea (`sea`: depth up to the top port level, so every placed resource can be reached), and crude oil and natural gas of the large catalog also offshore (depth 2 or more, needing a port of level 2). With a quarter of coasts starting with a port, ports reach about a fifth of the world's fish. In the small catalog, fish and bread had the same preference and fish covered almost half the food: the 30 starting ports could not catch it (fish output on a 300-area map fell from 345,000 to 104,000 a day, even with four times the capacity), and unmet necessities rose from 2.6% to 9.7%. Fish's preference went from 1 to 0.35 in the small and medium catalogs, making it a coastal supplement: unmet necessities came back to 2.9% (small, 300 areas) and 2.8% (medium, 1,000 areas, 3.3% before).
+
+In the two-year AI-only game (small catalog, 300 areas), fish sells at about 4.5 times its labor value instead of 2.5, which makes ports worth building: the AIs went from 30 to 51 ports (35 before), and sea routes from 74 to 123. Sea tonnage reached 4,100 tonnes a day (3,300 before). Offshore oil is barely touched in two years, since few ports reach level 2. Treasuries hold and no command is rejected.
+
+### A third save version
+
+Saves of version 2 have no water cells, and their coastal areas hold the fish that is now at sea, so they are refused like version 1.

@@ -26,7 +26,16 @@ export class CatalogError extends Error {
 const TIERS: readonly DemandTier[] = ["necessity", "comfort", "luxury"];
 const KINDS = ["primary", "crafted", "service"] as const;
 const ABUNDANCES: readonly Abundance[] = ["common", "regional", "rare"];
-const TERRAINS: readonly TerrainAffinity[] = ["plains", "forest", "hills", "mountains", "desert", "coast"];
+const TERRAINS: readonly TerrainAffinity[] = [
+  "plains",
+  "forest",
+  "hills",
+  "mountains",
+  "desert",
+  "coast",
+  "sea",
+  "offshore",
+];
 
 type Json = Record<string, unknown>;
 

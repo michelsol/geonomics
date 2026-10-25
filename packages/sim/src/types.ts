@@ -6,6 +6,7 @@ export type GoodId = number; // index into World.goods
 export type NeedId = number; // index into World.needs
 export type AreaId = number; // index into World.areas
 export type EdgeId = number; // index into World.edges
+export type WaterId = number; // index into World.waters
 export type GovernmentId = number; // index into World.governments
 export type ArmyId = number; // unique id of an army, never reused
 export type PlayerId = string; // PeerJS peer id of a connected human player
@@ -17,6 +18,7 @@ export interface World {
   needs: Need[]; // needs of the population, each satisfied by one or more goods
   goods: Good[]; // catalog of goods, sorted so that every input comes before its outputs
   areas: Area[]; // every area on the map
+  waters: WaterCell[]; // every water cell of a generated map; empty for hand-built worlds
   edges: Edge[]; // every connection between two areas
   governments: Government[]; // every government, human or AI, including eliminated ones
   armies: Map<ArmyId, Army>; // every army currently in the field
@@ -28,11 +30,24 @@ export interface World {
   map: MapLayout | null; // geometry of a generated map; null for hand-built worlds
 }
 
-/** What rendering needs beyond area positions: Voronoi cells are rebuilt from area positions then water points. */
+/** The rectangle a generated map tiles: Voronoi cells are rebuilt from area positions then water cell positions. */
 export interface MapLayout {
   width: number; // map units (km)
   height: number;
-  waterPoints: Float64Array; // x, y pairs of the water cells' centers
+}
+
+/**
+ * A cell of sea on a generated map (section 5, Water cells): no people, owner or market, but natural capacity that
+ * the ports reaching it extract (section 6, Infrastructure).
+ */
+export interface WaterCell {
+  id: WaterId; // index of this cell in World.waters
+  position: { x: number; y: number }; // map coordinates of the cell's center
+  depth: number; // hops over water from the nearest land; 1 for a cell touching a coast
+  neighbors: WaterId[]; // neighboring water cells
+  coasts: AreaId[]; // neighboring land areas, all coastal
+  naturalCapacity: Float64Array; // per good: current maximum extraction per day, after depletion
+  naturalCapacityMaximum: Float64Array; // per good: capacity the cell recovers toward
 }
 
 export type Terrain = "plains" | "forest" | "hills" | "mountains" | "desert";
@@ -68,7 +83,8 @@ export interface RecipeInput {
 }
 
 export type Abundance = "common" | "regional" | "rare";
-export type TerrainAffinity = Terrain | "coast";
+// "coast": coastal land; "sea": water cells a port can reach; "offshore": the same, beyond the cells touching a coast
+export type TerrainAffinity = Terrain | "coast" | "sea" | "offshore";
 
 export interface Good {
   id: GoodId; // index of this good in World.goods

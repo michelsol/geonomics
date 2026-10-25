@@ -5,12 +5,16 @@ import {
   type GovernmentView,
   neutralPolicies,
   type Personality,
+  type Reach,
   type ResolvedPolicies,
   resolveSettings,
   runningLevel,
   type Snapshot,
   type StaticData,
   type StaticEdge,
+  shores,
+  waterReach,
+  withinHops,
 } from "@geonomics/sim";
 
 /** Price of a good in an area from the public price table. */
@@ -142,9 +146,59 @@ export function realmWageLevel(snapshot: Snapshot): number {
   return population > 0 ? weighted / population : 1;
 }
 
-/** Natural capacity of a good in an area at its fullest, in units per day (static data). */
-export function capacityMaximum(data: StaticData, area: number, good: number): number {
-  return data.naturalCapacityMaximum[area * data.goods.length + good] as number;
+const reaches = new WeakMap<Uint8Array, (readonly Reach[])[]>();
+
+/** Per area, the water cells its port reaches and its share of each, from the public port levels (memoized). */
+export function reachOf(data: StaticData, snapshot: Snapshot | null): (readonly Reach[])[] | null {
+  if (!snapshot || data.waters.length === 0) return null;
+  const levels = snapshot.areas.portLevel;
+  let reach = reaches.get(levels);
+  if (!reach) {
+    reach = waterReach(data.waters, levels);
+    reaches.set(levels, reach);
+  }
+  return reach;
+}
+
+/** Natural capacity of a good in a water cell at its fullest, in units per day (static data). */
+export function waterCapacityMaximum(data: StaticData, water: number, good: number): number {
+  return data.waterCapacityMaximum[water * data.goods.length + good] as number;
+}
+
+/**
+ * Natural capacity of a good in an area at its fullest, in units per day: its land, plus its share of the water cells
+ * its port reaches when the snapshot is given.
+ */
+export function capacityMaximum(data: StaticData, snapshot: Snapshot | null, area: number, good: number): number {
+  let capacity = data.naturalCapacityMaximum[area * data.goods.length + good] as number;
+  for (const { water, share } of reachOf(data, snapshot)?.[area] ?? []) {
+    capacity += share * waterCapacityMaximum(data, water, good);
+  }
+  return capacity;
+}
+
+/** What one more port level would add to an area at sea: the water cells newly reached and their capacity per good. */
+export interface PortGain {
+  cells: number;
+  capacity: Float64Array; // per good, the area's share at full capacity
+}
+
+export function portLevelGain(data: StaticData, snapshot: Snapshot, area: number): PortGain {
+  const capacity = new Float64Array(data.goods.length);
+  const level = snapshot.areas.portLevel[area] as number;
+  const shore = shores(data.waters, data.areas.length)[area] ?? [];
+  // Ports already reaching each cell, to split the cells the next level adds with them.
+  const ports = new Uint16Array(data.waters.length);
+  for (const reach of reachOf(data, snapshot) ?? [])
+    for (const { water } of reach) ports[water] = (ports[water] as number) + 1;
+  let cells = 0;
+  for (const [water, hop] of withinHops(data.waters, shore, level + 1)) {
+    if (hop !== level + 1) continue;
+    cells++;
+    for (let g = 0; g < capacity.length; g++)
+      capacity[g] = (capacity[g] as number) + waterCapacityMaximum(data, water, g) / ((ports[water] as number) + 1);
+  }
+  return { cells, capacity };
 }
 
 export interface ConquestEstimate {
@@ -343,7 +397,7 @@ export interface SelectionSummary {
   detailPopulation: number; // people in the areas with detail
   savings: number; // over the areas with detail
   unemployed: number;
-  capacity: Float64Array; // per good: maximum natural capacity, summed
+  capacity: Float64Array; // per good: maximum natural capacity, land and reached waters, summed
   capacityNow: Float64Array; // per good: natural capacity left after depletion, over the areas with detail
   extracted: Float64Array; // per good: primary output per day, over the areas with detail
   market: MarketRow[]; // per good
@@ -401,7 +455,7 @@ export function selectionSummary(
       unemployed += detail.unemployedWorkers;
     }
     for (let g = 0; g < goods; g++) {
-      capacity[g] = (capacity[g] as number) + capacityMaximum(data, area, g);
+      capacity[g] = (capacity[g] as number) + capacityMaximum(data, snapshot, area, g);
       const row = market[g] as MarketRow;
       row.price += detail ? (detail.price[g] as number) : table ? priceOf(data, table, area, g) : 0;
       if (!detail) continue;

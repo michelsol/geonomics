@@ -55,13 +55,22 @@ describe("generateMap", () => {
     }
   });
 
-  it("places every primary good of every catalog somewhere, and fish only on coasts", () => {
+  it("places every primary good of every catalog somewhere, and fish only at sea within a port's reach", () => {
     for (const name of ["small", "medium", "large"] as const) {
       const generated = generate(name, 5).world;
+      const reach = generated.config.infrastructure.maximumLevel;
       for (const good of generated.goods.filter((g) => g.isPrimary)) {
         const holders = generated.areas.filter((area) => (area.naturalCapacity[good.id] as number) > 0);
-        expect(holders.length, `${name} ${good.key}`).toBeGreaterThan(0);
-        if (good.key === "fish") expect(holders.every((area) => area.isCoastal)).toBe(true);
+        const waters = generated.waters.filter((water) => (water.naturalCapacity[good.id] as number) > 0);
+        expect(holders.length + waters.length, `${name} ${good.key}`).toBeGreaterThan(0);
+        if (good.key === "fish") {
+          expect(holders).toHaveLength(0);
+          expect(waters.length).toBeGreaterThan(0);
+          expect(waters.every((water) => water.depth <= reach)).toBe(true);
+        } else if (good.key === "crude_oil" || good.key === "natural_gas") {
+          expect(waters.length, good.key).toBeGreaterThan(0);
+          expect(waters.every((water) => water.depth >= 2 && water.depth <= reach)).toBe(true);
+        } else expect(waters, good.key).toHaveLength(0);
       }
       for (const area of generated.areas) {
         expect(generated.goods.some((g) => g.isPrimary && (area.naturalCapacity[g.id] as number) > 0)).toBe(true);
@@ -94,7 +103,32 @@ describe("generateMap", () => {
       expect(area.position.x).toBeLessThan(world.map?.width as number);
       expect(area.owner).toBeNull();
     }
-    expect((world.map?.waterPoints.length as number) / 2).toBeGreaterThan(world.areas.length);
+    expect(world.waters.length).toBeGreaterThan(world.areas.length);
+  });
+
+  it("fills the rest of the rectangle with water cells, each with its depth and neighbors", () => {
+    const { width, height } = world.map as { width: number; height: number };
+    const spacing = world.config.map.cellSpacing;
+    // Land and water together tile the map, at about one cell per spacing squared.
+    expect((world.areas.length + world.waters.length) * spacing * spacing).toBeCloseTo(width * height, -5);
+    const touching = new Set<number>();
+    for (const [id, water] of world.waters.entries()) {
+      expect(water.id).toBe(id);
+      expect(water.position.x).toBeGreaterThanOrEqual(0);
+      expect(water.position.x).toBeLessThanOrEqual(width);
+      for (const other of water.neighbors) expect(world.waters[other]?.neighbors).toContain(id);
+      for (const area of water.coasts) expect(world.areas[area]?.isCoastal).toBe(true);
+      if (water.coasts.length > 0) touching.add(id);
+      expect(water.depth).toBe(
+        water.coasts.length > 0
+          ? 1
+          : 1 + Math.min(...water.neighbors.map((other) => world.waters[other]?.depth as number)),
+      );
+    }
+    // Every coastal area touches a water cell.
+    const coasts = new Set(world.waters.flatMap((water) => water.coasts));
+    expect(world.areas.filter((area) => area.isCoastal).every((area) => coasts.has(area.id))).toBe(true);
+    expect(touching.size).toBeGreaterThan(0);
   });
 
   it("places distinct capitals", () => {

@@ -15,9 +15,9 @@
       "satisfies": null
     },
     {
-      "key": "fish", "name": "Fish", "unit": "10 kg", "kind": "primary", "laborHoursPerUnit": 2.5, "transportWeight": 0.012, "spoilageRatePerDay": 0.08, "depletionPerUnitExtracted": 0.005, "regenerationRatePerDay": 0.02, "abundance": "regional", "terrains": ["coast"],
+      "key": "fish", "name": "Fish", "unit": "10 kg", "kind": "primary", "laborHoursPerUnit": 2.5, "transportWeight": 0.012, "spoilageRatePerDay": 0.08, "depletionPerUnitExtracted": 0.005, "regenerationRatePerDay": 0.02, "abundance": "regional", "terrains": ["sea"],
       "inputs": [],
-      "satisfies": {"need": "food", "unitsPerGood": 6, "preference": 1}
+      "satisfies": {"need": "food", "unitsPerGood": 6, "preference": 0.35}
     },
     {
       "key": "cotton", "name": "Cotton", "unit": "10 kg", "kind": "primary", "laborHoursPerUnit": 0.5, "transportWeight": 0.012, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": "regional", "terrains": ["plains", "desert"],

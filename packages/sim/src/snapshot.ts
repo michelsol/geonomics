@@ -25,8 +25,10 @@ import type {
   Relation,
   StandingOrder,
   Terrain,
+  WaterId,
   World,
 } from "./types";
+import { extractionCapacity } from "./waters";
 
 export interface StaticEdge {
   mode: EdgeMode;
@@ -35,14 +37,25 @@ export interface StaticEdge {
   distance: number;
 }
 
+/** A water cell as the interface knows it: enough to draw it and to compute the ports' reach (waterReach). */
+export interface StaticWater {
+  x: number;
+  y: number;
+  depth: number; // hops over water from the nearest land
+  neighbors: WaterId[];
+  coasts: AreaId[];
+}
+
 export interface StaticData {
   config: WorldConfig;
   needs: Need[];
   goods: Good[];
   areas: { name: string; x: number; y: number; terrain: Terrain; isCoastal: boolean }[];
+  waters: StaticWater[]; // empty for hand-built worlds
   edges: StaticEdge[];
   map: MapLayout | null;
-  naturalCapacityMaximum: Float32Array; // area-major: area × goodCount + good; 0 where a good cannot be extracted
+  naturalCapacityMaximum: Float32Array; // area-major: area × goodCount + good, the land alone; 0 where none
+  waterCapacityMaximum: Float32Array; // water-major: water × goodCount + good
 }
 
 /** Full state of one owned area, for its own government. */
@@ -96,7 +109,7 @@ export interface AreaDetail {
   imported: Float32Array;
   exported: Float32Array;
   privateWorkers: Float32Array;
-  naturalCapacity: Float32Array; // current extraction capacity per day, after depletion
+  naturalCapacity: Float32Array; // current extraction capacity per day, after depletion: land plus staffed waters
   needDemanded: Float32Array; // per need: need units the population wanted in the last tick
   needConsumed: Float32Array; // per need: need units it consumed, substitutes included
   wage: Float32Array; // per good: value added per private worker-day after production tax, in man-hours
@@ -183,16 +196,23 @@ export function buildStaticData(world: World): StaticData {
       terrain: area.terrain,
       isCoastal: area.isCoastal,
     })),
+    waters: world.waters.map((water) => ({
+      x: water.position.x,
+      y: water.position.y,
+      depth: water.depth,
+      neighbors: [...water.neighbors],
+      coasts: [...water.coasts],
+    })),
     edges: world.edges.map((_, id) => staticEdge(world, id)),
-    map: world.map,
-    naturalCapacityMaximum: capacityTable(world),
+    map: world.map ? { width: world.map.width, height: world.map.height } : null,
+    naturalCapacityMaximum: capacityTable(world.areas, world.goods.length),
+    waterCapacityMaximum: capacityTable(world.waters, world.goods.length),
   };
 }
 
-function capacityTable(world: World): Float32Array {
-  const goodCount = world.goods.length;
-  const table = new Float32Array(world.areas.length * goodCount);
-  for (const area of world.areas) table.set(area.naturalCapacityMaximum, area.id * goodCount);
+function capacityTable(cells: readonly { naturalCapacityMaximum: Float64Array }[], goodCount: number): Float32Array {
+  const table = new Float32Array(cells.length * goodCount);
+  for (const [i, cell] of cells.entries()) table.set(cell.naturalCapacityMaximum, i * goodCount);
   return table;
 }
 
@@ -351,7 +371,9 @@ function detailOf(world: World, id: AreaId): AreaDetail {
     imported: Float32Array.from(area.imported),
     exported: Float32Array.from(area.exported),
     privateWorkers: Float32Array.from(area.privateWorkers),
-    naturalCapacity: Float32Array.from(area.naturalCapacity),
+    naturalCapacity: Float32Array.from(world.goods, (good) =>
+      good.isPrimary ? extractionCapacity(world, area, good.id) : 0,
+    ),
     needDemanded: Float32Array.from(area.needDemanded),
     needConsumed: Float32Array.from(area.needConsumed),
     wage: Float32Array.from(wages),

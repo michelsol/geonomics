@@ -1,5 +1,5 @@
 // Map generation (specification §5, Map generation): Voronoi cells, elevation and moisture from noise, terrain,
-// coasts, population, resources, land edges, sea routes, airports and capital positions.
+// coasts, water cells, population, resources on land and at sea, land edges, sea lanes and capital positions.
 import { Delaunay } from "d3-delaunay";
 import { createNoise2D, type NoiseFunction2D } from "simplex-noise";
 import type { Catalog } from "./catalog";
@@ -9,7 +9,7 @@ import { referenceDemandPerPerson } from "./init";
 import { nextRandom, seedFrom } from "./random";
 import { LAND_DISTANCE_PER_TRAVEL_DAY } from "./routes";
 import type { AreaId, Terrain, World } from "./types";
-import { type AreaSpec, addEdge, createEmptyWorld, createWorld } from "./world";
+import { type AreaSpec, addEdge, createEmptyWorld, createWaterCell, createWorld, setWaterDepths } from "./world";
 
 /** Productivity and land transport cost multiplier of each terrain. */
 export const TERRAIN_EFFECTS: Record<Terrain, { productivity: number; landCost: number; density: number }> = {
@@ -147,7 +147,26 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
   });
 
   const world = createWorld(catalog, config, { areas, edges: [], seed: rng.randomSeed });
-  world.map = { width, height, waterPoints: waterPoints(count, land, points) };
+  world.map = { width, height };
+
+  // Water cells: every cell that is not land, in cell order, with their water and land neighbors.
+  const waterOf = new Int32Array(count).fill(-1);
+  for (let cell = 0, next = 0; cell < count; cell++) if (!land[cell]) waterOf[cell] = next++;
+  for (let cell = 0; cell < count; cell++) {
+    const id = waterOf[cell] as number;
+    if (id < 0) continue;
+    const around = neighbors[cell] as number[];
+    world.waters.push(
+      createWaterCell(
+        id,
+        { x: x(cell), y: y(cell) },
+        around.filter((n) => land[n]).map((n) => areaOf[n] as number),
+        around.filter((n) => !land[n]).map((n) => waterOf[n] as number),
+        catalog.goods.length,
+      ),
+    );
+  }
+  setWaterDepths(world.waters);
 
   // 6. Land edges between neighboring land cells.
   const linked = new Set<string>();
@@ -191,24 +210,45 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
   }
   joinIslands();
 
-  // 8. Natural capacity of primary goods, placed by terrain and a noise field per good. Every area holds at least
-  // one primary good, so none is left with nothing to work on or to sell.
+  // 8. Natural capacity of primary goods, placed by terrain and a noise field per good, on land areas and on the
+  // water cells ports can reach. Every area holds at least one primary good, so none is left with nothing to work on
+  // or to sell. A water cell has no people: it counts as a share of the population of the coast nearest to it.
   const demand = referenceDemandPerPerson(createEmptyWorld(catalog, config, 0));
   const totalPopulation = world.areas.reduce((sum, area) => sum + area.population, 0);
+  const reachable = config.infrastructure.maximumLevel;
+  const coastPopulation = nearestCoastPopulation(world);
+  const sites = [
+    ...world.areas.map((area) => ({ position: area.position, population: area.population })),
+    ...world.waters.map((water) => ({
+      position: water.position,
+      population: m.waterCellPopulationShare * (coastPopulation[water.id] as number),
+    })),
+  ];
+  const areaCount = world.areas.length;
   const primaries = world.goods.filter((good) => good.isPrimary);
-  const suits = (good: World["goods"][number], area: World["areas"][number]) =>
-    good.terrains.length === 0 || good.terrains.some((t) => (t === "coast" ? area.isCoastal : area.terrain === t));
+  const suits = (good: World["goods"][number], site: number) => {
+    if (site >= areaCount) {
+      const depth = (world.waters[site - areaCount] as World["waters"][number]).depth;
+      return good.terrains.some((t) =>
+        t === "sea" ? depth <= reachable : t === "offshore" && depth >= 2 && depth <= reachable,
+      );
+    }
+    const area = world.areas[site] as World["areas"][number];
+    return (
+      good.terrains.length === 0 || good.terrains.some((t) => (t === "coast" ? area.isCoastal : area.terrain === t))
+    );
+  };
   const scores = primaries.map(() => {
     const field = noise();
-    return world.areas.map((area) => field(area.position.x / featureScale, area.position.y / featureScale));
+    return sites.map((site) => field(site.position.x / featureScale, site.position.y / featureScale));
   });
-  const weights = primaries.map(() => new Float64Array(world.areas.length));
+  const weights = primaries.map(() => new Float64Array(sites.length));
   for (const [k, good] of primaries.entries()) {
     const score = scores[k] as number[];
-    let eligible = world.areas.filter((area) => suits(good, area));
-    if (eligible.length === 0) eligible = world.areas;
-    const ranked = eligible.map((area) => area.id).sort((p, q) => (score[q] as number) - (score[p] as number) || p - q);
-    // Enough producing areas that their workforce could supply the world with extractionLaborShare of its labor.
+    let eligible = sites.map((_, site) => site).filter((site) => suits(good, site));
+    if (eligible.length === 0) eligible = world.areas.map((area) => area.id);
+    const ranked = eligible.sort((p, q) => (score[q] as number) - (score[p] as number) || p - q);
+    // Enough producing places that their workforce could supply the world with extractionLaborShare of its labor.
     const laborShare =
       ((demand[good.id] as number) * good.laborHoursPerUnit) /
       (config.economy.hoursPerWorkerDay * config.economy.workforceShare);
@@ -217,14 +257,14 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
     let count = 0;
     let population = 0;
     while (count < ranked.length && (count < minimumCount || population < neededPopulation)) {
-      population += world.areas[ranked[count] as number]?.population as number;
+      population += sites[ranked[count] as number]?.population as number;
       count++;
     }
     const chosen = ranked.slice(0, count);
     const cutoff = score[chosen[chosen.length - 1] as number] as number;
-    for (const id of chosen) {
-      (weights[k] as Float64Array)[id] =
-        ((score[id] as number) - cutoff + 0.2) * (world.areas[id]?.population as number);
+    for (const site of chosen) {
+      (weights[k] as Float64Array)[site] =
+        ((score[site] as number) - cutoff + 0.2) * (sites[site]?.population as number);
     }
   }
   for (const area of world.areas) {
@@ -234,7 +274,7 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
       .filter(({ good }) => good.abundance === "common")
       .sort(
         (p, q) =>
-          Number(suits(q.good, area)) - Number(suits(p.good, area)) ||
+          Number(suits(q.good, area.id)) - Number(suits(p.good, area.id)) ||
           ((scores[q.k] as number[])[area.id] as number) - ((scores[p.k] as number[])[area.id] as number) ||
           p.k - q.k,
       );
@@ -245,10 +285,12 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
     const w = weights[k] as Float64Array;
     const weightSum = w.reduce((a, b) => a + b, 0);
     const total = m.capacityHeadroom * (demand[good.id] as number) * totalPopulation;
-    for (const area of world.areas) {
-      const capacity = (total * (w[area.id] as number)) / weightSum;
-      area.naturalCapacity[good.id] = capacity;
-      area.naturalCapacityMaximum[good.id] = capacity;
+    for (const [site, weight] of w.entries()) {
+      const capacity = weightSum > 0 ? (total * weight) / weightSum : 0;
+      const cell = site < areaCount ? world.areas[site] : world.waters[site - areaCount];
+      if (!cell) continue;
+      cell.naturalCapacity[good.id] = capacity;
+      cell.naturalCapacityMaximum[good.id] = capacity;
     }
   }
 
@@ -438,10 +480,25 @@ function components(count: number, neighbors: number[][], inside: (i: number) =>
   return result;
 }
 
-function waterPoints(count: number, land: Uint8Array, points: Float64Array): Float64Array {
-  const result: number[] = [];
-  for (let i = 0; i < count; i++) if (!land[i]) result.push(points[2 * i] as number, points[2 * i + 1] as number);
-  return Float64Array.from(result);
+/**
+ * Per water cell, the population of the coast nearest to it: the most populous coast it touches, or for a cell out at
+ * sea, the largest such population among its neighbors one hop nearer to land.
+ */
+function nearestCoastPopulation(world: World): Float64Array {
+  const result = new Float64Array(world.waters.length);
+  const byDepth = [...world.waters].sort((a, b) => a.depth - b.depth || a.id - b.id);
+  for (const water of byDepth) {
+    let best = 0;
+    if (water.depth === 1) for (const area of water.coasts) best = Math.max(best, world.areas[area]?.population ?? 0);
+    else {
+      for (const id of water.neighbors) {
+        const other = world.waters[id];
+        if (other && other.depth === water.depth - 1) best = Math.max(best, result[id] as number);
+      }
+    }
+    result[water.id] = best;
+  }
+  return result;
 }
 
 function areaName(random: () => number): string {

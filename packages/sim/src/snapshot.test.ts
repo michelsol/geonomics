@@ -9,12 +9,12 @@ import {
   encodePriceTable,
   snapshotTransferables,
 } from "./snapshot";
-import { realmWorld, send } from "./testing";
+import { goodId, realmWorld, send } from "./testing";
 import { rebuildAirRoutes } from "./tick/infrastructure";
 import { lastMigration, lastNaturalChange } from "./tick/population";
 import { runTick } from "./tick/tick";
 import { lastTradeFlows, lastTradeTonnage } from "./tick/trade";
-import { addEdge } from "./world";
+import { addEdge, createWaterCell, setWaterDepths } from "./world";
 
 describe("snapshots", () => {
   it("send stocks and flows only for the viewer's areas and their neighbors", () => {
@@ -61,6 +61,23 @@ describe("snapshots", () => {
     expect(table.length).toBe(4 * goods);
     expect(table[3 * goods]).toBeCloseTo(neutral.naturalCapacityMaximum[0] as number, 1);
     expect(snapshot.detail.find((d) => d.area === 3)?.naturalCapacity[0]).toBe(1);
+  });
+
+  it("carry the water cells, their capacity, and the waters a port works in its area's capacity", () => {
+    const world = realmWorld();
+    const fish = goodId(world, "fish");
+    const harbor = world.areas[0] as (typeof world.areas)[number];
+    const cell = createWaterCell(0, { x: -100, y: 0 }, [0], [], world.goods.length);
+    cell.naturalCapacity[fish] = 400;
+    cell.naturalCapacityMaximum[fish] = 500;
+    world.waters.push(cell);
+    setWaterDepths(world.waters);
+    const data = buildStaticData(world);
+    expect(data.waters).toEqual([{ x: -100, y: 0, depth: 1, neighbors: [], coasts: [0] }]);
+    expect(data.waterCapacityMaximum[fish]).toBe(500);
+    // The staffed port's area adds the cell's current capacity to its own.
+    const detail = buildSnapshot(world, 0).detail.find((d) => d.area === 0);
+    expect(detail?.naturalCapacity[fish]).toBeCloseTo((harbor.naturalCapacity[fish] as number) + 400, 0);
   });
 
   it("report edge state and edges created since the receiver last knew", () => {

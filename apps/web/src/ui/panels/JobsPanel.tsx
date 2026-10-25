@@ -42,7 +42,9 @@ export function JobsPanel() {
   const goods = goodOptions(data, storable);
   const good = job.good >= 0 ? job.good : (goods[0]?.value ?? 0);
   // A primary good is only produced where it is found.
-  const producers = data.goods[good]?.isPrimary ? areas.filter((area) => capacityMaximum(data, area, good) > 0) : areas;
+  const producers = data.goods[good]?.isPrimary
+    ? areas.filter((area) => capacityMaximum(data, snapshot, area, good) > 0)
+    : areas;
 
   // Jobs across the areas, one line per distinct job.
   const groups = new Map<string, JobGroup>();

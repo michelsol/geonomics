@@ -3,6 +3,7 @@
 import { canBuild, INFRASTRUCTURE_KINDS, levelCost } from "../infrastructure";
 import { snapshotLevel } from "../snapshot";
 import type { AiMemory, AreaId, Command, InfrastructureKind, Personality, StandingRule } from "../types";
+import { shores, waterReach, withinHops } from "../waters";
 import type { Traits } from "./personalities";
 import type { Realm } from "./realm";
 import type { AiView } from "./view";
@@ -54,6 +55,36 @@ function setSoldierWage(realm: Realm, commands: Command[]): void {
   const wage = wageFor(realm.wageLevel);
   if (Number.isFinite(wage) && Math.abs(wage - realm.government.soldierWage) > 0.05 * realm.government.soldierWage)
     commands.push({ type: "setSoldierWage", wage });
+}
+
+/**
+ * Per owned coastal area, what its next port level would add at sea: the labor value per day of the water cells it
+ * would newly reach at full capacity, each split with the ports already reaching it.
+ */
+export function seaGains(view: AiView, owned: Iterable<AreaId>): Map<AreaId, number> {
+  const gains = new Map<AreaId, number>();
+  const { waters, waterCapacityMaximum, goods, config } = view.data;
+  if (waters.length === 0) return gains;
+  const levels = view.snapshot.areas.portLevel;
+  const ports = new Uint16Array(waters.length);
+  for (const reach of waterReach(waters, levels))
+    for (const { water } of reach) ports[water] = (ports[water] as number) + 1;
+  const primaries = goods.filter((good) => good.isPrimary);
+  const cellValue = (water: number) =>
+    primaries.reduce(
+      (sum, good) => sum + (waterCapacityMaximum[water * goods.length + good.id] as number) * good.laborValue,
+      0,
+    );
+  const shore = shores(waters, levels.length);
+  for (const area of owned) {
+    const level = levels[area] as number;
+    if (level >= config.infrastructure.maximumLevel || (shore[area] as number[]).length === 0) continue;
+    let gain = 0;
+    for (const [water, hop] of withinHops(waters, shore[area] as number[], level + 1))
+      if (hop === level + 1) gain += cellValue(water) / ((ports[water] as number) + 1);
+    gains.set(area, gain);
+  }
+  return gains;
 }
 
 /** One level of one kind in one area, as the AI weighs it. */
@@ -117,6 +148,8 @@ function manageInfrastructure(view: AiView, realm: Realm, traits: Traits, comman
   });
   const busiest = Math.max(1e-9, ...[...realm.owned].map((area) => tonnage[area] as number));
   const border = new Set(realm.border);
+  const seaGain = seaGains(view, realm.owned);
+  const bestSeaGain = Math.max(1e-9, ...seaGain.values());
   const options: Option[] = [];
   for (const area of realm.owned) {
     const people = (areas.population[area] as number) / largest;
@@ -124,7 +157,7 @@ function manageInfrastructure(view: AiView, realm: Realm, traits: Traits, comman
     for (const kind of INFRASTRUCTURE_KINDS) {
       const level = snapshotLevel(areas, area, kind);
       let value = 0;
-      if (kind === "port") value = coastal ? people : 0;
+      if (kind === "port") value = coastal ? people + (seaGain.get(area) ?? 0) / bestSeaGain : 0;
       else if (kind === "airport") value = people * (area === government.capital ? 2 : 1);
       else if (kind === "roads") value = people + (tonnage[area] as number) / busiest;
       else value = border.has(area) ? people : 0;

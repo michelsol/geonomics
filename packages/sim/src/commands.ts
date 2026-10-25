@@ -21,6 +21,7 @@ import type {
   StandingRule,
   World,
 } from "./types";
+import { extractionCapacityMaximum } from "./waters";
 
 /** Player id under which AI governments send their commands; the host never accepts it from the network. */
 export const AI_PLAYER = "ai";
@@ -255,7 +256,7 @@ function validateJob(world: World, area: Area, job: GovernmentJob): string | nul
   if (!isIndex(job.good, world.goods.length)) return "unknown good";
   const good = world.goods[job.good] as World["goods"][number];
   if (good.isService) return "a government cannot produce a service";
-  if (good.isPrimary && (area.naturalCapacityMaximum[good.id] as number) <= 0)
+  if (good.isPrimary && extractionCapacityMaximum(world, area, good.id) <= 0)
     return "the area has no natural capacity for this good";
   return null;
 }

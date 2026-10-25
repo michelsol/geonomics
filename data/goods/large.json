@@ -35,7 +35,7 @@
       "satisfies": null
     },
     {
-      "key": "fish", "name": "Fish", "unit": "10 kg", "kind": "primary", "laborHoursPerUnit": 2, "transportWeight": 0.012, "spoilageRatePerDay": 0.08, "depletionPerUnitExtracted": 0.005, "regenerationRatePerDay": 0.02, "abundance": "regional", "terrains": ["coast"],
+      "key": "fish", "name": "Fish", "unit": "10 kg", "kind": "primary", "laborHoursPerUnit": 2, "transportWeight": 0.012, "spoilageRatePerDay": 0.08, "depletionPerUnitExtracted": 0.005, "regenerationRatePerDay": 0.02, "abundance": "regional", "terrains": ["sea"],
       "inputs": [],
       "satisfies": {"need": "food", "unitsPerGood": 6, "preference": 1}
     },
@@ -60,12 +60,12 @@
       "satisfies": {"need": "energy", "unitsPerGood": 80, "preference": 0.2}
     },
     {
-      "key": "crude_oil", "name": "Crude oil", "unit": "barrel", "kind": "primary", "laborHoursPerUnit": 3, "transportWeight": 0.14, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional", "terrains": ["desert", "plains"],
+      "key": "crude_oil", "name": "Crude oil", "unit": "barrel", "kind": "primary", "laborHoursPerUnit": 3, "transportWeight": 0.14, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional", "terrains": ["desert", "plains", "offshore"],
       "inputs": [],
       "satisfies": null
     },
     {
-      "key": "natural_gas", "name": "Natural gas", "unit": "100 m³", "kind": "primary", "laborHoursPerUnit": 2, "transportWeight": 0.08, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional", "terrains": ["desert", "plains"],
+      "key": "natural_gas", "name": "Natural gas", "unit": "100 m³", "kind": "primary", "laborHoursPerUnit": 2, "transportWeight": 0.08, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional", "terrains": ["desert", "plains", "offshore"],
       "inputs": [],
       "satisfies": {"need": "energy", "unitsPerGood": 100, "preference": 1}
     },

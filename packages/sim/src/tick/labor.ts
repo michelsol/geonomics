@@ -2,6 +2,7 @@
 import { infrastructureBillPerDay, staffWageShareOf } from "../infrastructure";
 import { EPSILON, fractionPerTick } from "../math";
 import type { Area, World } from "../types";
+import { extractionCapacity } from "../waters";
 import { savingsFactor } from "./consumption";
 import { effectiveHoursPerWorkerDay } from "./production";
 import { policiesOf, type Scratch, scratchOf, suppliedForPerTick } from "./scratch";
@@ -97,7 +98,7 @@ export function workersFor(
   if (unitsPerDay <= 0) return 0;
   const hourly = hours / good.laborHoursPerUnit;
   if (!good.isPrimary) return unitsPerDay / hourly;
-  const capacity = area.naturalCapacity[good.id] as number;
+  const capacity = extractionCapacity(world, area, good.id);
   if (capacity <= EPSILON) return 0;
   const planned = Math.min(unitsPerDay, MAXIMUM_PLANNED_CAPACITY_USE * capacity);
   return (-capacity * Math.log(1 - planned / capacity)) / hourly;

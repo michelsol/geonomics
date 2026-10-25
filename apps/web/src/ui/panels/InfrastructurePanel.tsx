@@ -9,7 +9,7 @@ import {
   snapshotLevel,
 } from "@geonomics/sim";
 import { useEffect, useState } from "react";
-import { actionTarget, policiesInForce } from "../../state/selectors";
+import { actionTarget, policiesInForce, portLevelGain, reachOf, waterCapacityMaximum } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { count, fmt, NumberField, pct, Section, Stat } from "../components";
 import { AreaLink, areaName, NoOwnArea, useSend, useView, type View } from "./common";
@@ -17,7 +17,7 @@ import { AreaLink, areaName, NoOwnArea, useSend, useView, type View } from "./co
 const LABELS: Record<InfrastructureKind, string> = { port: "Port", airport: "Airport", roads: "Roads", fort: "Fort" };
 const SHORT: Record<InfrastructureKind, string> = { port: "P", airport: "A", roads: "R", fort: "F" };
 const EFFECTS: Record<InfrastructureKind, string> = {
-  port: "Each level adds capacity to the area's sea routes; armies sail only from a running port.",
+  port: "Each level adds capacity to the area's sea routes and reaches one more ring of water cells; armies sail only from a running port.",
   airport: "Each level adds capacity to the area's air routes; airports at the top level link to each other.",
   roads: "Lower the transport cost of the area's land borders, with the roads of the area across.",
   fort: "Each level adds 100% to the area's defense. A capture takes one level down.",
@@ -85,6 +85,7 @@ export function InfrastructurePanel() {
           Each built level needs staff to run.
         </span>
       </Section>
+      <Sea view={view} areas={areas} />
       {single === null && <AreaTable view={view} areas={areas} />}
     </>
   );
@@ -189,6 +190,79 @@ function KindRow({
         </button>
       </td>
     </tr>
+  );
+}
+
+/**
+ * What the ports of the areas reach at sea: the water cells and the resources in them, the areas' shares at full
+ * capacity, and what one more port level in each area would add.
+ */
+function Sea({ view, areas }: { view: View; areas: readonly number[] }) {
+  const { data, snapshot } = view;
+  const coasts = areas.filter((area) => data.areas[area]?.isCoastal);
+  if (data.waters.length === 0 || coasts.length === 0) return null;
+  const goods = data.goods.length;
+  const reach = reachOf(data, snapshot) ?? [];
+  const cells = new Set<number>();
+  const now = new Float64Array(goods);
+  const next = new Float64Array(goods);
+  let added = 0;
+  for (const area of coasts) {
+    for (const { water, share } of reach[area] ?? []) {
+      cells.add(water);
+      for (let g = 0; g < goods; g++) now[g] = (now[g] as number) + share * waterCapacityMaximum(data, water, g);
+    }
+    if ((snapshot.areas.portLevel[area] as number) >= data.config.infrastructure.maximumLevel) continue;
+    const gain = portLevelGain(data, snapshot, area);
+    added += gain.cells;
+    for (let g = 0; g < goods; g++) next[g] = (next[g] as number) + (gain.capacity[g] as number);
+  }
+  const rows = data.goods.filter(
+    (good) => good.isPrimary && ((now[good.id] as number) > 0 || (next[good.id] as number) > 0),
+  );
+  return (
+    <Section
+      title="Sea"
+      actions={
+        <span className="muted">
+          {count(cells.size)} water {cells.size === 1 ? "cell" : "cells"} in reach
+        </span>
+      }
+    >
+      {rows.length === 0 ? (
+        <span className="muted">No resources in reach{added > 0 ? " or one level away" : ""}.</span>
+      ) : (
+        <table data-testid="sea-resources">
+          <thead>
+            <tr>
+              <th>Resource</th>
+              <th
+                className="num"
+                title="The areas' shares of the water cells their ports reach, at full capacity and staff"
+              >
+                In reach
+              </th>
+              <th className="num" title={`What one more port level would add (${count(added)} more water cells)`}>
+                Next level
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((good) => (
+              <tr key={good.id}>
+                <td>{good.name}</td>
+                <td className="num">{fmt(now[good.id] as number)}</td>
+                <td className="num">{(next[good.id] as number) > 0 ? `+${fmt(next[good.id] as number)}` : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <span className="hint">
+        A port of level L works the water cells within L hops of its coast; a cell several ports reach is shared equally
+        between them. Capacities are per day, and the catch runs at the port's staffed share.
+      </span>
+    </Section>
   );
 }
 

@@ -13,10 +13,10 @@ export function ResourcesPanel() {
   const resource = useGame((state) => state.selectedResource);
   const selectResource = useGame((state) => state.selectResource);
   if (!view) return <p className="muted">Waiting for the first snapshot…</p>;
-  const { data } = view;
+  const { data, snapshot } = view;
   const info = data.goods[resource];
   const richest = data.areas
-    .map((_, area) => ({ area, capacity: capacityMaximum(data, area, resource) }))
+    .map((_, area) => ({ area, capacity: capacityMaximum(data, snapshot, area, resource) }))
     .filter((row) => row.capacity > 0)
     .sort((a, b) => b.capacity - a.capacity || a.area - b.area)
     .slice(0, RICHEST);
@@ -34,6 +34,8 @@ export function ResourcesPanel() {
           <div className="muted">
             Capacity in {info.unit} per day
             {info.depletionPerUnitExtracted > 0 ? "; extraction depletes it, and it recovers slowly" : "; renewable"}
+            {info.terrains.some((t) => t === "sea" || t === "offshore") &&
+              `. Found at sea${info.terrains.includes("offshore") && !info.terrains.includes("sea") ? " beyond the waters along the coast" : ""}: an area works the water cells its port reaches, shared with the other ports reaching them`}
           </div>
         )}
         {richest.length === 0 ? (

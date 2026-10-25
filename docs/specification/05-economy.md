@@ -17,13 +17,15 @@ hourlyOutputPerWorker(good) =
 
 Goods are processed in catalog order, so inputs made this tick are available to their outputs. Private and government workers on the same primary good share the natural capacity, and output is split between them in proportion to workers.
 
+**Extraction capacity.** The `capacity` of a primary good in an area is its own natural capacity plus, when it has a port, its share of the current natural capacity of each water cell the port reaches (section 6, Infrastructure), times the port's staffed share. Capacity lost to depletion is split between the land and the waters in proportion to the capacity each brought, and among the water cells in proportion to the area's share of each times its capacity. Water cells recover toward their maximum in phase 10, like areas.
+
 ```typescript
 // Primary goods: diminishing returns on nature
 laborOutputPerDay = totalWorkers * hourlyOutputPerWorker(good)
 outputPerDay      = capacity * (1 - exp(-laborOutputPerDay / capacity))
 output            = outputPerDay * days
 marginalOutputPerWorker = hourlyOutputPerWorker(good) * exp(-laborOutputPerDay / capacity)
-naturalCapacity  -= output * good.depletionPerUnitExtracted
+capacityLost      = output * good.depletionPerUnitExtracted // split between the land and the waters it came from
 
 // Crafted goods: limited by labor and by rationed inputs
 maximumByLabor  = workers * hourlyOutputPerWorker(good) * days
@@ -231,10 +233,10 @@ A map is generated from a seed, the catalog and `WorldConfig.map`. Every random 
 | Mountains | 0.7 | 4 | 0.3 |
 | Desert | 0.8 | 1.5 | 0.35 |
 
-4. **Areas.** Each land cell is an area. An area is coastal when it borders a water cell. Productivity is the terrain value times 0.9 to 1.1 from noise. Population is the terrain density, ×1.3 on coasts, times 0.6 to 1.4 from noise, scaled to a mean of `meanAreaPopulation`.
+4. **Areas and water cells.** Each land cell is an area, and every other cell of the rectangle a water cell, so land and sea tile the whole map. An area is coastal when it borders a water cell. A water cell's depth is its number of hops over water from the nearest land: 1 where it touches a coast. Productivity is the terrain value times 0.9 to 1.1 from noise. Population is the terrain density, ×1.3 on coasts, times 0.6 to 1.4 from noise, scaled to a mean of `meanAreaPopulation`.
 5. **Land edges** join neighboring land cells. Distance is between cell centers; `terrainFactor` is the mean land cost factor of the two areas; `travelDays` is `distance / 25 × terrainFactor`.
 6. **Sea lanes.** Each coastal area is linked by a lane to its `seaRoutesPerPort` nearest coastal areas by distance over water (a search over water cells), skipping areas it already shares a land edge with. Then, while some areas cannot reach the others, the shortest water lane from the group of area 0 to another group is added. Ports, airports and their routes come with the realms (section 6, Founding).
-7. **Natural capacity.** For each primary good, the eligible areas are those whose terrain is in the good's `terrains` (`coast` meaning coastal areas), or all areas if none match. A noise field per good ranks them. The top areas are chosen until both `presence[abundance]` of the eligible areas and enough population to supply world demand with `extractionLaborShare` of its workforce are reached. An area that holds no primary good gets its best-scoring common good, preferring one suited to its terrain. Capacity totals `capacityHeadroom` × reference demand × world population, split in proportion to population × (noise above the cut + 0.2).
+7. **Natural capacity.** For each primary good, the eligible places are the areas whose terrain is in the good's `terrains` (`coast` meaning coastal areas; no `terrains` meaning every area) and the water cells it suits: `sea`, any water cell of depth at most `maximumLevel`, so that a port can reach it; `offshore`, depth 2 to `maximumLevel`, beyond the cells along the coast. If none is eligible, every area is. A noise field per good ranks them. A water cell has no people: it counts as `waterCellPopulationShare` of the population of its nearest coast (for a cell out at sea, the largest such value among its neighbors one hop nearer to land). The top places are chosen until both `presence[abundance]` of the eligible ones and enough population to supply world demand with `extractionLaborShare` of its workforce are reached. An area that holds no primary good gets its best-scoring common good, preferring one suited to its terrain. Capacity totals `capacityHeadroom` × reference demand × world population, split in proportion to population × (noise above the cut + 0.2).
 8. **Capitals.** `governmentCount` capitals: the most populous area, then each next one maximizing hops to the nearest capital over land and sea edges × √population. An area no capital reaches counts one hop beyond the farthest reachable area.
 
 The world is then initialized (Rule 6), a government is founded on each capital (section 6, Founding), and the world is warmed up.
@@ -254,7 +256,7 @@ Needs and goods are loaded from a JSON catalog chosen when a game is created. Th
 - **Needs and goods** carry the fields of the `Need` and `Good` interfaces, minus the derived ones (`id`, `laborValue`, `referenceUnitPrice`).
 - **References** between needs, goods and recipe inputs use string `key`s, resolved to ids at load.
 - **`kind`** is `"primary"`, `"crafted"` or `"service"`. The loader derives `isPrimary` and `isService` from it.
-- **`terrains`** (optional, primary goods) lists where map generation places the good: `plains`, `forest`, `hills`, `mountains`, `desert` or `coast`.
+- **`terrains`** (optional, primary goods) lists where map generation places the good: `plains`, `forest`, `hills`, `mountains`, `desert` or `coast` on land; `sea` or `offshore` in water cells. Fish is found at sea, and crude oil and natural gas of the large catalog also offshore.
 - **`military`** names the `weaponsGood` used for `WorldConfig.military`.
 
 ```json

@@ -1,4 +1,5 @@
-// Phase 10: spoilage of stocks, depots and goods in transit, and regeneration of natural capacity.
+// Phase 10: spoilage of stocks, depots and goods in transit, and regeneration of natural capacity, on land and at
+// sea.
 import type { World } from "../types";
 
 export function runDecay(world: World): void {
@@ -15,6 +16,16 @@ export function runDecay(world: World): void {
         area.naturalCapacity[g] =
           capacity + (recover[g] as number) * ((area.naturalCapacityMaximum[g] as number) - capacity);
       }
+    }
+  }
+
+  for (const water of world.waters) {
+    for (const good of world.goods) {
+      if (!good.isPrimary || good.regenerationRatePerDay <= 0) continue;
+      const g = good.id;
+      const capacity = water.naturalCapacity[g] as number;
+      water.naturalCapacity[g] =
+        capacity + (recover[g] as number) * ((water.naturalCapacityMaximum[g] as number) - capacity);
     }
   }
 

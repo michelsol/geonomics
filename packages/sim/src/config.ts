@@ -98,6 +98,7 @@ export interface WorldConfig {
     capacityHeadroom: number; // world natural capacity of a primary good, as a multiple of its reference demand
     presence: { common: number; regional: number; rare: number }; // share of eligible areas holding a primary good
     extractionLaborShare: number; // producing areas of a primary good could supply the world with this share of their labor
+    waterCellPopulationShare: number; // placing resources, a water cell counts as this share of its nearest coast's people
     governmentCount: number; // realms founded on the map, which they split between them
     minimumIslandAreas: number; // smaller islands sink
   };
@@ -207,6 +208,7 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
     capacityHeadroom: 2.5,
     presence: { common: 0.85, regional: 0.3, rare: 0.08 },
     extractionLaborShare: 0.1,
+    waterCellPopulationShare: 0.5,
     governmentCount: 6,
     minimumIslandAreas: 2,
   },

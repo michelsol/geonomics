@@ -1,5 +1,5 @@
-// Map geometry computed once per game: Voronoi cells of the areas, shared borders, selection outlines, and cell
-// picking.
+// Map geometry computed once per game: Voronoi cells of the areas and the water cells, shared borders, selection
+// outlines, and cell picking.
 import type { StaticData } from "@geonomics/sim";
 import { Delaunay } from "d3-delaunay";
 
@@ -16,6 +16,7 @@ export interface MapGeometry {
   width: number;
   height: number;
   cells: number[][]; // per area: flat x, y polygon
+  waterCells: number[][]; // per water cell: flat x, y polygon
   borders: Border[]; // every segment between two areas, or between an area and water
   pick(x: number, y: number): number | null; // area at a map point, null for water or outside
   /** The frontier of a set of areas, as flat x1, y1, x2, y2 segments: sides between two of them are left out. */
@@ -33,8 +34,8 @@ export function buildGeometry(data: StaticData): MapGeometry {
   for (const area of data.areas) points.push(area.x, area.y);
   let width = data.map?.width ?? 0;
   let height = data.map?.height ?? 0;
-  if (data.map) for (const value of data.map.waterPoints) points.push(value);
-  else {
+  for (const water of data.waters) points.push(water.x, water.y);
+  if (!data.map) {
     for (const area of data.areas) {
       width = Math.max(width, area.x + 100);
       height = Math.max(height, area.y + 100);
@@ -45,6 +46,8 @@ export function buildGeometry(data: StaticData): MapGeometry {
 
   const cells: number[][] = [];
   for (let i = 0; i < areaCount; i++) cells.push((voronoi.cellPolygon(i) ?? []).flat());
+  const waterCells: number[][] = [];
+  for (let i = 0; i < data.waters.length; i++) waterCells.push((voronoi.cellPolygon(areaCount + i) ?? []).flat());
 
   const owners = new Map<string, number>();
   const borders: Border[] = [];
@@ -72,6 +75,7 @@ export function buildGeometry(data: StaticData): MapGeometry {
     width,
     height,
     cells,
+    waterCells,
     borders,
     outline(areas) {
       // Each side of a selected cell, counted: a side seen twice lies between two selected cells.

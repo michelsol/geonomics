@@ -2,13 +2,15 @@ import { describe, expect, it } from "vitest";
 import { createConfig, type DeepPartial, type WorldConfig } from "../config";
 import { aiPersonalities } from "../government";
 import { hashWorld } from "../hash";
-import { realmWorld, send, smallCatalog } from "../testing";
+import { goodId, realmWorld, send, smallCatalog } from "../testing";
 import { staffFully } from "../tick/infrastructure";
 import { runTick } from "../tick/tick";
 import type { Government, Personality, World } from "../types";
-import { createWorld } from "../world";
+import { createWaterCell, createWorld, setWaterDepths } from "../world";
 import { lastAiActivity } from ".";
+import { seaGains } from "./economy";
 import { TRAITS } from "./personalities";
+import { perceive } from "./view";
 
 const government = (world: World, id: number) => world.governments[id] as Government;
 const taxOf = (g: Government) =>
@@ -90,6 +92,25 @@ describe("the economy", () => {
       0,
     );
     expect(levels).toBeGreaterThan(1);
+  });
+
+  it("values a port by the sea resources its next level would reach", () => {
+    const world = aiWorld({ 0: "trader" });
+    const fish = goodId(world, "fish");
+    // Off Harbor (0), an empty cell and fish one hop further; off Isle (2), fish in reach already, nothing beyond.
+    const cells = [
+      createWaterCell(0, { x: -100, y: 0 }, [0], [1], world.goods.length),
+      createWaterCell(1, { x: -200, y: 0 }, [], [0], world.goods.length),
+      createWaterCell(2, { x: 0, y: 600 }, [2], [], world.goods.length),
+    ];
+    (cells[1] as World["waters"][number]).naturalCapacityMaximum[fish] = 3000;
+    (cells[2] as World["waters"][number]).naturalCapacityMaximum[fish] = 5000;
+    world.waters.push(...cells);
+    setWaterDepths(world.waters);
+    const gains = seaGains(perceive(world, 0), [0, 1, 2]);
+    expect(gains.get(0)).toBeCloseTo(3000 * (world.goods[fish]?.laborValue as number), 6);
+    expect(gains.get(2)).toBe(0);
+    expect(gains.has(1)).toBe(false); // no coast
   });
 
   it("takes infrastructure down when it cannot pay for it", () => {

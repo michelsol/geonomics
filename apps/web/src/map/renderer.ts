@@ -6,10 +6,12 @@ import {
   largestPopulation,
   priceOf,
   priceSpread,
+  reachOf,
   realNetIncomes,
   type Spread,
   spreadOf,
   transportFlows,
+  waterCapacityMaximum,
 } from "../state/selectors";
 import type { GameState } from "../state/store";
 import { ARROW_MIN_SHARE, arrowPolygon, arrowWidth, MAX_ARROWS } from "./arrows";
@@ -23,7 +25,9 @@ import {
   employmentColor,
   incomeColor,
   MIGRATION_ARROW,
+  mix,
   NEUTRAL,
+  OUTSIDE,
   PICKED,
   parseColor,
   populationColor,
@@ -38,7 +42,7 @@ import {
   spreadColor,
   TERRAIN_COLORS,
   TRANSPORT_ARROW,
-  WATER,
+  waterColor,
 } from "./colors";
 import type { MapGeometry } from "./geometry";
 
@@ -77,6 +81,7 @@ export class MapRenderer {
   /** Screen pixels at the bottom of the map that the panels' bottom sheet covers on phones. */
   coveredBottom: () => number = () => 0;
   private ownerKey = "";
+  private portKey = ""; // port levels, which set the water cells each area reaches
   private largestPopulation = 0;
   private scale: Spread | null = null; // the prices or income layer's lowest, median and highest value
   private incomes: Float32Array | null = null; // the income layer's real net income per area
@@ -97,7 +102,7 @@ export class MapRenderer {
       this.brush,
     );
     app.stage.addChild(this.root);
-    app.renderer.background.color = WATER;
+    app.renderer.background.color = OUTSIDE;
     this.fit();
   }
 
@@ -106,9 +111,10 @@ export class MapRenderer {
     this.state = state;
     const { snapshot, layer, priceTable, selectedGood, selectedResource, governments } = state;
     const owners = snapshot ? this.owners(snapshot) : "";
+    if (snapshot) this.portKey = String.fromCharCode(...snapshot.areas.portLevel);
     const cellInputs =
       layer === "realms"
-        ? [layer, owners, governments.length]
+        ? [layer, owners, this.portKey, governments.length]
         : layer === "prices"
           ? [layer, priceTable, selectedGood]
           : layer === "resources"
@@ -160,7 +166,7 @@ export class MapRenderer {
       this.drawMarkers(state, px);
       this.drawn.markers = markerInputs;
     }
-    const selectionInputs = [state.selection, state.peaceAreas, state.mode, this.lineScale];
+    const selectionInputs = [state.selection, state.peaceAreas, state.mode, this.portKey, this.lineScale];
     if (changed(this.drawn.selection, selectionInputs)) {
       this.drawSelection(state, px);
       this.drawn.selection = selectionInputs;
@@ -196,7 +202,7 @@ export class MapRenderer {
 
   private bestCapacities = new Map<number, number>();
 
-  /** The largest natural capacity of a good across the map, cached per good. */
+  /** The largest natural capacity of a good in one cell across the map, land or water, cached per good. */
   bestCapacity(good: number): number {
     let best = this.bestCapacities.get(good);
     if (best === undefined) {
@@ -204,9 +210,41 @@ export class MapRenderer {
       const goods = this.data.goods.length;
       for (let area = 0; area < this.data.areas.length; area++)
         best = Math.max(best, this.data.naturalCapacityMaximum[area * goods + good] as number);
+      for (let water = 0; water < this.data.waters.length; water++)
+        best = Math.max(best, waterCapacityMaximum(this.data, water, good));
       this.bestCapacities.set(good, best);
     }
     return best;
+  }
+
+  /**
+   * Water cells by depth; on the realms layer, the cells a realm's ports reach take a tint of its color, and cells
+   * shared between realms a pale one.
+   */
+  private drawWaters(state: GameState): void {
+    const g = this.cells;
+    const reach = state.layer === "realms" ? reachOf(this.data, state.snapshot) : null;
+    const owner = state.snapshot?.areas.owner;
+    // Per water cell: the realm reaching it, -1 for none, -2 for several.
+    const realm = new Int32Array(this.data.waters.length).fill(-1);
+    if (reach && owner) {
+      for (const [area, cells] of reach.entries()) {
+        const by = owner[area] as number;
+        if (by < 0) continue;
+        for (const { water } of cells) realm[water] = realm[water] === -1 || realm[water] === by ? by : -2;
+      }
+    }
+    for (const [water, polygon] of this.geometry.waterCells.entries()) {
+      if (polygon.length < 6) continue;
+      let color = waterColor(this.data.waters[water]?.depth ?? 0);
+      const by = realm[water] as number;
+      if (by === -2) color = mix(color, NEUTRAL, 0.45);
+      else if (by >= 0) {
+        const realmColor = state.governments[by]?.color;
+        if (realmColor) color = mix(color, parseColor(realmColor), 0.35);
+      }
+      g.poly(polygon).fill({ color });
+    }
   }
 
   private drawCells(state: GameState): void {
@@ -221,6 +259,7 @@ export class MapRenderer {
         : this.incomes
           ? spreadOf(this.incomes)
           : null;
+    this.drawWaters(state);
     for (let area = 0; area < this.geometry.cells.length; area++) {
       const polygon = this.geometry.cells[area] as number[];
       if (polygon.length < 6) continue;
@@ -229,7 +268,7 @@ export class MapRenderer {
     this.drawStripes(state);
   }
 
-  /** The resources layer: stripes over each area that has the chosen good, thicker for more. */
+  /** The resources layer: stripes over each area or water cell that has the chosen good, thicker for more. */
   private drawStripes(state: GameState): void {
     const g = this.stripes.clear();
     if (state.layer !== "resources") return;
@@ -240,6 +279,11 @@ export class MapRenderer {
     for (let area = 0; area < this.geometry.cells.length; area++) {
       const polygon = this.geometry.cells[area] as number[];
       const level = resourceLevel(this.data.naturalCapacityMaximum[area * goods + good] as number, best);
+      if (level < 0 || polygon.length < 6) continue;
+      g.poly(polygon).fill(patterns[level] as FillPattern);
+    }
+    for (const [water, polygon] of this.geometry.waterCells.entries()) {
+      const level = resourceLevel(waterCapacityMaximum(this.data, water, good), best);
       if (level < 0 || polygon.length < 6) continue;
       g.poly(polygon).fill(patterns[level] as FillPattern);
     }
@@ -285,6 +329,8 @@ export class MapRenderer {
       g.moveTo(border.x1, border.y1).lineTo(border.x2, border.y2);
     }
     g.stroke({ width: 1.5 * px, color: CELL_LINE, alpha: 0.8 });
+    // The map's edge.
+    g.rect(0, 0, this.geometry.width, this.geometry.height).stroke({ width: 1.5 * px, color: BORDER, alpha: 0.25 });
     if (!snapshot) return;
     const owner = snapshot.areas.owner;
     for (const border of this.geometry.borders) {
@@ -434,6 +480,15 @@ export class MapRenderer {
       for (const area of state.selection) {
         const polygon = this.geometry.cells[area];
         if (polygon && polygon.length >= 6) g.poly(polygon).fill({ color: SELECTION, alpha: 0.18 });
+      }
+    }
+    // The water cells the selected areas' ports reach.
+    const reach = reachOf(this.data, state.snapshot);
+    if (reach) {
+      const waters = new Set(state.selection.flatMap((area) => (reach[area] ?? []).map((cell) => cell.water)));
+      for (const water of waters) {
+        const polygon = this.geometry.waterCells[water];
+        if (polygon && polygon.length >= 6) g.poly(polygon).fill({ color: SELECTION, alpha: 0.14 });
       }
     }
     const frontier = this.geometry.outline(state.selection);

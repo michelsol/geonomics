@@ -60,7 +60,9 @@ export function Guide() {
             <li>
               <b>Infrastructure</b>: build ports, airports, roads and forts up to level 3, paying from the treasury into
               the area as it is built, or take them down at once. Each level needs staff, paid a share of the local
-              wage; without them it does not run. Better roads and ports carry more trade for less.
+              wage; without them it does not run. Better roads and ports carry more trade for less. A port also lets the
+              area work the sea around it: fish and, further out, offshore oil and gas in the water cells within as many
+              hops of the coast as its level, shared with any other port reaching them.
             </li>
           </ul>
         </section>

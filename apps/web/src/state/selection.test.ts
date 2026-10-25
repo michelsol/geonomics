@@ -1,7 +1,21 @@
-import { buildSnapshot, buildStaticData, encodePriceTable, type World } from "@geonomics/sim";
+import {
+  buildSnapshot,
+  buildStaticData,
+  encodePriceTable,
+  extractionCapacityMaximum,
+  type World,
+} from "@geonomics/sim";
 import { describe, expect, it } from "vitest";
 import { createGame } from "../host/createGame";
-import { actionTarget, areasNear, type Point, selectionSummary, splitByPopulation } from "./selectors";
+import {
+  actionTarget,
+  areasNear,
+  capacityMaximum,
+  type Point,
+  portLevelGain,
+  selectionSummary,
+  splitByPopulation,
+} from "./selectors";
 import { createGameStore } from "./store";
 
 function setup() {
@@ -27,6 +41,33 @@ describe("areas near a point", () => {
     const between = Math.hypot(a.x - b.x, a.y - b.y);
     expect(areasNear(data, a, between)).toContain(1);
     expect(areasNear(data, a, between * 0.999)).not.toContain(1);
+  });
+});
+
+describe("natural capacity", () => {
+  it("adds the area's share of the waters its port reaches, as the simulation counts it", () => {
+    const { world, data } = setup();
+    const snapshot = buildSnapshot(world, null);
+    const fish = data.goods.findIndex((good) => good.key === "fish");
+    const ports = world.areas.filter((area) => area.portLevel > 0);
+    expect(ports.length).toBeGreaterThan(0);
+    for (const area of world.areas) {
+      expect(capacityMaximum(data, snapshot, area.id, fish)).toBeCloseTo(
+        extractionCapacityMaximum(world, area, fish),
+        0,
+      );
+    }
+    // Without a snapshot, the land alone: no fish there.
+    expect(capacityMaximum(data, null, (ports[0] as World["areas"][number]).id, fish)).toBe(0);
+  });
+
+  it("tells what one more port level would add at sea", () => {
+    const { world, data } = setup();
+    const snapshot = buildSnapshot(world, null);
+    const port = world.areas.find((area) => area.portLevel === 1) as World["areas"][number];
+    const gain = portLevelGain(data, snapshot, port.id);
+    expect(gain.cells).toBeGreaterThan(0);
+    expect(gain.capacity.every((value) => value >= 0)).toBe(true);
   });
 });
 

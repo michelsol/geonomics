@@ -120,7 +120,7 @@ Each owned area has four kinds of infrastructure, each at a level from 0 (none) 
 
 | Kind | Effect of its running level |
 | --- | --- |
-| Port | Coastal areas only. Each level adds `seaCapacityPerPortLevel` to the area's sea routes; armies embark only from a running port (section 5, Sea and air routes). |
+| Port | Coastal areas only. Each level adds `seaCapacityPerPortLevel` to the area's sea routes; armies embark only from a running port (section 5, Sea and air routes). The port also works the sea: see Waters below. |
 | Airport | Each level adds `airCapacityPerAirportLevel` to the area's air routes; the first level opens air routes, the maximum level makes the airport a hub. |
 | Roads | A land edge's transport cost is `baseTransportCost × (1 − (1 − minimumTransportCostFactor) × mean of its two areas' running road levels / maximumLevel)`. |
 | Fort | Defense is multiplied by `1 + running fort level` (section 7, Combat and Siege). |
@@ -129,6 +129,7 @@ Each owned area has four kinds of infrastructure, each at a level from 0 (none) 
 - **Taking down.** A target below the built level lowers it at once, for free, and stops construction of that kind. Staff beyond the new quota become unemployed at once.
 - **Staff.** Each built level needs `staffPerLevel` workers. They are hired, quit and fired in phase 7 like government workers (Hiring and wages), with the staff wage `staffWageShare × wageLevel` as their offer, so their attractiveness is `staffWageShare`: they come while it is at least 1, and quit at the shortfall or the unpaid share, whichever is larger.
 - **Running level.** The staffed share is `min(1, staff / quota)`, and the running level is the built level times the staffed share. Half the staff gives half the effect.
+- **Waters.** A port of built level `L` reaches every water cell within `L` hops over water of its area, a cell touching the area being one hop away. A cell reached by several ports is shared equally between them, whether or not they run: each area works `1 / (ports reaching it)` of its capacity, at its port's staffed share (section 5, Production). The reach changes only when port levels do. Without a port, an area works no water cell.
 - **Captures.** Built levels stay with the area (a fort loses one level). The old owner's staff become unemployed and its construction stops; the infrastructure stands idle until the new owner hires staff.
 
 ### Standing orders

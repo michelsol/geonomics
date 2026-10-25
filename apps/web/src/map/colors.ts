@@ -1,7 +1,11 @@
 // Color scales of the map layers (specification §10, Map). Colors are 0xRRGGBB numbers, as PixiJS takes them.
 import type { Terrain } from "@geonomics/sim";
 
-export const WATER = 0x1d2b3f;
+export const WATER = 0x1d2b3f; // deep sea, beyond any port's reach
+export const OUTSIDE = 0x0b0f15; // around the map
+// Water cells by depth, 1 (touching a coast) to 3: shallower is lighter.
+const SHALLOWS = [0x34557c, 0x2c4868, 0x253c56] as const;
+export const waterColor = (depth: number): number => SHALLOWS[depth - 1] ?? WATER;
 export const NEUTRAL = 0x5b6270;
 export const CELL_LINE = 0x0b111a;
 export const BORDER = 0xf2f4f8;
@@ -34,6 +38,9 @@ export function ramp(stops: readonly number[], t: number): number {
   const f = x - i;
   return fromRgb([a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]);
 }
+
+/** `a` mixed with a share `t` of `b`. */
+export const mix = (a: number, b: number, t: number): number => ramp([a, b], t);
 
 export const DIVERGING = [0x2c6bb0, 0x8db8e0, 0xf2f2f2, 0xeba07e, 0xc0392b];
 export const SATISFACTION = [0xc0392b, 0xe6a03c, 0xe8d85a, 0x6fbf5a, 0x2e8b57];

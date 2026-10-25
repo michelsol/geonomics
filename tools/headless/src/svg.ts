@@ -1,8 +1,8 @@
-// Debug view of a generated map: Voronoi cells by terrain, realms, water, land edges, sea and air routes, armies
-// and capitals.
+// Debug view of a generated map: Voronoi cells by terrain, realms, water cells by depth and the ports' reach, land
+// edges, sea and air routes, armies and capitals.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { Terrain, World } from "@geonomics/sim";
+import { type Terrain, type World, waterReachOf } from "@geonomics/sim";
 import { Delaunay } from "d3-delaunay";
 
 const TERRAIN_COLORS: Record<Terrain, string> = {
@@ -13,19 +13,25 @@ const TERRAIN_COLORS: Record<Terrain, string> = {
   desert: "#e6d29a",
 };
 
+const WATER_COLORS = ["#6f9bcc", "#5f8cc0", "#5483b8"]; // depth 1 to 3; deeper is #4f7fb5
+
 export function writeMapSvg(world: World, path: string): void {
   const map = world.map;
   if (!map) throw new Error("This world has no generated map to draw");
   const points: number[] = [];
   for (const area of world.areas) points.push(area.position.x, area.position.y);
-  for (const value of map.waterPoints) points.push(value);
+  for (const water of world.waters) points.push(water.position.x, water.position.y);
   const voronoi = new Delaunay(Float64Array.from(points)).voronoi([0, 0, map.width, map.height]);
+  const reached = new Set(waterReachOf(world).flatMap((cells) => cells.map((cell) => cell.water)));
   const cells: string[] = [];
   const cellCount = points.length / 2;
   for (let i = 0; i < cellCount; i++) {
     const area = world.areas[i];
-    const fill = area ? TERRAIN_COLORS[area.terrain] : "#4f7fb5";
+    const water = world.waters[i - world.areas.length];
+    const fill = area ? TERRAIN_COLORS[area.terrain] : (WATER_COLORS[(water?.depth ?? 0) - 1] ?? "#4f7fb5");
     cells.push(`<path d="${voronoi.renderCell(i)}" fill="${fill}" stroke="${area ? "#00000022" : fill}"/>`);
+    if (water && reached.has(water.id))
+      cells.push(`<path d="${voronoi.renderCell(i)}" fill="#ffffff" fill-opacity="0.25" stroke="none"/>`);
     const owner = area?.owner === null || area === undefined ? undefined : world.governments[area.owner];
     if (owner) {
       cells.push(

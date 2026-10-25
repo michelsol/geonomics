@@ -3,7 +3,7 @@ import type { Catalog } from "./catalog";
 import type { WorldConfig } from "./config";
 import { seedFrom } from "./random";
 import { edgeBaseTransportCost, edgeCapacityPerDay, edgeTravelDays } from "./routes";
-import type { Area, AreaId, Edge, EdgeMode, Terrain, World } from "./types";
+import type { Area, AreaId, Edge, EdgeMode, Terrain, WaterCell, WaterId, World } from "./types";
 
 export interface AreaInit {
   id: AreaId;
@@ -71,6 +71,7 @@ export function createEmptyWorld(catalog: Catalog, config: WorldConfig, seed: nu
     needs: catalog.needs,
     goods: catalog.goods,
     areas: [],
+    waters: [],
     edges: [],
     governments: [],
     armies: new Map(),
@@ -98,10 +99,56 @@ export interface EdgeSpec {
   lane?: boolean; // sea only: a lane between coasts rather than a route between ports (default false)
 }
 
+export interface WaterSpec {
+  position: { x: number; y: number };
+  coasts: AreaId[]; // neighboring land areas
+  neighbors: number[]; // neighboring water cells, by index in WorldSpec.waters (listed on both sides)
+  naturalCapacity?: Record<string, number>; // primary good key -> maximum extraction per day
+}
+
 export interface WorldSpec {
   areas: AreaSpec[];
   edges: EdgeSpec[];
+  waters?: WaterSpec[]; // none by default
   seed: number;
+}
+
+/** Creates a water cell with its per-good arrays; depth is set later by setWaterDepths. */
+export function createWaterCell(
+  id: WaterId,
+  position: { x: number; y: number },
+  coasts: AreaId[],
+  neighbors: WaterId[],
+  goodCount: number,
+): WaterCell {
+  return {
+    id,
+    position: { ...position },
+    depth: 0,
+    neighbors,
+    coasts,
+    naturalCapacity: new Float64Array(goodCount),
+    naturalCapacityMaximum: new Float64Array(goodCount),
+  };
+}
+
+/** Depth of every water cell: hops over water from the nearest cell touching a coast, which has depth 1. */
+export function setWaterDepths(waters: WaterCell[]): void {
+  const queue: WaterId[] = [];
+  for (const water of waters) {
+    water.depth = water.coasts.length > 0 ? 1 : Number.POSITIVE_INFINITY;
+    if (water.coasts.length > 0) queue.push(water.id);
+  }
+  for (let head = 0; head < queue.length; head++) {
+    const current = waters[queue[head] as WaterId] as WaterCell;
+    for (const id of current.neighbors) {
+      const next = waters[id] as WaterCell;
+      if (next.depth > current.depth + 1) {
+        next.depth = current.depth + 1;
+        queue.push(id);
+      }
+    }
+  }
 }
 
 /** Builds a world from hand-written areas and edges. Call initializeWorld afterwards to reach Rule 6's start. */
@@ -120,6 +167,25 @@ export function createWorld(catalog: Catalog, config: WorldConfig, spec: WorldSp
     }
     world.areas.push(area);
   }
+  for (const [id, waterSpec] of (spec.waters ?? []).entries()) {
+    const water = createWaterCell(
+      id,
+      waterSpec.position,
+      [...waterSpec.coasts],
+      [...waterSpec.neighbors],
+      catalog.goods.length,
+    );
+    for (const [key, capacity] of Object.entries(waterSpec.naturalCapacity ?? {})) {
+      const good = goodIds.get(key);
+      if (good === undefined || !catalog.goods[good]?.isPrimary) {
+        throw new Error(`Water cell ${id}: natural capacity for "${key}", which is not a primary good`);
+      }
+      water.naturalCapacity[good] = capacity;
+      water.naturalCapacityMaximum[good] = capacity;
+    }
+    world.waters.push(water);
+  }
+  setWaterDepths(world.waters);
   for (const edgeSpec of spec.edges) addEdge(world, edgeSpec);
   return world;
 }

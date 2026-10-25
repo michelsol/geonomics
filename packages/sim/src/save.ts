@@ -4,7 +4,8 @@ import { decode, ExtensionCodec, encode } from "@msgpack/msgpack";
 import type { World } from "./types";
 
 const MAGIC = "geonomics-save";
-export const SAVE_FORMAT_VERSION = 2; // 2: leveled infrastructure with staff (specification §6, Infrastructure)
+// 2: leveled infrastructure with staff (specification §6, Infrastructure); 3: water cells (specification §5)
+export const SAVE_FORMAT_VERSION = 3;
 
 /** What a save says about itself, readable without decoding the world. */
 export interface SaveInfo {

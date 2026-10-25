@@ -34,4 +34,5 @@ export { hourlyOutputPerWorker } from "./tick/production";
 export { runTick, type TickOptions } from "./tick/tick";
 export { lastTradeFlows, lastTradeTonnage, type TradeFlow } from "./tick/trade";
 export type * from "./types";
+export * from "./waters";
 export * from "./world";

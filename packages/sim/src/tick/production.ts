@@ -1,6 +1,7 @@
 // Phase 1: production (specification §5, Production), private and government.
 import { EPSILON } from "../math";
 import type { Area, Good, GovernmentAreaState, World } from "../types";
+import { depleteExtraction, extractionCapacity } from "../waters";
 import { policiesOf, type Scratch, scratchOf } from "./scratch";
 
 /** Worker-hours per worker per game day at the area's productivity. */
@@ -88,7 +89,8 @@ export function produceArea(world: World, area: Area, scratch: Scratch, commit: 
     let stateOutput = 0; // government output, to the depot
 
     if (good.isPrimary) {
-      const capacity = area.naturalCapacity[g] as number;
+      // The area's land and its share of the water cells its port reaches (section 6, Infrastructure).
+      const capacity = extractionCapacity(world, area, g);
       if (capacity > EPSILON) {
         // Private and government workers share the natural capacity; output is split in proportion to workers.
         const privateWorkers = area.privateWorkers[g] as number;
@@ -103,9 +105,8 @@ export function produceArea(world: World, area: Area, scratch: Scratch, commit: 
         if (depot) depot[g] = (depot[g] as number) + stateOutput;
         marginal[g] = hourly * saturation;
         producible[g] = 1;
-        if (commit && good.depletionPerUnitExtracted > 0) {
-          area.naturalCapacity[g] = Math.max(0, capacity - totalOutput * good.depletionPerUnitExtracted);
-        }
+        if (commit && good.depletionPerUnitExtracted > 0)
+          depleteExtraction(world, area, g, totalOutput * good.depletionPerUnitExtracted);
       } else {
         marginal[g] = 0;
         producible[g] = 0;

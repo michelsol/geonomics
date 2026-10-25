@@ -14,6 +14,7 @@ type EdgeId = number;        // index into World.edges
 type GovernmentId = number;  // index into World.governments
 type ArmyId = number;        // unique id of an army, never reused
 type PlayerId = string;      // PeerJS peer id of a connected human player
+type WaterId = number;       // index into World.waters
 
 interface World {
   tick: number;                         // number of ticks simulated since the game started
@@ -22,6 +23,7 @@ interface World {
   needs: Need[];                        // needs of the population, each satisfied by one or more goods
   goods: Good[];                        // catalog of goods, sorted so that every input comes before its outputs
   areas: Area[];                        // every area on the map
+  waters: WaterCell[];                  // every water cell of a generated map; empty for hand-built worlds
   edges: Edge[];                        // every connection between two areas
   governments: Government[];            // every government, human or AI, including eliminated ones
   armies: Map<ArmyId, Army>;            // every army currently in the field
@@ -34,11 +36,22 @@ interface World {
 }
 
 interface MapLayout {
-  width: number;                        // map size in map units (km)
+  width: number;                        // map size in map units (km): the rectangle the cells tile
   height: number;
-  waterPoints: Float64Array;            // x, y pairs of the water cells' centers
 }
-// Area cells for rendering are the Voronoi cells of the area positions followed by the water points.
+// Cells for rendering are the Voronoi cells of the area positions followed by the water cells' positions.
+
+// A cell of sea (section 5, Map generation): no people, owner or market, but natural capacity that the ports
+// reaching it extract (section 6, Infrastructure).
+interface WaterCell {
+  id: WaterId;                          // index of this cell in World.waters
+  position: { x: number; y: number };   // map coordinates of the cell's center
+  depth: number;                        // hops over water from the nearest land; 1 for a cell touching a coast
+  neighbors: WaterId[];                 // neighboring water cells
+  coasts: AreaId[];                     // neighboring land areas, all coastal
+  naturalCapacity: Float64Array;        // per good: current maximum extraction per day, after depletion
+  naturalCapacityMaximum: Float64Array; // per good: capacity the cell recovers toward
+}
 
 type Terrain = "plains" | "forest" | "hills" | "mountains" | "desert";
 
@@ -90,7 +103,7 @@ interface Good {
   depletionPerUnitExtracted: number;    // primary goods: natural capacity lost per unit extracted (0 = renewable)
   regenerationRatePerDay: number;       // primary goods: share of lost capacity recovered per game day
   abundance: "common" | "regional" | "rare" | null; // primary goods: how widely map generation spreads capacity
-  terrains: (Terrain | "coast")[];      // primary goods: where map generation places capacity; empty = anywhere
+  terrains: (Terrain | "coast" | "sea" | "offshore")[]; // primary goods: where map generation places capacity; empty = anywhere on land
   satisfies: NeedSatisfaction | null;   // need this good is consumed for; null for pure inputs
   laborValue: number;                   // derived at startup: man-hours embodied in one unit, inputs included
 }

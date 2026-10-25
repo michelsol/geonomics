@@ -5,6 +5,16 @@ import type { Area, GovernmentAreaState, InfrastructureKind, ResolvedPolicies } 
 
 export const INFRASTRUCTURE_KINDS: readonly InfrastructureKind[] = ["port", "airport", "roads", "fort"];
 
+let portChanges = 0;
+
+/** Counts port level changes made through setLevel, so caches of the water reach know when to look again. */
+export const portLevelChanges = (): number => portChanges;
+
+/** Records a port level set directly rather than through setLevel. */
+export function portLevelChanged(): void {
+  portChanges++;
+}
+
 /** Index of a kind in every per-kind array. */
 export const kindIndex = (kind: InfrastructureKind): number => INFRASTRUCTURE_KINDS.indexOf(kind);
 
@@ -25,6 +35,7 @@ export function setLevel(area: Area, kind: InfrastructureKind, level: number): v
   switch (kind) {
     case "port":
       area.portLevel = level;
+      portChanges++;
       return;
     case "airport":
       area.airportLevel = level;

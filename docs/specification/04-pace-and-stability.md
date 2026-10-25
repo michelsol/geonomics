@@ -182,6 +182,7 @@ interface WorldConfig {
     capacityHeadroom: number;           // world capacity of a primary good as a multiple of its reference demand (default 2.5)
     presence: { common: number; regional: number; rare: number }; // share of eligible areas holding a primary good (default 0.85, 0.3, 0.08)
     extractionLaborShare: number;       // producing areas of a primary good could supply the world with this share of their labor (default 0.1)
+    waterCellPopulationShare: number;   // placing resources, a water cell counts as this share of its nearest coast's population (default 0.5)
     governmentCount: number;            // realms founded, which split the whole map; chosen by the player (default 6)
     minimumIslandAreas: number;         // smaller islands sink (default 2)
   };

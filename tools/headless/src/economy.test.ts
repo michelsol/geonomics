@@ -154,8 +154,8 @@ it("substitutes bread for fish when fish runs short, keeping food satisfaction",
 
   run(world, 300);
   const before = breadShare();
-  area.naturalCapacity[fish] = (area.naturalCapacity[fish] as number) * 0.3;
-  area.naturalCapacityMaximum[fish] = (area.naturalCapacityMaximum[fish] as number) * 0.3;
+  area.naturalCapacity[fish] = (area.naturalCapacity[fish] as number) * 0.1;
+  area.naturalCapacityMaximum[fish] = (area.naturalCapacityMaximum[fish] as number) * 0.1;
   let lowest = 1;
   for (let i = 0; i < 300; i++) {
     runTick(world);

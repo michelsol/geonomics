@@ -2,7 +2,15 @@
 // staffed shares, what roads, ports and airports do to the edges, and the air route rebuild.
 
 import { MinHeap } from "../heap";
-import { INFRASTRUCTURE_KINDS, isBuilding, kindIndex, levelOf, setLevel, staffQuota } from "../infrastructure";
+import {
+  INFRASTRUCTURE_KINDS,
+  isBuilding,
+  kindIndex,
+  levelOf,
+  portLevelChanged,
+  setLevel,
+  staffQuota,
+} from "../infrastructure";
 import { nextRandom } from "../random";
 import { edgeCapacityPerDay, edgeTransportCost } from "../routes";
 import type { Area, AreaId, Edge, GovernmentAreaState, InfrastructureKind, World } from "../types";
@@ -133,6 +141,7 @@ export function placeStartingInfrastructure(world: World): void {
     const coast = landmass.filter((area) => area.isCoastal).sort(byPopulation)[0];
     if (coast) coast.portLevel = 1;
   }
+  portLevelChanged();
   for (const government of world.governments) {
     for (const [id, state] of government.areaStates) {
       const area = world.areas[id] as Area;

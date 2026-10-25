@@ -94,10 +94,10 @@ describe("shipped catalogs", () => {
   it("prices a need unit at the preference-weighted mix of its goods' unit prices", () => {
     const catalog = loadCatalog(small);
     const food = catalog.needs.find((n) => n.key === "food");
-    // fish: 3.6 / 6 = 0.6, bread: 0.8195 / 1.3 ≈ 0.6304; σ = 2; preferences equal.
+    // fish: 3.6 / 6 = 0.6, bread: 0.8195 / 1.3 ≈ 0.6304; σ = 2; preferences 0.35 for fish, 1 for bread.
     const fish = 0.6;
     const bread = 0.8195 / 1.3;
-    const wFish = fish ** -2;
+    const wFish = 0.35 * fish ** -2;
     const wBread = bread ** -2;
     expect(food?.referenceUnitPrice).toBeCloseTo((wFish * fish + wBread * bread) / (wFish + wBread), 10);
   });
