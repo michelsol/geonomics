@@ -1,6 +1,6 @@
-[Specification](README.md) · section 6 of 11
+[Specification](README.md) · section 5 of 10
 
-## 6. Government mechanics
+## 5. Government mechanics
 
 A government touches the private economy through three channels only: policies, market orders and employment. It holds one treasury for the whole realm and one depot per owned area, because money moves instantly but goods must travel.
 
@@ -10,12 +10,12 @@ A government is founded on each capital placed by map generation, in capital ord
 
 - **Realm:** the realms split the whole map. Each area joins the capital nearest by distance over active land and sea edges, the earlier capital on a tie; an area with no such path joins the capital nearest in a straight line. No area starts neutral.
 - **Color:** each realm in turn takes the palette color (12 colors) least used by its already colored neighbors, then least used overall.
-- **Treasury:** starts at `startingTreasuryDays` of the realm's income, `population × workforceShare × hoursPerWorkerDay × wageLevel` summed over its areas.
+- **Treasury:** starts at `startingTreasuryDays` of the realm's income, `population × workforceShare × hoursPerWorkerDay × averageWage` summed over its areas.
 - **Owned areas:** each starts with an empty depot, no jobs, a `wageOffer` of 1, no policies, and its built infrastructure as its target.
 - **Infrastructure:** each coastal area gets a port of level 1 with chance `startingPortShare`, drawn from the seeded generator in area order, and each realm an airport of level 1 in its capital and then its most populous areas, up to `startingAirports`. A landmass left without any port gets one in its most populous coastal area, so no island is cut off. Then the routes are built and every starting level is fully staffed from the workforce.
 - **Relations:** every pair of governments starts at peace.
 - **Controller:** the AI, until a player takes the government over.
-- **Personality:** from the game's AI mix (section 11).
+- **Personality:** from the game's AI mix (section 10).
 
 ### Policies
 
@@ -28,7 +28,7 @@ Each policy plugs into exactly one phase of the tick.
 | `importTariffRate` | Good | Trade | Added to the cost of goods entering across a border. |
 | `exportTariffRate` | Good | Trade | Added to the cost of goods leaving across a border. A very high value acts as a ban. |
 | `headTaxPerPersonPerDay` | Area | Taxes | Flat tax per inhabitant. Reliable revenue that drains savings and drives people away. Negative, it is an allowance paid to every inhabitant, as a subsidy. |
-| `staffWageShare` | Area | Taxes, Labor | Infrastructure staff pay as a share of the area's wage level (`defaultStaffWageShare` when unset). Staff come at 1 or more and leave below it (Infrastructure). |
+| `staffWageShare` | Area | Taxes, Labor | Infrastructure staff pay as a share of the area's average wage (`defaultStaffWageShare` when unset). Staff come at 1 or more and leave below it (Infrastructure). |
 | `priceCeiling`, `priceFloor` | Good | Prices | Clamp the local price. Ceilings cause shortages; floors cause gluts. |
 
 The player sets **realm policies** once and adds **area overrides** where needed.
@@ -60,9 +60,9 @@ shortfall   = taxDue - paidInMoney
 The **bill** of a government is the subsidies, wages and construction payments it owes this tick:
 - the subsidies of every owned area;
 - government wages, `workers × wageOffer × hoursPerWorkerDay × days` per job;
-- infrastructure staff wages, `staff × staffWageShare × max(wageLevel, 0) × hoursPerWorkerDay × days` per kind;
+- infrastructure staff wages, `staff × staffWageShare × max(averageWage, 0) × hoursPerWorkerDay × days` per kind;
 - construction payments, `n × costPerLevel / buildDaysPerLevel × days` per kind building its level `n`;
-- soldiers' wages (section 7, Armies).
+- soldiers' wages (section 6, Armies).
 
 It is paid from the treasury into the areas' savings after taxes are collected. If the treasury cannot pay the whole bill, every payment is scaled by the same `paidShare = treasury / bill`.
 
@@ -97,7 +97,7 @@ Each owned area has a depot, filled by market purchases, government production j
 The player sets a target number of workers per job and a wage offer per area. Workers come from `unemployedWorkers` first, then proportionally from private jobs.
 
 ```typescript
-wageAttractiveness = wageOffer / max(area.wageLevel, epsilon)
+wageAttractiveness = wageOffer / max(area.averageWage, epsilon)
 if (targetWorkers < workers)
   workers = targetWorkers                                            // firing is instant
 workers -= workers * fraction(quitRatePerDay) * max(0, 1 - wageAttractiveness, 1 - paidShare)
@@ -120,16 +120,16 @@ Each owned area has four kinds of infrastructure, each at a level from 0 (none) 
 
 | Kind | Effect of its running level |
 | --- | --- |
-| Port | Coastal areas only. Each level adds `seaCapacityPerPortLevel` to the area's sea routes; armies embark only from a running port (section 5, Sea and air routes). The port also works the sea: see Waters below. |
+| Port | Coastal areas only. Each level adds `seaCapacityPerPortLevel` to the area's sea routes; armies embark only from a running port (section 4, Sea and air routes). The port also works the sea: see Waters below. |
 | Airport | Each level adds `airCapacityPerAirportLevel` to the area's air routes; the first level opens air routes, the maximum level makes the airport a hub. |
 | Roads | A land edge's transport cost is `baseTransportCost × (1 − (1 − minimumTransportCostFactor) × mean of its two areas' running road levels / maximumLevel)`. |
-| Fort | Defense is multiplied by `1 + running fort level` (section 7, Combat and Siege). |
+| Fort | Defense is multiplied by `1 + running fort level` (section 6, Combat and Siege). |
 
 - **Building.** `setInfrastructureTarget` sets the level to build up to. Levels are built one at a time: level `n` takes `buildDaysPerLevel` days and costs `n × costPerLevel`, paid in equal parts every day into the area's savings as part of the bill. When the treasury pays only `paidShare` of the bill, construction advances by `paidShare × days`. A level is complete in phase 10 when its days are done; construction stops at the target.
 - **Taking down.** A target below the built level lowers it at once, for free, and stops construction of that kind. Staff beyond the new quota become unemployed at once.
-- **Staff.** Each built level needs `staffPerLevel` workers. They are hired, quit and fired in phase 7 like government workers (Hiring and wages), with the staff wage `staffWageShare × wageLevel` as their offer, so their attractiveness is `staffWageShare`: they come while it is at least 1, and quit at the shortfall or the unpaid share, whichever is larger.
+- **Staff.** Each built level needs `staffPerLevel` workers. They are hired, quit and fired in phase 7 like government workers (Hiring and wages), with the staff wage `staffWageShare × averageWage` as their offer, so their attractiveness is `staffWageShare`: they come while it is at least 1, and quit at the shortfall or the unpaid share, whichever is larger.
 - **Running level.** The staffed share is `min(1, staff / quota)`, and the running level is the built level times the staffed share. Half the staff gives half the effect.
-- **Waters.** A port of built level `L` reaches every water cell within `L` hops over water of its area, a cell touching the area being one hop away. A cell reached by several ports is shared equally between them, whether or not they run: each area works `1 / (ports reaching it)` of its capacity, at its port's staffed share (section 5, Production). The reach changes only when port levels do. Without a port, an area works no water cell.
+- **Waters.** A port of built level `L` reaches every water cell within `L` hops over water of its area, a cell touching the area being one hop away. A cell reached by several ports is shared equally between them, whether or not they run: each area works `1 / (ports reaching it)` of its capacity, at its port's staffed share (section 4, Production). The reach changes only when port levels do. Without a port, an area works no water cell.
 - **Captures.** Built levels stay with the area (a fort loses one level). The old owner's staff become unemployed and its construction stops; the infrastructure stands idle until the new owner hires staff.
 
 ### Standing orders

@@ -10,7 +10,7 @@ export interface Realm {
   day: number;
   owned: ReadonlySet<AreaId>;
   population: number;
-  wageLevel: number; // population-weighted mean wage level of the owned areas
+  averageWage: number; // population-weighted mean of the owned areas' average wages
   armies: Army[]; // this government's armies
   soldiers: number;
   jobSpendingPerDay: number; // government wages owed per day at the current staffing
@@ -56,7 +56,7 @@ export function assess(view: AiView, memory: AiMemory, traits: Traits): Realm {
   let wageSum = 0;
   for (const area of owned) {
     population += areas.population[area] as number;
-    wageSum += (areas.population[area] as number) * (areas.wageLevel[area] as number);
+    wageSum += (areas.population[area] as number) * (areas.averageWage[area] as number);
   }
   let jobSpendingPerDay = 0;
   for (const state of government.areaStates)
@@ -88,7 +88,7 @@ export function assess(view: AiView, memory: AiMemory, traits: Traits): Realm {
     day,
     owned,
     population,
-    wageLevel: population > 0 ? wageSum / population : 1,
+    averageWage: population > 0 ? wageSum / population : 1,
     armies: own,
     soldiers,
     jobSpendingPerDay,

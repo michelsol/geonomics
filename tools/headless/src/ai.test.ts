@@ -1,4 +1,4 @@
-// Roadmap stage 10: AI-only games. The full exit runs (1,000 areas, 2,000 days) are `pnpm headless -- --ai <mix>`;
+// AI-only games. The full exit runs (1,000 areas, 2,000 days) are `pnpm headless -- --ai <mix>`;
 // this shorter one keeps the suite fast.
 import { expect, it } from "vitest";
 import { runAiGame } from "./aiGame";

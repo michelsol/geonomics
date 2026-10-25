@@ -1,4 +1,4 @@
-// Diagnostics from specification §4: price volatility, oscillation count, unmet necessities and labor churn,
+// Diagnostics from specification §3: price volatility, oscillation count, unmet necessities and labor churn,
 // measured over a trailing window of game days.
 import type { World } from "@geonomics/sim";
 
@@ -15,7 +15,7 @@ export interface GoodDiagnostics {
 export interface Diagnostics {
   day: number;
   population: number;
-  meanWageLevel: number; // population-weighted
+  meanWage: number; // population-weighted
   meanSatisfaction: number; // population-weighted
   unmetNecessities: number; // share of necessity demand not met, averaged over the window
   laborChurn: number; // share of the workforce changing jobs per day, averaged over the window
@@ -112,7 +112,7 @@ export class Recorder {
     let satisfaction = 0;
     for (const area of world.areas) {
       population += area.population;
-      wage += area.population * area.wageLevel;
+      wage += area.population * area.averageWage;
       satisfaction += area.population * area.satisfaction;
     }
     const filled = Math.min(this.samples, this.window);
@@ -121,7 +121,7 @@ export class Recorder {
     return {
       day: world.gameDay,
       population,
-      meanWageLevel: population > 0 ? wage / population : 0,
+      meanWage: population > 0 ? wage / population : 0,
       meanSatisfaction: population > 0 ? satisfaction / population : 0,
       unmetNecessities: average(this.unmet),
       laborChurn: average(this.churn),
@@ -144,7 +144,7 @@ export class Recorder {
 export function formatDiagnostics(d: Diagnostics): string {
   const pct = (v: number) => `${(100 * v).toFixed(2)}%`;
   const lines = [
-    `day ${d.day}  population ${Math.round(d.population).toLocaleString("en")}  wage level ${d.meanWageLevel.toFixed(3)}  satisfaction ${pct(d.meanSatisfaction)}`,
+    `day ${d.day}  population ${Math.round(d.population).toLocaleString("en")}  average wage ${d.meanWage.toFixed(3)}  satisfaction ${pct(d.meanSatisfaction)}`,
     `unmet necessities ${pct(d.unmetNecessities)}  labor churn ${pct(d.laborChurn)}/day  worst volatility ${d.worstVolatility.toFixed(4)}  worst oscillations ${d.worstOscillations}`,
     `  ${"good".padEnd(22)} ${"volatility".padStart(10)} ${"oscill.".padStart(8)} ${"price/LV".padStart(9)}`,
     ...d.goods.map(

@@ -1,4 +1,4 @@
-// Population of the selection, or of the realm when nothing is selected (specification §10, Panels): people, births
+// Population of the selection, or of the realm when nothing is selected (specification §9, Panels): people, births
 // & deaths, migrants in and out, and their history. The map shows population, with migration flows on request.
 import { demographyOf } from "../../state/selectors";
 import { useGame } from "../../state/store";

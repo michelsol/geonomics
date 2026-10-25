@@ -1,5 +1,5 @@
 // Joining a game hosted in another browser: the store talks to the host instead of a local worker
-// (specification §9, Joining and Dropped connections).
+// (specification §8, Joining and Dropped connections).
 import { ClientSession, connector, type ToHost } from "@geonomics/net";
 import type { ToWorker } from "../host/protocol";
 import { gameStore, setPortTarget } from "../state/store";

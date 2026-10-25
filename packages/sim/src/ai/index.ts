@@ -1,4 +1,4 @@
-// AI governments (specification §11): each AI realm decides every few days from what a player of it would see, and
+// AI governments (specification §10): each AI realm decides every few days from what a player of it would see, and
 // acts through the same commands. A fixed number of decisions per tick bounds the host time, deterministically.
 import { AI_PLAYER, applyCommand } from "../commands";
 import { nextRandom } from "../random";

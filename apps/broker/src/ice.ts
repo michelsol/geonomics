@@ -1,4 +1,4 @@
-// ICE servers for the game's peers (specification §9, Broker): Cloudflare STUN and TURN, with short-lived credentials
+// ICE servers for the game's peers (specification §8, Broker): Cloudflare STUN and TURN, with short-lived credentials
 // minted here so the TURN key's secret never reaches a browser.
 
 export interface IceEnv {

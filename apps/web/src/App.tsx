@@ -1,4 +1,4 @@
-// Top-level screen switch (specification §10, Screens).
+// Top-level screen switch (specification §9, Screens).
 import { lazy, Suspense } from "react";
 import { useGame } from "./state/store";
 import { Guide } from "./ui/Guide";

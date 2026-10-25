@@ -1,4 +1,4 @@
-// Saved games in IndexedDB (specification §9, Save and load): one autosave per game, the most recent games kept.
+// Saved games in IndexedDB (specification §8, Save and load): one autosave per game, the most recent games kept.
 // Works in the worker, which writes autosaves, and on the main thread, which lists and deletes them.
 import type { SaveInfo } from "@geonomics/sim";
 

@@ -1,4 +1,4 @@
-// Goods catalog loader (specification §5, Goods catalogs). Takes parsed JSON, so it works in the browser,
+// Goods catalog loader (specification §4, Goods catalogs). Takes parsed JSON, so it works in the browser,
 // the worker and Node alike.
 import type {
   Abundance,

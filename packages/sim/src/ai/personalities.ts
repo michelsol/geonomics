@@ -1,4 +1,4 @@
-// The three AI personalities (specification §11): the same rules, tuned differently.
+// The three AI personalities (specification §10): the same rules, tuned differently.
 import type { InfrastructureKind, Personality } from "../types";
 
 export interface Traits {

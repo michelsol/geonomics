@@ -1,4 +1,4 @@
-// PeerJS links (specification §9, Joining): reliable, ordered data channels carrying raw binary frames.
+// PeerJS links (specification §8, Joining): reliable, ordered data channels carrying raw binary frames.
 import { type DataConnection, Peer, type PeerOptions, util } from "peerjs";
 import { inviteCode } from "./code";
 import type { Link } from "./link";

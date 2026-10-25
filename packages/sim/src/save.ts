@@ -1,10 +1,10 @@
-// Save format (specification §9, Save and load): the whole world in msgpack, exact to the bit, behind a header that
+// Save format (specification §8, Save and load): the whole world in msgpack, exact to the bit, behind a header that
 // names the format and its version.
 import { decode, ExtensionCodec, encode } from "@msgpack/msgpack";
 import type { World } from "./types";
 
 const MAGIC = "geonomics-save";
-// 2: leveled infrastructure with staff (specification §6, Infrastructure); 3: water cells (specification §5)
+// 2: leveled infrastructure with staff (specification §5, Infrastructure); 3: water cells (specification §4)
 export const SAVE_FORMAT_VERSION = 3;
 
 /** What a save says about itself, readable without decoding the world. */

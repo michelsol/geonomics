@@ -1,4 +1,4 @@
-// The PeerServer signaling protocol as PeerJS speaks it (specification §9, Broker): peers register an id over a
+// The PeerServer signaling protocol as PeerJS speaks it (specification §8, Broker): peers register an id over a
 // WebSocket, then trade offers, answers and candidates addressed by id. Pure logic, so it runs in tests as in the Worker.
 
 /** A registered peer's socket: its id and token travel with it, as the Durable Object's attachment. */

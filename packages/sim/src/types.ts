@@ -1,4 +1,4 @@
-// Data model from specification §3. The world is plain serializable data; per-good values are typed arrays
+// Data model from specification §2. The world is plain serializable data; per-good values are typed arrays
 // indexed by GoodId so each tick phase is a tight loop.
 import type { WorldConfig } from "./config";
 
@@ -14,7 +14,7 @@ export type PlayerId = string; // PeerJS peer id of a connected human player
 export interface World {
   tick: number; // number of ticks simulated since the game started
   gameDay: number; // elapsed game time in days (sum of gameDaysPerTick over all ticks)
-  config: WorldConfig; // all tunable parameters, including pace (section 4)
+  config: WorldConfig; // all tunable parameters, including pace (section 3)
   needs: Need[]; // needs of the population, each satisfied by one or more goods
   goods: Good[]; // catalog of goods, sorted so that every input comes before its outputs
   areas: Area[]; // every area on the map
@@ -37,8 +37,8 @@ export interface MapLayout {
 }
 
 /**
- * A cell of sea on a generated map (section 5, Water cells): no people, owner or market, but natural capacity that
- * the ports reaching it extract (section 6, Infrastructure).
+ * A cell of sea on a generated map (section 4, Water cells): no people, owner or market, but natural capacity that
+ * the ports reaching it extract (section 5, Infrastructure).
  */
 export interface WaterCell {
   id: WaterId; // index of this cell in World.waters
@@ -120,7 +120,7 @@ export interface Area {
   unemployedWorkers: number; // workers without a private or government job
   terrain: Terrain; // set by map generation: sets productivity and land transport cost
   isCoastal: boolean; // set by map generation: the area touches navigable water
-  // Infrastructure (section 6, Infrastructure): built levels, 0 (none) to infrastructure.maximumLevel
+  // Infrastructure (section 5, Infrastructure): built levels, 0 (none) to infrastructure.maximumLevel
   portLevel: number; // coastal areas only: raises the capacity of the area's sea routes
   airportLevel: number; // raises the capacity of the area's air routes
   roadLevel: number; // lowers the transport cost of the area's land edges
@@ -133,7 +133,7 @@ export interface Area {
   // Per-good arrays, indexed by GoodId
   stock: Float64Array; // units stored privately, available to consume or export
   price: Float64Array; // current local market price, in man-hours per unit
-  smoothedPrice: Float64Array; // slow moving average of price, used for job decisions (section 4)
+  smoothedPrice: Float64Array; // slow moving average of price, used for job decisions (section 3)
   privateWorkers: Float64Array; // workers employed in private production of each good
   naturalCapacity: Float64Array; // primary goods: current maximum extraction per day (0 otherwise)
   naturalCapacityMaximum: Float64Array; // primary goods: capacity the area recovers toward
@@ -151,7 +151,7 @@ export interface Area {
   needConsumed: Float64Array; // per NeedId: need units actually consumed, substitutes included
   satisfaction: number; // 0 to 1: tier-weighted share of need demand that was met
   necessitySatisfaction: number; // 0 to 1: share of necessity need demand that was met
-  wageLevel: number; // average value added per private worker-hour, in man-hours
+  averageWage: number; // average value added per private worker-hour, in man-hours
 }
 
 export type EdgeMode = "land" | "sea" | "air";
@@ -177,7 +177,7 @@ export interface Edge {
 
 export type GovernmentJob = { kind: "produce"; good: GoodId }; // state production; output goes to the local depot
 
-/** What a government builds and staffs in its areas (section 6, Infrastructure). */
+/** What a government builds and staffs in its areas (section 5, Infrastructure). */
 export type InfrastructureKind = "port" | "airport" | "roads" | "fort"; // per-kind arrays follow this order
 
 export interface JobAssignment {
@@ -192,7 +192,7 @@ export type PolicyName =
   | "importTariffRate" // per good: share of the price charged on goods entering across a border
   | "exportTariffRate" // per good: share of the price charged on goods leaving across a border
   | "headTaxPerPersonPerDay" // per area: flat tax per inhabitant per game day, in man-hours
-  | "staffWageShare" // per area: infrastructure staff pay, as a share of the area's wage level
+  | "staffWageShare" // per area: infrastructure staff pay, as a share of the area's average wage
   | "priceCeiling" // per good: maximum allowed local price
   | "priceFloor"; // per good: minimum allowed local price
 
@@ -226,7 +226,7 @@ export interface GovernmentAreaState {
 
 export type GovernmentController = { kind: "human"; player: PlayerId } | { kind: "ai" };
 
-/** How an AI runs the realm (specification §11); "idle" never acts, for test worlds. */
+/** How an AI runs the realm (specification §10); "idle" never acts, for test worlds. */
 export type Personality = "trader" | "builder" | "conqueror" | "idle";
 
 /** The personality mix of a new game's realms. */

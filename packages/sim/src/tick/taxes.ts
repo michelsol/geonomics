@@ -1,5 +1,5 @@
-// Phase 5: taxes, subsidies, wages of workers, staff and soldiers, and construction payments (specification §6, Tax
-// collection, Hiring and wages, Infrastructure; specification §7, Armies).
+// Phase 5: taxes, subsidies, wages of workers, staff and soldiers, and construction payments (specification §5, Tax
+// collection, Hiring and wages, Infrastructure; specification §6, Armies).
 import { armyArea } from "../army";
 import { infrastructureBillPerDay, staffWageShareOf } from "../infrastructure";
 import { EPSILON } from "../math";

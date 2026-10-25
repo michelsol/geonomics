@@ -1,5 +1,5 @@
-// Phase 2: government market orders and depot transfers (specification §6, Market orders, Depots and transfers),
-// and the standing orders evaluated in phase 0 (specification §6, Standing orders).
+// Phase 2: government market orders and depot transfers (specification §5, Market orders, Depots and transfers),
+// and the standing orders evaluated in phase 0 (specification §5, Standing orders).
 import { EPSILON, reserveDaysOf } from "../math";
 import type { Area, Government, GovernmentAreaState, StandingOrder, World } from "../types";
 import { privateUsedPerTick, type StandingTrade, scratchOf } from "./scratch";

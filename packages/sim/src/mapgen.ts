@@ -1,4 +1,4 @@
-// Map generation (specification §5, Map generation): Voronoi cells, elevation and moisture from noise, terrain,
+// Map generation (specification §4, Map generation): Voronoi cells, elevation and moisture from noise, terrain,
 // coasts, water cells, population, resources on land and at sea, land edges, sea lanes and capital positions.
 import { Delaunay } from "d3-delaunay";
 import { createNoise2D, type NoiseFunction2D } from "simplex-noise";

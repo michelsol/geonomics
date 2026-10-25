@@ -1,6 +1,6 @@
-[Specification](README.md) · section 9 of 11
+[Specification](README.md) · section 8 of 10
 
-## 9. Architecture and stack
+## 8. Architecture and stack
 
 Everything is TypeScript and runs in the browser. The host's browser runs the simulation in a Web Worker; joining players connect through PeerJS, send commands and draw the snapshots they receive.
 
@@ -78,7 +78,7 @@ From the host to a joining player:
 The host broadcasts snapshots at `snapshotRate` (default 3 per second), independent of the tick rate. A snapshot contains:
 
 - `tick` and `gameDay`.
-- Per area, for every area: owner, population, its natural change of the last tick per game day (growth, or starvation when negative), wage level, gross and net income per member of the workforce and day (section 10, Income; NaN for an empty area), employment rate (the share of the workforce, `population × workforceShare`, not unemployed), satisfaction, port, airport, road and fortification levels and the staffed share of each, siege progress and besieger, and militia.
+- Per area, for every area: owner, population, its natural change of the last tick per game day (growth, or starvation when negative), average wage, gross and net income per member of the workforce and day (section 9, Income; NaN for an empty area), employment rate (the share of the workforce, `population × workforceShare`, not unemployed), satisfaction, port, airport, road and fortification levels and the staffed share of each, siege progress and besieger, and militia.
 - The receiving player's **visible areas**, its owned areas and their direct neighbors, and for them savings, unemployed workers, and the price, stock, produced, consumed, imported, exported, private worker and natural capacity arrays, the wage of each private job per worker-day, and per need the need units demanded and consumed. Other areas' stocks and flows are not sent. A joined player receives this detail in turns: each snapshot carries its focused area and the next 48 visible areas, and its interface keeps the last detail of each visible area. The local player receives all of it every time.
 - The static data sent once at the start also carries every area's maximum natural capacity per good, its land alone, and every water cell with its position, depth, neighbors, coasts and maximum natural capacity per good. The interface computes the ports' reach from these and the public port levels, as the simulation does. An area's natural capacity in the detail is its extraction capacity, land and staffed waters.
 - Per edge: transport cost, capacity, active and blocked state, plus the full data of any route edge created since the last snapshot.

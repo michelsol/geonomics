@@ -1,4 +1,4 @@
-// Taxes, tariffs and price controls, realm-wide or per area, and standing orders (specification §6). The map shows
+// Taxes, tariffs and price controls, realm-wide or per area, and standing orders (specification §5). The map shows
 // real net income.
 import { Section } from "../components";
 import { PolicyEditor } from "./PolicyEditor";

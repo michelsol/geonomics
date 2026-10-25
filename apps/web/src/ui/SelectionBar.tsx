@@ -1,4 +1,4 @@
-// The selection, under the tabs on every panel (specification §10, Selection): what is selected, what the player's
+// The selection, under the tabs on every panel (specification §9, Selection): what is selected, what the player's
 // actions apply to, and the controls choosing it.
 import { mapControls } from "../map/MapView";
 import { actionTarget } from "../state/selectors";

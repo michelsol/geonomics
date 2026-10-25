@@ -1,4 +1,4 @@
-// Roadmap stage 4: distant markets connect through sea and air routes.
+// Distant markets connect through sea and air routes.
 import {
   type DeepPartial,
   lastTradeFlows,

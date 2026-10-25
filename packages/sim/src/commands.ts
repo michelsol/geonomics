@@ -1,4 +1,4 @@
-// Phase 0: command validation and application (specification §3, Commands and Command validation).
+// Phase 0: command validation and application (specification §2, Commands and Command validation).
 import { armyPath, disbandArmy, planningOrigin, returnSoldiers } from "./army";
 import { resolvePolicies, settleRealm, transferArea, upsertSetting } from "./government";
 import type { Path } from "./graph";

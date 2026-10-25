@@ -34,7 +34,7 @@ const referenceLaborValues: Record<keyof typeof shipped, Record<string, number>>
   },
 };
 
-// Specification §5, calibration rule: the basket at labor-value prices and necessities' share of it.
+// Specification §4, calibration rule: the basket at labor-value prices and necessities' share of it.
 const referenceNecessityShare = { small: 0.32, medium: 0.29, large: 0.35 };
 
 function laborValue(catalog: Catalog, key: string): number {

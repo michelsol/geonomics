@@ -60,7 +60,7 @@ export function detailOf(snapshot: Snapshot | null, area: number): AreaDetail | 
 /**
  * Cost of living in an area: the reference basket of needs at local prices over the same basket at labor values, so
  * 1 when goods cost their labor value. Consumers split each need between its goods as the consumption phase does
- * (specification §5, Consumption), from the public prices, without consumption tax.
+ * (specification §4, Consumption), from the public prices, without consumption tax.
  */
 export function costOfLiving(data: StaticData, table: Uint16Array, area: number): number {
   let local = 0;
@@ -134,13 +134,13 @@ export function realmPopulation(snapshot: Snapshot): number {
   return population;
 }
 
-/** Average wage level of the player's realm, weighted by population, as the sim's soldier desertion rule uses it. */
-export function realmWageLevel(snapshot: Snapshot): number {
+/** Average wage of the player's realm, weighted by population, as the sim's soldier desertion rule uses it. */
+export function realmAverageWage(snapshot: Snapshot): number {
   let weighted = 0;
   let population = 0;
   for (const area of snapshot.government?.ownedAreas ?? []) {
     const people = snapshot.areas.population[area] as number;
-    weighted += (snapshot.areas.wageLevel[area] as number) * people;
+    weighted += (snapshot.areas.averageWage[area] as number) * people;
     population += people;
   }
   return population > 0 ? weighted / population : 1;
@@ -212,7 +212,7 @@ export interface ConquestEstimate {
 }
 
 /**
- * What it takes to conquer an area (specification §7, Power, Combat and Siege). Combat follows Lanchester's square
+ * What it takes to conquer an area (specification §6, Power, Combat and Siege). Combat follows Lanchester's square
  * law: losses of each side scale with the other's total power over its own power per soldier, so (a/d)·A² − (d/a)·D²
  * stays constant and the attackers win exactly when their total power exceeds the defense power.
  */
@@ -334,7 +334,7 @@ export function areasNear(data: StaticData, point: Point, radius: number): numbe
   return near;
 }
 
-/** What the player's actions apply to (specification §10, Selection). */
+/** What the player's actions apply to (specification §9, Selection). */
 export interface ActionTarget {
   /** True when nothing or all of the player's areas are selected: the actions are realm-wide. */
   realm: boolean;
@@ -403,7 +403,7 @@ export interface SelectionSummary {
   market: MarketRow[]; // per good
 }
 
-/** Totals and population-weighted means over several areas (specification §10, Selection). */
+/** Totals and population-weighted means over several areas (specification §9, Selection). */
 export function selectionSummary(
   data: StaticData,
   snapshot: Snapshot,
@@ -504,7 +504,7 @@ export function meanPrices(data: StaticData, table: Uint16Array, areas: readonly
   });
 }
 
-/** Population and its movements over some areas (specification §10, Population panel), in people per day. */
+/** Population and its movements over some areas (specification §9, Population panel), in people per day. */
 export interface Demography {
   population: number;
   naturalChange: number; // births & deaths: growth, less starvation where necessities run short
@@ -591,7 +591,7 @@ export function needsOf(
   return { rows, withDetail, detailPopulation };
 }
 
-/** One realm's public figures at the end of a session (specification §10, Screens). */
+/** One realm's public figures at the end of a session (specification §9, Screens). */
 export interface RealmResult {
   id: number;
   name: string;

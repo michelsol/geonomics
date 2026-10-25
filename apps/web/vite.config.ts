@@ -6,7 +6,7 @@ export default defineConfig({
   base: "./", // relative paths, so the build works under any GitHub Pages sub-path
   plugins: [
     react(),
-    // Installable, and playable offline (specification §9, Offline and install). "prompt": a new version waits until
+    // Installable, and playable offline (specification §8, Offline and install). "prompt": a new version waits until
     // the player reloads from the menu, so a running game never loses the chunks it still has to load.
     VitePWA({
       registerType: "prompt",

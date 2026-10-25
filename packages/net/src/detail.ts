@@ -1,4 +1,4 @@
-// Area detail for remote players in turns (specification §9, Snapshots): every snapshot carries the area the player
+// Area detail for remote players in turns (specification §8, Snapshots): every snapshot carries the area the player
 // looks at plus the next batch of its visible areas, so a large realm stays within the size budget and every area is
 // refreshed within a few snapshots.
 import type { AreaId } from "@geonomics/sim";

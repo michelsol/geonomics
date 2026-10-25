@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-// Roadmap stage 8 exit: an acceptable frame rate on a 3,000-area map while the simulation runs.
+// An acceptable frame rate on a 3,000-area map while the simulation runs.
 test("the map stays smooth on a 3,000-area map", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop", "measured on desktop only");
   // CI runners render without a GPU on shared machines: their frame rate measures the runner, not the game.

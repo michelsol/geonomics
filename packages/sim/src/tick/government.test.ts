@@ -228,7 +228,7 @@ describe("hiring, quitting and firing (phase 7)", () => {
     expect(area.unemployedWorkers).toBeCloseTo(unemployed, 6);
   });
 
-  it("does not hire below the wage level, and workers quit an underpaying job", () => {
+  it("does not hire below the average wage, and workers quit an underpaying job", () => {
     const world = realmWorld();
     send(world, { type: "setWageOffer", area: 1, wageOffer: 0.5 });
     send(world, { type: "setJobTarget", area: 1, job: GRAIN_JOB, targetWorkers: 200 });

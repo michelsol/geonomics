@@ -1,4 +1,4 @@
-// One simulation tick: eleven phases in a fixed order, each over every area (specification §8).
+// One simulation tick: eleven phases in a fixed order, each over every area (specification §7).
 import { runAi } from "../ai";
 import { applyCommands, type CommandRejection, expireProposals } from "../commands";
 import type { Area, CommandEnvelope, World } from "../types";

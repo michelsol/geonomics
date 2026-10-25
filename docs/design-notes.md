@@ -2,7 +2,7 @@
 
 Rationale and findings behind the rules in the [specification](specification/README.md). The specification says what the simulation does; this file says why, and what was tried before.
 
-## Economy stability (roadmap stage 3)
+## Economy stability
 
 The first rules for prices, trade and labor made the economy swing from price floor to price ceiling, stall trade, and slowly run out of money. The headless runner and a one-good toy model of the loops pointed to four traps.
 
@@ -32,7 +32,7 @@ A soft choice of jobs weighted only by value added splits workers evenly between
 
 Labor now aims at the workers needed to meet demand, exports and the stock gap, tilted by value added against a reservation wage. The quantity part answers demand directly; the tilt makes every produced good settle where it adds about the reservation wage, so primary goods with scarce capacity earn a rent. Because labor reads quantities first, it can run at the pace of the smoothed price (10-day half-life) without chasing it; the original 20-day half-life converged noticeably slower with the large catalog.
 
-The reservation wage also absorbs the surplus labor that the calibration rule leaves (about a quarter of the workforce). With an unemployment value of 0 and a temperature proportional to the wage level, unemployment could never become attractive and prices deflated toward the floor.
+The reservation wage also absorbs the surplus labor that the calibration rule leaves (about a quarter of the workforce). With an unemployment value of 0 and a temperature proportional to the average wage, unemployment could never become attractive and prices deflated toward the floor.
 
 ### Money leaks
 
@@ -47,7 +47,7 @@ A reservation wage fixed at one man-hour per hour then kept resource-poor areas 
 - The diagnostic oscillation count ignores daily moves under 0.1%, which are noise.
 - The air-only island scenario with the large catalog leaves about 40% of necessities unmet: shelter needs cement, stone and timber, which cannot fly. That is the scenario working as intended.
 
-## Map generation (roadmap stage 5)
+## Map generation
 
 ### Shape
 
@@ -55,7 +55,7 @@ The first maps were one round continent with a mountain core, because hills and 
 
 ### Resources must be labor-feasible
 
-Placing primary goods by abundance alone starved most of the map. Coal in the medium catalog takes about 7% of all labor at reference demand (fish in the small catalog about 12%); as a regional good on hills and mountains it ended up in about a tenth of the areas, which would have needed more than their whole workforce to supply the world. Coal sold at the price ceiling, its holders earned a wage level near 6, money drained toward them, and the rest of the map went broke and hungry.
+Placing primary goods by abundance alone starved most of the map. Coal in the medium catalog takes about 7% of all labor at reference demand (fish in the small catalog about 12%); as a regional good on hills and mountains it ended up in about a tenth of the areas, which would have needed more than their whole workforce to supply the world. Coal sold at the price ceiling, its holders earned an average wage near 6, money drained toward them, and the rest of the map went broke and hungry.
 
 The fix has three parts:
 
@@ -82,9 +82,9 @@ What helped:
 - Per-good constants and each area's use cached once per tick.
 - A 1% trade margin, below which neighbors do not trade, which halved the active pairs and removed small back-and-forth shipments.
 
-Micro-optimizations of the per-area phases (fewer `pow` calls, hoisted lookups) made no measurable difference. Reaching the budget needs a structural change: fusing the per-area phases into fewer passes, or splitting areas between worker threads in the host loop (stage 8). The default 1,000-area map runs in about 15 ms.
+Micro-optimizations of the per-area phases (fewer `pow` calls, hoisted lookups) made no measurable difference. Reaching the budget needs a structural change: fusing the per-area phases into fewer passes, or splitting areas between worker threads in the host loop. The default 1,000-area map runs in about 15 ms.
 
-## Government (roadmap stage 6)
+## Government
 
 ### Government purchases must count as demand
 
@@ -96,7 +96,7 @@ Depot transfers originally paid their transport into nothing. It now goes to the
 
 ### How fast policies bite
 
-The economy reacts slowly, by design (specification §4):
+The economy reacts slowly, by design (specification §3):
 
 - A head tax of 1 man-hour per person per day (a quarter of income) halves the taxed area's savings in about 150 days, against an untaxed control. Its imports fall by over 15%.
 - After grain capacity triples, the grain price falls about 20% in 100 days. When capacity drops to 40%, it rises about 60% over the next 100 days.
@@ -107,13 +107,13 @@ A government that buys in the glut and sells in the famine makes a clear profit.
 
 Founded realms send their areas through the government code paths: the policy lookups, taxes, the market phase and depot spoilage. On the default 1,000-area map this adds about 7% to the tick (5.2 ms against 4.8 ms with the medium catalog). The economic diagnostics of every scenario are unchanged when no government acts.
 
-## War and conquest (roadmap stage 7)
+## War and conquest
 
 ### Attacking armies hold what they attack
 
 At first, an army in attack stance stopped on entering an area it attacked, but set out again on the next tick, so it walked through enemy land without besieging anything. An attacking army now stays in an area until it falls or the war ends, then follows the rest of its path. A march order in attack stance is therefore a campaign: each area on the way is taken in turn. Armies in hold stance pass through.
 
-### The §7 example
+### The §6 example
 
 On the small catalog, 1,000 equipped soldiers attacking a neutral area of 10,000 people:
 - defeat its 200 militia in about 3 days;
@@ -134,7 +134,7 @@ Every area now has a militia of 2% of its population, beside its owner's armies.
 
 Recruits leave both the workforce and the population. Since the workforce is `population × workforceShare`, a realm at war holds slightly fewer workers than its population implies; disbanding restores it. The labor phase only counts workers it actually holds, so this never creates or loses anyone.
 
-## Web app (roadmap stage 8)
+## Web app
 
 ### Rendering
 
@@ -165,7 +165,7 @@ Keeping whole tables would cost about 117 MB at 3,000 areas × 54 goods. An area
 The panels sit in a bottom sheet over the full-screen map, with peek, half and full heights. The top bar scrolls sideways instead of wrapping, so the map keeps its height. Touch targets are 44 px. One finger pans, two fingers pinch-zoom and pan, and a tap that moves less than 6 px selects an area.
 
 
-## Playtest feedback after stage 8
+## First playtest feedback
 
 ### Why weapons were never made
 
@@ -173,7 +173,7 @@ Weapons satisfy no need and go into no recipe, so private producers only make th
 
 ### Armies without food
 
-Food made armies hard to run: loading supplies, standing orders per depot, foraging abroad. Soldiers now cost only their wage, and the wage sets their loyalty with the same rule as government workers. Measured realm wage levels after warm-up range from about 0.3 to 1.5 man-hours per hour (small catalog extremes, around 0.9 on the medium catalog), so the default soldier wage is 1.5. Armies keep weapons, taken from the local depot automatically, because equipment is what doubles their power.
+Food made armies hard to run: loading supplies, standing orders per depot, foraging abroad. Soldiers now cost only their wage, and the wage sets their loyalty with the same rule as government workers. Measured realm average wages after warm-up range from about 0.3 to 1.5 man-hours per hour (small catalog extremes, around 0.9 on the medium catalog), so the default soldier wage is 1.5. Armies keep weapons, taken from the local depot automatically, because equipment is what doubles their power.
 
 ### What it takes to conquer an area
 
@@ -214,7 +214,7 @@ Capital placement scored an area no capital reached (an island) as infinitely fa
 
 The flows moved to their own dropdown so they can be read against any area layer, such as migration over population or trade over prices. Arrows keep their dark outline, so the dimmed realm colors under them were dropped.
 
-## Multiplayer (roadmap stage 9)
+## Multiplayer
 
 ### Snapshot sizes
 
@@ -272,7 +272,7 @@ Credentials last 24 hours, longer than a game session usually runs. The host's p
 
 On 2026-10-23, Firefox 158 on Windows gathered no ICE candidates at all, not even host ones, on pages loaded over IPv6 loopback (`http://[::1]:…`, or `localhost` when the server listens only on `::1`, as Vite does by default with Node on Windows). The same page over `127.0.0.1` gathered host and server-reflexive candidates, and so did public pages loaded over IPv4. Every join from Firefox then failed with "ICE failed, your TURN server appears to be broken", whatever the ICE servers. The dev and preview servers therefore listen on `127.0.0.1`. Pages loaded over public IPv6 were not tested: the machine had no IPv6 route.
 
-## AI governments (roadmap stage 10)
+## AI governments
 
 ### Exit runs
 
@@ -287,7 +287,7 @@ On 2026-10-23, Firefox 158 on Windows gathered no ICE candidates at all, not eve
 | Aggressive, 2 | 8/8 | +8.6% | 398k → 379k | 20, 17 | 365 days | 1.22 (7.7) |
 | Peaceful, 1 | 8/8 | +17.2% | 440k → 401k | 0, 0 | — | 0.99 (4.5) |
 
-These runs are without research (removed after stage 10). No AI command was rejected. The tick itself takes about 10 ms, so the AI adds about a tenth.
+These runs are without research, which has since been removed. No AI command was rejected. The tick itself takes about 10 ms, so the AI adds about a tenth.
 
 For comparison, the same map with idle realms grows about 17% over the 2,000 days, and its trade stays about level (440k → 435k t/day). AI realms trade 1–20% less than at the start, most likely because their production taxes lower value added and wars block edges. With research capped at level 5, its productivity gain more than offset this, and trade grew 4–19%.
 
@@ -304,12 +304,12 @@ Conquerors gain areas, mostly from traders and builders, but no realm falls: a c
 
 ### Choices
 
-- **A cap on decisions, not on time.** The roadmap asks for a limit on host time per tick. A wall-clock budget would make the world depend on the device's speed and break replays; a fixed number of decisions per tick (4, each realm every 10 days) keeps the tick deterministic, and the runs above measure what it costs.
+- **A cap on decisions, not on time.** The host time per tick needs a limit. A wall-clock budget would make the world depend on the device's speed and break replays; a fixed number of decisions per tick (4, each realm every 10 days) keeps the tick deterministic, and the runs above measure what it costs.
 - **What the AI reads.** Decisions take a view built by `perceive()`: the same snapshot a player of the realm receives, the static data and the decoded price table. Decision code never receives the world, so the AI cannot see more than a player. Applying the commands is the only place the AI touches the world, through `applyCommand` like any player.
 - **Memory in the world.** `Government.aiMemory` is plain data in the world, so a saved game resumes its AI where it was, and the world hash covers it.
 - **Offline players.** The AI runs an offline player's realm by its personality rather than leaving it idle, so a player who drops during a war still defends. The realm stays reserved in the lobby, and control returns on reconnect.
 
-## Persistence, PWA and release (roadmap stage 11)
+## Persistence, PWA and release
 
 ### Save sizes
 
@@ -366,7 +366,7 @@ The Resources panel keeps its own good, apart from the good of the Goods panel. 
 
 ### Births & deaths
 
-The model has one net rate of natural change per area (section 5, Population): an area whose necessities are met grows, and one short of them starves. Showing births and deaths apart would have meant inventing a split the model does not have, so the Population panel shows one signed figure, "Births & deaths", next to migration in and out.
+The model has one net rate of natural change per area (section 4, Population): an area whose necessities are met grows, and one short of them starves. Showing births and deaths apart would have meant inventing a split the model does not have, so the Population panel shows one signed figure, "Births & deaths", next to migration in and out.
 
 ### No depot transfers
 
@@ -390,7 +390,7 @@ Starving areas could show high wages: food is dear, so a worker's output is wort
 
 ### Gross, net and real net income
 
-The wage level counts only employed private workers and ignores taxes, so an area with mass unemployment or a crushing head tax still looked well off. Gross and net income are per member of the workforce, the unemployed earning nothing, and net income takes off what the government takes and adds what it pays. The host computes both, since the taxes and job wages behind them are private to each realm, and sends them as public figures like the wage level. Private value added uses the same marginal output as the wage level, so the mean of the per-job wages is the wage level and the figures agree with what drives demand and labor. Tariffs come out of the trade margin and already show in prices and the cost of living. Soldiers' pay goes to wherever the army stands, and soldiers are not part of the area's workforce, so neither is counted. Subsidies and allowances count as far as the treasury paid them.
+The average wage counts only employed private workers and ignores taxes, so an area with mass unemployment or a crushing head tax still looked well off. Gross and net income are per member of the workforce, the unemployed earning nothing, and net income takes off what the government takes and adds what it pays. The host computes both, since the taxes and job wages behind them are private to each realm, and sends them as public figures like the average wage. Private value added uses the same marginal output as the average wage, so the mean of the per-job wages is the average wage and the figures agree with what drives demand and labor. Tariffs come out of the trade margin and already show in prices and the cost of living. Soldiers' pay goes to wherever the army stands, and soldiers are not part of the area's workforce, so neither is counted. Subsidies and allowances count as far as the treasury paid them.
 
 ### No stand-in for a foreign selection
 
@@ -449,3 +449,9 @@ In the two-year AI-only game (small catalog, 300 areas), fish sells at about 4.5
 ### A third save version
 
 Saves of version 2 have no water cells, and their coastal areas hold the fish that is now at sea, so they are refused like version 1.
+
+## Open questions
+
+- **Tick time on large maps.** At 3,000 areas with the large catalog a tick takes about 50 ms in Node and 65 ms in the browser worker. The interface stays smooth because the simulation runs in a worker; only the top speed on large maps is limited. Worth revisiting if players need faster large maps.
+- **Naval combat and blockades** on sea routes.
+- **Research**, if it returns with its effect on the economy fixed (it left people hungrier past a few levels; see AI governments), and with it gating the modern recipes of the large catalog.

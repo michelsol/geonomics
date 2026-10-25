@@ -1,10 +1,12 @@
-[Specification](README.md) · section 4 of 11
+[Specification](README.md) · section 3 of 10
 
-## 4. Pace, stability and convergence
+## 3. Pace, stability and convergence
 
 Instability comes from feedback loops that overshoot: prices jump, too many workers switch, supply crashes, and the cycle repeats. Six rules prevent it, and three global pace parameters let a game run calmer or faster without retuning anything.
 
 ### Rule 1: two separate clocks
+
+The simulation advances in **ticks**, each a fixed amount of game time.
 
 - `maxTicksPerSecond` is the **wall-clock** speed of the host loop. Changing it (pause, 1×, 5×) never changes results, only how fast they arrive.
 - `gameDaysPerTick` is the **game time** each tick represents. Every rate in the configuration is per game day and is scaled by it.
@@ -13,8 +15,8 @@ Instability comes from feedback loops that overshoot: prices jump, too many work
 
 Every "move toward a target" update uses a fraction derived from a rate per day:
 
-```latex
-\text{fraction} = 1 - e^{-\text{rate} \times \text{responsiveness} \times \text{gameDaysPerTick}}
+```typescript
+fraction = 1 - exp(-rate * responsiveness * gameDaysPerTick)
 ```
 
 The update is then `value += fraction × (target − value)`. The fraction always stays between 0 and 1, so the value can never jump past its target, whatever the tick length or responsiveness. Prices use the multiplicative form `price × e^(clamped change)` for the same reason.
@@ -57,7 +59,7 @@ A game starts from a state that is already almost balanced:
 2. Workers are allocated to cover local demand where local resources allow. The rest stay unemployed: by the calibration rule that is about a quarter of the workforce, the pool government jobs and armies hire from.
 3. Each area starts with `reserveDaysOf(good)` of total demand in stock.
 4. Each area starts with `targetSavingsDays` of income in savings, so savings neither boost nor dampen demand at first.
-5. Value added and `wageLevel` are computed once from these starting prices and workers, so the first tick has valid purchasing power and labor targets.
+5. Value added and `averageWage` are computed once from these starting prices and workers, so the first tick has valid purchasing power and labor targets.
 6. The world then runs `warmupDays` with no players and no AI decisions, at `warmupResponsivenessBoost` times the normal economy responsiveness and with population frozen (demography responsiveness 0), before the game opens.
 
 ### Global pace parameters
@@ -139,7 +141,7 @@ interface WorldConfig {
     starvationRatePerDay: number;       // relative decline per day when no necessity is met (default 0.003)
     growthSatisfactionThreshold: number;// necessity satisfaction above which population grows (default 0.9)
     migrationRatePerDay: number;        // share of the attractiveness gap that migrates per day (default 0.01)
-    migrationWageWeight: number;        // weight of wage level versus satisfaction in attractiveness (default 0.5)
+    migrationWageWeight: number;        // weight of average wage versus satisfaction in attractiveness (default 0.5)
   };
   government: {
     hiringRatePerDay: number;           // share of the gap to target government jobs filled per day (default 0.1)
@@ -152,7 +154,7 @@ interface WorldConfig {
     costPerLevel: Record<InfrastructureKind, number>;      // man-hours: building level n costs n times this (port 150,000; airport 300,000; roads 60,000; fort 80,000)
     buildDaysPerLevel: Record<InfrastructureKind, number>; // game days to build one level (port 60, airport 90, roads 45, fort 30)
     staffPerLevel: Record<InfrastructureKind, number>;     // workers each built level needs to run (port 100, airport 150, roads 25, fort 50)
-    defaultStaffWageShare: number;      // staff pay as a share of the local wage level, where no policy sets it (default 1.1)
+    defaultStaffWageShare: number;      // staff pay as a share of the local average wage, where no policy sets it (default 1.1)
     minimumTransportCostFactor: number; // land transport cost between two areas with roads at the maximum level (default 0.3)
     startingPortShare: number;          // chance that a coastal area starts with a port of level 1 (default 0.25)
     startingAirports: number;           // airports of level 1 each realm starts with (default 1)
@@ -173,7 +175,7 @@ interface WorldConfig {
     battleCivilianLossPerDay: number;   // share of an area's population lost per day of fighting (default 0.002)
     siegeDecayRatePerDay: number;       // speed at which siege progress decays once the attackers leave (default 0.1)
   };
-  map: {                                // map generation (section 5, Map generation)
+  map: {                                // map generation (section 4, Map generation)
     landAreaCount: number;              // areas on a generated map (default 1000)
     cellSpacing: number;                // average distance between neighboring cell centers, in km (default 100)
     landShare: number;                  // share of the cells that are land (default 0.45)

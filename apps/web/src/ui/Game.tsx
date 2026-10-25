@@ -60,7 +60,7 @@ type SheetHeight = "peek" | "half" | "full";
 
 const SPECTATOR_PANELS: readonly PanelName[] = ["area", "goods", "population", "needs", "resources", "game"];
 
-/** Keeps the host's screen on while its game runs and the tab is visible (specification §9, Hosting on mobile). */
+/** Keeps the host's screen on while its game runs and the tab is visible (specification §8, Hosting on mobile). */
 function useWakeLock(): void {
   const running = useGame((state) => !state.status.paused && state.session.role !== "client");
   useEffect(() => {

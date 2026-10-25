@@ -1,4 +1,4 @@
-// Where the signaling broker is, the join link, and what a joining tab remembers (specification §9, Joining).
+// Where the signaling broker is, the join link, and what a joining tab remembers (specification §8, Joining).
 import type { BrokerOptions } from "@geonomics/net";
 
 /** The game's own broker (apps/broker), set at build time; without it, the PeerJS cloud. */

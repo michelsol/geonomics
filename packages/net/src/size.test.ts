@@ -1,4 +1,4 @@
-// Roadmap stage 9 exit: a full snapshot plus the price table stay under 300 KB on the wire.
+// A full snapshot plus the price table stay under 300 KB on the wire.
 import {
   buildSnapshot,
   createConfig,

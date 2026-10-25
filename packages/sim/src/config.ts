@@ -1,4 +1,4 @@
-// WorldConfig and its defaults (specification §4). Defaults are starting points for tuning in the headless runner.
+// WorldConfig and its defaults (specification §3). Defaults are starting points for tuning in the headless runner.
 import type { Catalog } from "./catalog";
 import type { GoodId, InfrastructureKind } from "./types";
 
@@ -55,7 +55,7 @@ export interface WorldConfig {
     starvationRatePerDay: number; // relative decline per day when no necessity is met
     growthSatisfactionThreshold: number; // necessity satisfaction above which population grows
     migrationRatePerDay: number; // share of the attractiveness gap that migrates per day
-    migrationWageWeight: number; // weight of wage level versus satisfaction in attractiveness
+    migrationWageWeight: number; // weight of average wage versus satisfaction in attractiveness
   };
   government: {
     hiringRatePerDay: number; // share of the gap to target government jobs filled per day
@@ -68,7 +68,7 @@ export interface WorldConfig {
     costPerLevel: Record<InfrastructureKind, number>; // man-hours: building level n costs n times this
     buildDaysPerLevel: Record<InfrastructureKind, number>; // game days to build one level
     staffPerLevel: Record<InfrastructureKind, number>; // workers each built level needs to run
-    defaultStaffWageShare: number; // staff pay as a share of the local wage level, where no policy sets it
+    defaultStaffWageShare: number; // staff pay as a share of the local average wage, where no policy sets it
     minimumTransportCostFactor: number; // land transport cost between two areas with roads at the maximum level
     startingPortShare: number; // chance that a coastal area starts with a port of level 1
     startingAirports: number; // airports of level 1 each realm starts with: the capital, then the most populous

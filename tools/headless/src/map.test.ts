@@ -1,4 +1,4 @@
-// Roadmap stage 5: a generated map warms up without collapsing, and a large map ticks fast enough.
+// A generated map warms up without collapsing, and a large map ticks fast enough.
 import { runTick, warmUp } from "@geonomics/sim";
 import { expect, it } from "vitest";
 import { readCatalog } from "./catalogs";

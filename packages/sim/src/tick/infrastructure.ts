@@ -1,4 +1,4 @@
-// Infrastructure in the tick and at founding (specification §6, Infrastructure; §5, Sea and air routes): construction,
+// Infrastructure in the tick and at founding (specification §5, Infrastructure; §4, Sea and air routes): construction,
 // staffed shares, what roads, ports and airports do to the edges, and the air route rebuild.
 
 import { MinHeap } from "../heap";

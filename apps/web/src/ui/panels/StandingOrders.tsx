@@ -1,4 +1,4 @@
-// Standing orders: automation rules that buy and sell on the realm's markets every tick (specification §6). A new one
+// Standing orders: automation rules that buy and sell on the realm's markets every tick (specification §5). A new one
 // applies to the selection's own areas, or to every area, including future ones, when the actions are realm-wide.
 import type { StandingRule } from "@geonomics/sim";
 import { useState } from "react";

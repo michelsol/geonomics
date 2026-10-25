@@ -1,4 +1,4 @@
-// Interface state (specification §10): fed by worker messages, or by the host's messages when joined, and read by
+// Interface state (specification §9): fed by worker messages, or by the host's messages when joined, and read by
 // React panels and the map renderer.
 import type { ConnectionState, LobbyPlayer } from "@geonomics/net";
 import type { AreaDetail, Command, GovernmentSummary, Snapshot, StaticData, StaticEdge } from "@geonomics/sim";
@@ -32,7 +32,7 @@ export type PanelName =
   | "armies"
   | "diplomacy"
   | "game";
-/** The map layer each panel shows (specification §10, Map). */
+/** The map layer each panel shows (specification §9, Map). */
 export const PANEL_LAYERS: Record<PanelName, Layer> = {
   area: "realms",
   goods: "prices",
@@ -51,7 +51,7 @@ export type Mode =
   | { kind: "moveArmy"; army: number }
   | { kind: "pickPeaceAreas" }
   | { kind: "brush" };
-/** The selection brush (specification §10, Selection): whether a stroke adds or erases, and how wide it paints. */
+/** The selection brush (specification §9, Selection): whether a stroke adds or erases, and how wide it paints. */
 export type BrushSize = "S" | "M" | "L";
 export interface Brush {
   erase: boolean;
@@ -80,7 +80,7 @@ export interface Port {
   postMessage(message: ToWorker): void;
 }
 
-/** Solo, hosting or joined: who runs the game and who else is in it (specification §9, Joining). */
+/** Solo, hosting or joined: who runs the game and who else is in it (specification §8, Joining). */
 export interface Session {
   role: "solo" | "host" | "client";
   link: string | null; // the join link, once hosting
@@ -119,7 +119,7 @@ export interface GameState {
   history: History | null;
   historyVersion: number; // bumped on every new sample, so charts know when to redraw
   status: HostStatus;
-  selection: number[]; // the selected areas (specification §10, Selection)
+  selection: number[]; // the selected areas (specification §9, Selection)
   selectedArea: number | null; // the selected area when exactly one is selected
   selectedGood: number;
   selectedArmy: number | null;

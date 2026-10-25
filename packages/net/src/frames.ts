@@ -1,4 +1,4 @@
-// Messages are compressed, then cut into frames small enough for any data channel (specification §9, Encoding).
+// Messages are compressed, then cut into frames small enough for any data channel (specification §8, Encoding).
 import { decode, encode } from "./codec";
 
 /** Frame payload limit: browsers agree on data channel messages up to 256 KiB; smaller frames interleave better. */

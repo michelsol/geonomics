@@ -1,4 +1,4 @@
-// What an AI sees (specification §11, Perception): the snapshot and price table a player of the realm would get, and
+// What an AI sees (specification §10, Perception): the snapshot and price table a player of the realm would get, and
 // the static data every player has. Decisions read this view only, never the world.
 import {
   type AreaDetail,

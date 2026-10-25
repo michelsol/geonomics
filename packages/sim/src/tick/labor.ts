@@ -1,4 +1,4 @@
-// Phase 7: labor allocation (specification §5, Labor allocation). Government hiring joins this phase in stage 6.
+// Phase 7: labor allocation (specification §4, Labor allocation).
 import { infrastructureBillPerDay, staffWageShareOf } from "../infrastructure";
 import { EPSILON, fractionPerTick } from "../math";
 import type { Area, World } from "../types";
@@ -12,8 +12,8 @@ const MAXIMUM_PLANNED_CAPACITY_USE = 0.95;
 
 /**
  * Value added per worker-hour of each good, from smoothed prices after production tax, into `out`. Uses the
- * marginal output per worker computed by the last production pass. Returns the area's wage level, or its previous
- * wage level when it has no private workers.
+ * marginal output per worker computed by the last production pass. Returns the area's average wage, or its previous
+ * average wage when it has no private workers.
  */
 export function computeValueAdded(world: World, area: Area, scratch: Scratch, out: Float64Array): number {
   const { hoursPerWorkerDay } = world.config.economy;
@@ -31,11 +31,11 @@ export function computeValueAdded(world: World, area: Area, scratch: Scratch, ou
     weighted += valueAdded * (area.privateWorkers[g] as number);
     workers += area.privateWorkers[g] as number;
   }
-  return workers > EPSILON ? weighted / workers : area.wageLevel;
+  return workers > EPSILON ? weighted / workers : area.averageWage;
 }
 
 /**
- * Gross and net income of an area per member of the workforce and day, the unemployed included (specification §10,
+ * Gross and net income of an area per member of the workforce and day, the unemployed included (specification §9,
  * Income), with the wage of each private job, its value added per worker-day after production tax, into `wages`.
  * Gross income is private value added before production tax plus the government wages, staff wages and construction
  * payments paid; net income takes off production, consumption and head taxes, and adds the subsidies and allowances
@@ -160,7 +160,7 @@ export function runLabor(world: World): void {
   const targets = scratch.weights;
 
   for (const area of world.areas) {
-    area.wageLevel = computeValueAdded(world, area, scratch, valueAdded);
+    area.averageWage = computeValueAdded(world, area, scratch, valueAdded);
 
     let available = area.unemployedWorkers;
     for (const good of world.goods) available += area.privateWorkers[good.id] as number;

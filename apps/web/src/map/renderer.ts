@@ -1,4 +1,4 @@
-// Draws the map with PixiJS (specification §10, Map). Every layer is cached geometry, redrawn only when what it
+// Draws the map with PixiJS (specification §9, Map). Every layer is cached geometry, redrawn only when what it
 // shows changes, and the scene is rendered on demand, so an idle map costs nothing per frame.
 import { EDGE_ACTIVE, EDGE_BLOCKED, type Snapshot, type StaticData } from "@geonomics/sim";
 import { type Application, Container, FillPattern, Graphics, Matrix, Texture } from "pixi.js";

@@ -1,4 +1,4 @@
-// The game's broker on Cloudflare (specification §9, Broker): PeerJS signaling in a Durable Object, and ICE servers.
+// The game's broker on Cloudflare (specification §8, Broker): PeerJS signaling in a Durable Object, and ICE servers.
 import { DurableObject } from "cloudflare:workers";
 import { iceServers, originAllowed } from "./ice";
 import { admit, KEY, newId, OPEN, type PeerSocket, route } from "./switchboard";

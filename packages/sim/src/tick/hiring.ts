@@ -1,5 +1,5 @@
 // Phase 7, government part: hiring, quitting and firing of government workers and infrastructure staff
-// (specification §6, Hiring and wages; Infrastructure).
+// (specification §5, Hiring and wages; Infrastructure).
 import { INFRASTRUCTURE_KINDS, staffQuota, staffWageShareOf } from "../infrastructure";
 import { EPSILON, fractionPerTick } from "../math";
 import type { Area, GovernmentAreaState, World } from "../types";
@@ -18,7 +18,7 @@ export function runHiring(world: World): void {
     const unpaid = 1 - (scratch.paidShare[government.id] ?? 1);
     for (const [id, state] of government.areaStates) {
       const area = world.areas[id] as Area;
-      // Staff are paid a share of the wage level, so the share is their pay against private jobs.
+      // Staff are paid a share of the average wage, so the share is their pay against private jobs.
       const share = staffWageShareOf(world.config, state.resolvedPolicies);
       const staffQuit = quitting * Math.max(0, 1 - share, unpaid);
       for (const [k, kind] of INFRASTRUCTURE_KINDS.entries()) {
@@ -37,7 +37,7 @@ export function runHiring(world: World): void {
       }
 
       if (state.jobs.length > 0) {
-        const attractiveness = state.wageOffer / Math.max(area.wageLevel, EPSILON);
+        const attractiveness = state.wageOffer / Math.max(area.averageWage, EPSILON);
         // Workers quit for the larger of the wage shortfall against private jobs and the share left unpaid.
         const quit = quitting * Math.max(0, 1 - attractiveness, unpaid);
         for (const job of state.jobs) {

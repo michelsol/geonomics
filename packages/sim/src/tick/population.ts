@@ -1,4 +1,4 @@
-// Phase 9: population growth, starvation and migration (specification §5, Population).
+// Phase 9: population growth, starvation and migration (specification §4, Population).
 import { EPSILON, fractionPerTick } from "../math";
 import type { Area, Edge, World } from "../types";
 import { scratchOf } from "./scratch";
@@ -28,7 +28,7 @@ export function runPopulation(world: World): void {
   delta.fill(0);
   perEdge.fill(0);
   for (const area of world.areas) {
-    const wage = Math.max(area.wageLevel, 0);
+    const wage = Math.max(area.averageWage, 0);
     attractiveness[area.id] =
       (1 - p.migrationWageWeight) * area.satisfaction + (p.migrationWageWeight * wage) / (wage + 1);
   }

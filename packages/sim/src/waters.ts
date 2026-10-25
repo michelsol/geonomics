@@ -1,4 +1,4 @@
-// Water cells worked through ports (specification §5, Water cells; §6, Infrastructure): which cells each port
+// Water cells worked through ports (specification §4, Water cells; §5, Infrastructure): which cells each port
 // reaches, and the extraction capacity an area gets from its land and its share of those cells.
 import { kindIndex, portLevelChanges } from "./infrastructure";
 import type { Area, AreaId, GoodId, WaterId, World } from "./types";

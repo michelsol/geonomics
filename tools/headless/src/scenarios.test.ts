@@ -1,4 +1,4 @@
-// Roadmap stage 2: every scenario builds with every catalog, starts from Rule 6 and reports diagnostics.
+// Every scenario builds with every catalog, starts from Rule 6 and reports diagnostics.
 import { reserveDaysOf, runTick } from "@geonomics/sim";
 import { describe, expect, it } from "vitest";
 import { CATALOG_NAMES, readCatalog } from "./catalogs";
@@ -32,7 +32,7 @@ describe.each(SCENARIO_NAMES)("%s", (scenario) => {
     }
     const report = recorder.report();
     expect(report.day).toBe(10);
-    for (const value of [report.unmetNecessities, report.laborChurn, report.worstVolatility, report.meanWageLevel]) {
+    for (const value of [report.unmetNecessities, report.laborChurn, report.worstVolatility, report.meanWage]) {
       expect(Number.isFinite(value)).toBe(true);
     }
     expect(report.goods).toHaveLength(world.goods.length);

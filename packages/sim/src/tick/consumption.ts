@@ -1,4 +1,4 @@
-// Phase 3: consumption (specification §5, Consumption). Army upkeep joins this phase in roadmap stage 7.
+// Phase 3: consumption (specification §4, Consumption).
 import { clamp, EPSILON } from "../math";
 import type { Area, World } from "../types";
 import { policiesOf, type Scratch, scratchOf } from "./scratch";
@@ -9,14 +9,14 @@ import { policiesOf, type Scratch, scratchOf } from "./scratch";
  */
 export function savingsFactor(world: World, area: Area): number {
   const e = world.config.economy;
-  const incomePerPersonPerDay = Math.max(area.wageLevel, 0.1) * e.hoursPerWorkerDay * e.workforceShare;
+  const incomePerPersonPerDay = Math.max(area.averageWage, 0.1) * e.hoursPerWorkerDay * e.workforceShare;
   const savingsDays = area.savings / Math.max(area.population * incomePerPersonPerDay, EPSILON);
   return clamp(savingsDays / e.targetSavingsDays, e.savingsFactorMin, e.savingsFactorMax) ** e.savingsElasticity;
 }
 
-/** Purchasing power from wage level and savings relative to the target savings. */
+/** Purchasing power from average wage and savings relative to the target savings. */
 export function purchasingPower(world: World, area: Area): number {
-  return Math.max(area.wageLevel, 0.1) * savingsFactor(world, area);
+  return Math.max(area.averageWage, 0.1) * savingsFactor(world, area);
 }
 
 export function runConsumption(world: World): void {

@@ -1,5 +1,5 @@
 // Employment, government production jobs and wage offers where the player's actions apply: one area, the selected
-// ones, or the whole realm. Totals for several areas are split over them by population (specification §10,
+// ones, or the whole realm. Totals for several areas are split over them by population (specification §9,
 // Selection). Infrastructure staff count as government jobs; the Infrastructure panel runs them.
 import type { Command, GovernmentJob } from "@geonomics/sim";
 import { useEffect, useState } from "react";
@@ -83,7 +83,7 @@ export function JobsPanel() {
   const hoursPerDay = data.config.economy.hoursPerWorkerDay;
   const wageOffer = people > 0 ? weighted / people : 0;
   const averageWage =
-    areas.reduce((sum, area) => sum + (snapshot.areas.wageLevel[area] as number) * (population[area] as number), 0) /
+    areas.reduce((sum, area) => sum + (snapshot.areas.averageWage[area] as number) * (population[area] as number), 0) /
     Math.max(people, 1);
 
   return (

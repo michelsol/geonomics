@@ -1,4 +1,4 @@
-// How to play (specification §10, Screens): a short guide, opened from the new game screen.
+// How to play (specification §9, Screens): a short guide, opened from the new game screen.
 import { useGame } from "../state/store";
 
 export function Guide() {

@@ -1,4 +1,4 @@
-// Builds a new solo game: map generation, Rule 6 initialization, founding and warm-up (specification §5, §6).
+// Builds a new solo game: map generation, Rule 6 initialization, founding and warm-up (specification §4, §5).
 import {
   createConfig,
   foundGovernments,

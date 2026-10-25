@@ -194,8 +194,8 @@ describe("snapshots", () => {
     const governmentPay = governmentWorkers * (state?.wageOffer ?? 0) * hoursPerWorkerDay + staffPay;
     expect(snapshot.areas.grossIncome[0]).toBeCloseTo((earned + governmentPay) / workforce, 3);
     expect(snapshot.areas.netIncome[0]).toBeCloseTo(snapshot.areas.grossIncome[0] as number, 5);
-    // The wage level is the private wages' mean, per hour, from before the tick's last moves between jobs.
-    expect(earned / workers / hoursPerWorkerDay).toBeCloseTo(area.wageLevel, 2);
+    // The average wage is the private wages' mean, per hour, from before the tick's last moves between jobs.
+    expect(earned / workers / hoursPerWorkerDay).toBeCloseTo(area.averageWage, 2);
 
     // A head tax comes off net income, spread over the workforce; an allowance adds to it.
     send(world, { type: "setRealmPolicy", setting: { policy: "headTaxPerPersonPerDay", good: null, value: 0.2 } });

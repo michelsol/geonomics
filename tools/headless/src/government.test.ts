@@ -1,4 +1,4 @@
-// Roadmap stage 6: governments act on the economy through commands (specification §6).
+// Governments act on the economy through commands (specification §5).
 import { type Command, createGovernment, hashWorld, runTick, type World, warmUp } from "@geonomics/sim";
 import { describe, expect, it } from "vitest";
 import { readCatalog } from "./catalogs";

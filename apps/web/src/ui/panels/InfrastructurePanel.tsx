@@ -1,4 +1,4 @@
-// Ports, airports, roads and forts where the player's actions apply (specification §10, Panels; §6, Infrastructure):
+// Ports, airports, roads and forts where the player's actions apply (specification §9, Panels; §5, Infrastructure):
 // their levels, construction and staff, the staff wage, and buttons that build a level up or take one down.
 import {
   canBuild,
@@ -292,7 +292,7 @@ function StaffWage({ view, areas, realm }: { view: View; areas: readonly number[
   for (const area of areas) {
     const state = government.areaStates.find((s) => s.area === area);
     if (!state) continue;
-    const hourly = shareOf(area) * Math.max(snapshot.areas.wageLevel[area] as number, 0) * economy.hoursPerWorkerDay;
+    const hourly = shareOf(area) * Math.max(snapshot.areas.averageWage[area] as number, 0) * economy.hoursPerWorkerDay;
     for (const [k, kind] of INFRASTRUCTURE_KINDS.entries()) {
       const level = snapshotLevel(snapshot.areas, area, kind);
       staff += state.staff[k] ?? 0;
@@ -328,7 +328,7 @@ function StaffWage({ view, areas, realm }: { view: View; areas: readonly number[
       <input
         type="range"
         className="policy-slider"
-        aria-label="Staff wage level"
+        aria-label="Staff wage share"
         min={50}
         max={200}
         step={5}

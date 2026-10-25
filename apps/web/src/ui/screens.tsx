@@ -1,4 +1,4 @@
-// New game, realm choice and end-of-session screens (specification §10, Screens).
+// New game, realm choice and end-of-session screens (specification §9, Screens).
 
 import { readCode } from "@geonomics/net/code"; // the code helpers alone: PeerJS loads when joining
 import type { AiMix, SaveInfo } from "@geonomics/sim";
@@ -166,7 +166,7 @@ function JoinWithCode() {
   );
 }
 
-/** Games saved in this browser, and loading a save file (specification §9, Save and load). */
+/** Games saved in this browser, and loading a save file (specification §8, Save and load). */
 function SavedGames() {
   const loadGame = useGame((state) => state.loadGame);
   const [saves, setSaves] = useState<SaveInfo[]>([]);

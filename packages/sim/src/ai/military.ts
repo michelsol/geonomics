@@ -1,4 +1,4 @@
-// An AI's wars (specification §11): defense for every personality; conquest, armies and weapons for the conqueror;
+// An AI's wars (specification §10): defense for every personality; conquest, armies and weapons for the conqueror;
 // peace when a war has run its course.
 import { runningLevel } from "../snapshot";
 import type { AiMemory, AiWar, AreaId, Army, Command, GovernmentId } from "../types";

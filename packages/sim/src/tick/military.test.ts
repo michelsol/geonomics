@@ -3,7 +3,7 @@ import { armyPath } from "../army";
 import { AI_PLAYER } from "../commands";
 import { realmWorld, send } from "../testing";
 import type { Army, GovernmentAreaState, World } from "../types";
-import { realmWageLevel, runDesertion, runEquipment, runMilitary, wearWeapons } from "./military";
+import { realmAverageWage, runDesertion, runEquipment, runMilitary, wearWeapons } from "./military";
 import { runPopulation } from "./population";
 import { scratchOf } from "./scratch";
 import { updateBlockedEdges } from "./tick";
@@ -77,19 +77,19 @@ describe("equipment and desertion", () => {
     expect(army.weapons).toBe(0);
   });
 
-  /** Gives government 0's areas a wage level, pays its soldiers `soldierWage` and returns an army of 1,000. */
-  function paidArmy(wageLevel: number, soldierWage: number) {
+  /** Gives government 0's areas an average wage, pays its soldiers `soldierWage` and returns an army of 1,000. */
+  function paidArmy(averageWage: number, soldierWage: number) {
     const world = realmWorld();
     const army = raise(world, 1, 1000);
     const government = world.governments[0] as World["governments"][number];
-    for (const id of government.ownedAreas) areaOf(world, id).wageLevel = wageLevel;
+    for (const id of government.ownedAreas) areaOf(world, id).averageWage = averageWage;
     government.soldierWage = soldierWage;
     return { world, government, army, rate: 1 - Math.exp(-world.config.military.desertionRatePerDay) };
   }
 
-  it("keeps soldiers paid at least the realm's wage level", () => {
+  it("keeps soldiers paid at least the realm's average wage", () => {
     const { world, government, army } = paidArmy(1.2, 1.2);
-    expect(realmWageLevel(world, government)).toBeCloseTo(1.2, 12);
+    expect(realmAverageWage(world, government)).toBeCloseTo(1.2, 12);
     runDesertion(world);
     expect(army.soldiers).toBe(1000);
   });

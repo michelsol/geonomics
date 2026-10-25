@@ -1,4 +1,4 @@
-// An AI's economy (specification §11): the realm tax, the soldier wage, infrastructure and the personality's standing
+// An AI's economy (specification §10): the realm tax, the soldier wage, infrastructure and the personality's standing
 // orders.
 import { canBuild, INFRASTRUCTURE_KINDS, levelCost } from "../infrastructure";
 import { snapshotLevel } from "../snapshot";
@@ -10,9 +10,9 @@ import type { AiView } from "./view";
 
 const TAX_STEP_UP = 0.02;
 const MAXIMUM_WAGE = 10; // the highest wage a command accepts
-const MINIMUM_WAGE = 0.1; // war can push an area's wage level below zero
+const MINIMUM_WAGE = 0.1; // war can push an area's average wage below zero
 const TAX_STEP_DOWN = 0.01;
-const WAGE_PREMIUM = 1.1; // soldiers are paid above the realm's wage level, so nobody deserts
+const WAGE_PREMIUM = 1.1; // soldiers are paid above the realm's average wage, so nobody deserts
 const GRANARIES = 5; // a builder keeps staples in this many of its most populous areas
 
 export function decideEconomy(
@@ -31,9 +31,9 @@ export function decideEconomy(
 
 const round = (value: number, step: number) => Math.round(value / step) * step;
 
-/** A wage offer a little above a wage level, within what commands accept. */
-const wageFor = (wageLevel: number) =>
-  Math.min(MAXIMUM_WAGE, Math.max(MINIMUM_WAGE, round(WAGE_PREMIUM * wageLevel, 0.01)));
+/** A wage offer a little above an average wage, within what commands accept. */
+const wageFor = (averageWage: number) =>
+  Math.min(MAXIMUM_WAGE, Math.max(MINIMUM_WAGE, round(WAGE_PREMIUM * averageWage, 0.01)));
 
 function setTax(realm: Realm, memory: AiMemory, traits: Traits, commands: Command[]): void {
   const current = realm.taxRate;
@@ -51,8 +51,8 @@ function setTax(realm: Realm, memory: AiMemory, traits: Traits, commands: Comman
 }
 
 function setSoldierWage(realm: Realm, commands: Command[]): void {
-  // Above the realm's wage level, soldiers do not desert.
-  const wage = wageFor(realm.wageLevel);
+  // Above the realm's average wage, soldiers do not desert.
+  const wage = wageFor(realm.averageWage);
   if (Number.isFinite(wage) && Math.abs(wage - realm.government.soldierWage) > 0.05 * realm.government.soldierWage)
     commands.push({ type: "setSoldierWage", wage });
 }
@@ -96,7 +96,7 @@ interface Option {
 }
 
 /**
- * Infrastructure within a budget (specification §11, Infrastructure): a share of tax income after soldiers' pay covers
+ * Infrastructure within a budget (specification §10, Infrastructure): a share of tax income after soldiers' pay covers
  * the staff of what stands and the payments of what is being built. With a treasury above half its reserve, it starts
  * as many of the best next levels as the budget allows; short of money, it stops construction, then takes down its
  * least valuable level.
@@ -114,7 +114,7 @@ function manageInfrastructure(view: AiView, realm: Realm, traits: Traits, comman
     levels *
     inf.staffPerLevel[kind] *
     share *
-    Math.max(areas.wageLevel[area] as number, 0) *
+    Math.max(areas.averageWage[area] as number, 0) *
     config.economy.hoursPerWorkerDay;
   const paymentPerDay = (kind: InfrastructureKind, level: number) =>
     levelCost(config, kind, level) / inf.buildDaysPerLevel[kind];

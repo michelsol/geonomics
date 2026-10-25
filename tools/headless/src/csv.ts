@@ -4,7 +4,7 @@ import { dirname } from "node:path";
 import type { World } from "@geonomics/sim";
 
 const HEADER =
-  "day,area,good,price,smoothedPrice,stock,produced,consumed,imported,exported,privateWorkers,population,wageLevel,savings,satisfaction\n";
+  "day,area,good,price,smoothedPrice,stock,produced,consumed,imported,exported,privateWorkers,population,averageWage,savings,satisfaction\n";
 
 export class CsvWriter {
   private readonly out: WriteStream;
@@ -18,7 +18,7 @@ export class CsvWriter {
   write(world: World): void {
     const rows: string[] = [];
     for (const area of world.areas) {
-      const areaFields = `${area.population},${area.wageLevel},${area.savings},${area.satisfaction}`;
+      const areaFields = `${area.population},${area.averageWage},${area.savings},${area.satisfaction}`;
       for (const good of world.goods) {
         const g = good.id;
         rows.push(

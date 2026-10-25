@@ -1,4 +1,4 @@
-// Phase 1: production (specification §5, Production), private and government.
+// Phase 1: production (specification §4, Production), private and government.
 import { EPSILON } from "../math";
 import type { Area, Good, GovernmentAreaState, World } from "../types";
 import { depleteExtraction, extractionCapacity } from "../waters";
@@ -89,7 +89,7 @@ export function produceArea(world: World, area: Area, scratch: Scratch, commit: 
     let stateOutput = 0; // government output, to the depot
 
     if (good.isPrimary) {
-      // The area's land and its share of the water cells its port reaches (section 6, Infrastructure).
+      // The area's land and its share of the water cells its port reaches (section 5, Infrastructure).
       const capacity = extractionCapacity(world, area, g);
       if (capacity > EPSILON) {
         // Private and government workers share the natural capacity; output is split in proportion to workers.

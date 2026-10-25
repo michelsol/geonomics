@@ -1,4 +1,4 @@
-// The selected areas, one or several (specification §10, Selection): their figures and defense in one grid, a
+// The selected areas, one or several (specification §9, Selection): their figures and defense in one grid, a
 // sortable market table and the depot. Explanations show on hover.
 import { INFRASTRUCTURE_KINDS, snapshotLevel } from "@geonomics/sim";
 import { useState } from "react";
@@ -167,7 +167,7 @@ function SelectionView({ areas, onOpen }: { areas: number[] } & PanelProps) {
 
 /**
  * Gross, net and real net income, then the cost of living: what the workforce earns, what it keeps, and what that
- * buys here (specification §10, Income).
+ * buys here (specification §9, Income).
  */
 function IncomeStats({ summary, several }: { summary: SelectionSummary; several: boolean }) {
   const each = " Per member of the workforce and day, the unemployed included, in man-hours.";

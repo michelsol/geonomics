@@ -1,6 +1,6 @@
-[Specification](README.md) · section 7 of 11
+[Specification](README.md) · section 6 of 10
 
-## 7. War and conquest
+## 6. War and conquest
 
 War is an economic activity: soldiers are withdrawn from the workforce and paid from the treasury, wear out weapons and cut trade. Conquest happens by besieging an undefended area until it changes owner.
 
@@ -19,14 +19,14 @@ Every area defends itself with a militia, beside its owner's armies. `Area.milit
 - **Recruiting** takes soldiers from the area's unemployed workers first, then from private jobs, and removes them from the population. A new army carries nothing and holds.
 - **Disbanding** returns soldiers to the population of the area where the army stands (or the area it left, while marching) as unemployed workers. A fully disbanded army leaves what it carries in its government's depot there, or in the area's stock if the government does not own the area.
 - **Marching** follows the fastest path by `travelDays` over active land and sea edges. Crossing an edge takes its `travelDays`; each tick an army covers `days × militaryResponsiveness` days of travel, carrying leftover days into the next edge. A new order replans from the area the army stands in or is heading to.
-- **Sea crossings**, over lanes and routes, are allowed only from an area owned by the army's government with a running port (built and staffed, section 6, Infrastructure). This is checked when the path is planned and again when the army sets out; an army that can no longer embark stops. So an invasion by sea needs a friendly port to embark from. Armies never use air routes.
+- **Sea crossings**, over lanes and routes, are allowed only from an area owned by the army's government with a running port (built and staffed, section 5, Infrastructure). This is checked when the path is planned and again when the army sets out; an army that can no longer embark stops. So an invasion by sea needs a friendly port to embark from. Armies never use air routes.
 - **Attacking.** An army in `attack` stance attacks every area it stands in that is neutral or owned by a government at war with its own. It stays there until the area falls or the war ends, then follows the rest of its path. An army in `hold` stance never attacks and passes through.
-- **Wages** of `government.soldierWage × hoursPerWorkerDay × soldiers × days` go from the treasury into the savings of the area where the army stands (or the area it left). They join the government's bill and are scaled down with it when the treasury is short (section 6, Tax collection). The player sets the wage with `setSoldierWage`.
+- **Wages** of `government.soldierWage × hoursPerWorkerDay × soldiers × days` go from the treasury into the savings of the area where the army stands (or the area it left). They join the government's bill and are scaled down with it when the treasury is short (section 5, Tax collection). The player sets the wage with `setSoldierWage`.
 
 ### Equipment and desertion
 
 - **Equipment** (phase 3). An army standing in an area of its own government takes weapons from the local depot, up to one per soldier. Carried weapons wear out at `weaponWearRatePerDay` in phase 10.
-- **Desertion** (phase 7, after taxes). Soldiers desert like government workers quit: at `desertionRatePerDay × max(0, 1 − soldierWage / realm wage level, unpaid share)`, scaled by `militaryResponsiveness`. The realm wage level is the population-weighted mean `wageLevel` of the government's areas; the unpaid share is what the treasury could not pay this tick. Deserters join the population of the army's area as unemployed workers.
+- **Desertion** (phase 7, after taxes). Soldiers desert like government workers quit: at `desertionRatePerDay × max(0, 1 − soldierWage / realm average wage, unpaid share)`, scaled by `militaryResponsiveness`. The realm average wage is the population-weighted mean `averageWage` of the government's areas; the unpaid share is what the treasury could not pay this tick. Deserters join the population of the army's area as unemployed workers.
 
 An army with fewer than one soldier is disbanded.
 

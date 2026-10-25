@@ -1,5 +1,5 @@
-// Simulation worker entry point: owns the world, runs the host loop (specification §9, Host loop) and saves the game
-// (specification §9, Save and load).
+// Simulation worker entry point: owns the world, runs the host loop (specification §8, Host loop) and saves the game
+// (specification §8, Save and load).
 import {
   buildSnapshot,
   buildStaticData,

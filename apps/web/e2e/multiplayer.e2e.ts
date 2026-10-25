@@ -1,6 +1,6 @@
 import { type Browser, expect, type Page, test } from "@playwright/test";
 
-// Roadmap stage 9 exit: one browser hosts, another joins with its code, both command and see each other's realms.
+// One browser hosts, another joins with its code, both command and see each other's realms.
 
 const BROKER = "?peer=localhost:8787";
 

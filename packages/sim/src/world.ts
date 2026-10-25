@@ -58,7 +58,7 @@ export function createArea(init: AreaInit, goodCount: number, needCount: number)
     needConsumed: new Float64Array(needCount),
     satisfaction: 1,
     necessitySatisfaction: 1,
-    wageLevel: 1,
+    averageWage: 1,
   };
 }
 

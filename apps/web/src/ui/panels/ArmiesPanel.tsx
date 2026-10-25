@@ -1,7 +1,7 @@
 // The player's armies: pay, recruiting, weapons, stance, moves and disbanding; foreign armies for awareness.
 import type { Army, GovernmentView } from "@geonomics/sim";
 import { useState } from "react";
-import { actionTarget, realmWageLevel, splitByPopulation } from "../../state/selectors";
+import { actionTarget, realmAverageWage, splitByPopulation } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { count, fmt, NumberField, pct, Section, Stat, Swatch } from "../components";
 import { AreaLink, areaName, NoOwnArea, useSend, useView } from "./common";
@@ -46,7 +46,7 @@ export function ArmiesPanel() {
   const soldiers = own.reduce((sum, army) => sum + army.soldiers, 0);
   // Wages are stored per soldier-hour and shown per day.
   const hoursPerDay = data.config.economy.hoursPerWorkerDay;
-  const averageWage = realmWageLevel(snapshot) * hoursPerDay;
+  const averageWage = realmAverageWage(snapshot) * hoursPerDay;
   const wage = government.soldierWage * hoursPerDay;
   const bill = soldiers * wage;
 

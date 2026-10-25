@@ -1,4 +1,4 @@
-// Host loop (specification §9, Host loop): drains the command queue, runs ticks at the target speed and posts
+// Host loop (specification §8, Host loop): drains the command queue, runs ticks at the target speed and posts
 // snapshots and price tables at their wall-clock rates, one snapshot per viewer: the local player, and every joined
 // player or spectator. Clock and scheduler are injected so it runs in tests.
 import { DetailRotation, pack } from "@geonomics/net/worker";
@@ -27,7 +27,7 @@ export interface HostLoopOptions {
   autosave?: () => void; // called every AUTOSAVE_INTERVAL_DAYS game days while the game runs
 }
 
-/** Game days between autosaves (specification §9, Save and load). */
+/** Game days between autosaves (specification §8, Save and load). */
 export const AUTOSAVE_INTERVAL_DAYS = 30;
 
 interface Viewer {
@@ -73,7 +73,7 @@ export class HostLoop {
   /**
    * Gives `player` the government (null: none) and, while `watching`, snapshots for it. Any government the player
    * held before goes back to the AI. A player who is not watching is offline: the AI runs its realm until it returns
-   * (specification §9, Dropped connections). A new remote viewer gets a snapshot at once.
+   * (specification §8, Dropped connections). A new remote viewer gets a snapshot at once.
    */
   setPlayer(player: PlayerId, government: GovernmentId | null, watching: boolean): void {
     for (const g of this.world.governments) {

@@ -1,4 +1,4 @@
-// Armies: where they stand, the paths they march and returning soldiers to the population (specification §7).
+// Armies: where they stand, the paths they march and returning soldiers to the population (specification §6).
 import { type Path, shortestPath } from "./graph";
 import { effectiveLevel } from "./infrastructure";
 import type { Area, AreaId, Army, Edge, GovernmentId, World } from "./types";

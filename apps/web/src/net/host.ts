@@ -1,5 +1,5 @@
 // Hosting from this browser: the PeerJS host peer, the lobby, and the routing between joined players and the
-// simulation worker (specification §9, Joining).
+// simulation worker (specification §8, Joining).
 // PeerJS loads only once the player hosts, so solo play never downloads it.
 import type { HostPeer, HostSession, HostStatus as NetStatus } from "@geonomics/net";
 import type { FromWorker, HostStatus } from "../host/protocol";

@@ -1,4 +1,4 @@
-// Invite codes (specification §9, Joining): the host's peer id, short enough to read out or type on a phone.
+// Invite codes (specification §8, Joining): the host's peer id, short enough to read out or type on a phone.
 
 /** Lowercase letters and digits that cannot be mistaken for one another: no 0 o 1 l i. */
 export const CODE_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";

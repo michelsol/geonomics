@@ -1,4 +1,4 @@
-// Messages between a hosting browser and the players who join it (specification §9, Messages).
+// Messages between a hosting browser and the players who join it (specification §8, Messages).
 import type {
   AreaId,
   Command,

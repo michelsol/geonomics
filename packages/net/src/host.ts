@@ -1,5 +1,5 @@
 // The hosting side of a game: players, the lobby, and routing between their links and the game
-// (specification §9, Joining and Players).
+// (specification §8, Joining and Players).
 import type { AreaId, Command, GoodId, GovernmentId, GovernmentSummary, PlayerId, StaticData } from "@geonomics/sim";
 import { type Link, MessageLink } from "./link";
 import { HOST_PLAYER, type LobbyPlayer, PROTOCOL_VERSION, type ToClient, type ToHost } from "./messages";

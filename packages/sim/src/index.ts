@@ -28,7 +28,7 @@ export {
   updateInfrastructureEffects,
   updateRouteCapacities,
 } from "./tick/infrastructure";
-export { realmWageLevel } from "./tick/military";
+export { realmAverageWage } from "./tick/military";
 export { lastMigration, lastNaturalChange } from "./tick/population";
 export { hourlyOutputPerWorker } from "./tick/production";
 export { runTick, type TickOptions } from "./tick/tick";

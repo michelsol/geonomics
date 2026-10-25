@@ -1,6 +1,6 @@
 # Geonomics broker
 
-A Cloudflare Worker that does two jobs for multiplayer games (specification §9, Broker):
+A Cloudflare Worker that does two jobs for multiplayer games (specification §8, Broker):
 
 - **Signaling:** it speaks the PeerServer protocol, so browsers find each other by peer id.
 - **ICE servers:** it hands out Cloudflare STUN and TURN servers, with short-lived credentials, so players on strict networks connect through a relay.

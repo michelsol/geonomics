@@ -1,4 +1,4 @@
-// Headless runner: runs a scenario with a catalog and prints the §4 diagnostics.
+// Headless runner: runs a scenario with a catalog and prints the §3 diagnostics.
 //   pnpm headless -- --scenario chain10 --catalog medium --days 365 --seed 1 --warmup --csv out/chain.csv
 //   pnpm headless -- --all --days 200
 //   pnpm headless -- --scenario map --catalog large --areas 3000 --days 30 --svg out/map.svg
@@ -133,7 +133,7 @@ if (values.ai !== undefined) {
         csvEvery: 1,
       });
       console.log(
-        `${scenario.padEnd(14)}${catalog.padEnd(9)}${`${(100 * d.unmetNecessities).toFixed(2)}%`.padStart(8)}${`${(100 * d.laborChurn).toFixed(3)}%`.padStart(11)}${d.worstVolatility.toFixed(4).padStart(12)}${String(d.worstOscillations).padStart(9)}${d.meanWageLevel.toFixed(3).padStart(8)}${msPerTick.toFixed(2).padStart(9)}`,
+        `${scenario.padEnd(14)}${catalog.padEnd(9)}${`${(100 * d.unmetNecessities).toFixed(2)}%`.padStart(8)}${`${(100 * d.laborChurn).toFixed(3)}%`.padStart(11)}${d.worstVolatility.toFixed(4).padStart(12)}${String(d.worstOscillations).padStart(9)}${d.meanWage.toFixed(3).padStart(8)}${msPerTick.toFixed(2).padStart(9)}`,
       );
     }
   }

@@ -1,8 +1,50 @@
-[Specification](README.md) · section 5 of 11
+[Specification](README.md) · section 4 of 10
 
-## 5. Economy mechanics
+## 4. Economy mechanics
 
-The private economy of every area is five steps: produce, consume, trade, reprice, reallocate labor. Population then reacts slowly to the result. In the formulas below, `days` means `gameDaysPerTick`, and `fraction(rate)` is the helper from section 4, rule 2.
+All values are measured in **man-hours**: one hour of work at the reference level of technology. This anchors every price to labor and gives a natural measure of prosperity.
+
+The private economy of every area is five steps: produce, consume, trade, reprice, reallocate labor. Population then reacts slowly to the result. In the formulas below, `days` means `gameDaysPerTick`, and `fraction(rate)` is the helper from section 3, rule 2.
+
+### Labor value
+
+The labor value of a good is the man-hours embodied in one unit, inputs included. It is computed once at startup, in recipe order:
+
+```typescript
+laborValue(g) = laborHoursPerUnit(g) + sum(input.quantity * laborValue(input.good) for input of g.inputs)
+```
+
+Labor value is the starting price of every good and the reference for price bounds and demand elasticity. Market prices then float around it according to local scarcity.
+
+### Value added and wages
+
+A worker's **value added** is the market value of what they produce, minus the value of the inputs used, per hour worked. An area's **average private wage** is the mean value added per worker-hour across its private workers.
+
+An average private wage above 1 means local labor is worth more than the reference: good resources, good trade access or scarce products. Players see it per worker and day, beside the wage of each private job; what the workforce earns and keeps, the unemployed included, they see as gross, net and real net income (section 9, Income).
+
+### Money circulation
+
+An area's **savings** is the private money held by its inhabitants. Transactions inside an area cancel out, so savings change only through flows that cross the area's boundary:
+
+| Flow | Direction | When |
+| --- | --- | --- |
+| Exports to neighbors, transport included | Into savings | Trade phase |
+| Imports from neighbors | Out of savings | Trade phase |
+| Taxes | Savings to treasury | Tax phase |
+| Subsidies | Treasury to savings | Tax phase |
+| Government and army wages | Treasury to savings | Tax phase |
+| Government purchases on the local market | Treasury to savings | Market phase |
+| Government sales on the local market | Savings to treasury | Market phase |
+
+**Starting money.** Money is made once, at the start: each area begins with `targetSavingsDays` of its income in savings (section 3, rule 6), and each realm with `startingTreasuryDays` of its income in its treasury (section 5, Founding). From then on, the flows above only move it between savings and treasuries.
+
+Taxing without spending drains an area's savings, so it can no longer import. This is intended: it is the natural cost of over-taxation.
+
+Transport is paid by the buyer to the exporting area, whose carriers do the work, so trade between neutral areas conserves money.
+
+Savings also feed back into demand and wages: an area holding more than its target savings spends more, mostly on comforts and luxuries, and its workers ask for more; an area with depleted savings cuts back and its workers accept less, so its goods get cheaper and sell abroad (Consumption and Labor allocation below). Both pull savings back toward the target through trade.
+
+When savings cannot cover a tax bill, the shortfall is collected **in kind**. Goods move from the area's stock to the government depot, valued at local prices.
 
 ### Workforce
 
@@ -17,7 +59,7 @@ hourlyOutputPerWorker(good) =
 
 Goods are processed in catalog order, so inputs made this tick are available to their outputs. Private and government workers on the same primary good share the natural capacity, and output is split between them in proportion to workers.
 
-**Extraction capacity.** The `capacity` of a primary good in an area is its own natural capacity plus, when it has a port, its share of the current natural capacity of each water cell the port reaches (section 6, Infrastructure), times the port's staffed share. Capacity lost to depletion is split between the land and the waters in proportion to the capacity each brought, and among the water cells in proportion to the area's share of each times its capacity. Water cells recover toward their maximum in phase 10, like areas.
+**Extraction capacity.** The `capacity` of a primary good in an area is its own natural capacity plus, when it has a port, its share of the current natural capacity of each water cell the port reaches (section 5, Infrastructure), times the port's staffed share. Capacity lost to depletion is split between the land and the waters in proportion to the capacity each brought, and among the water cells in proportion to the area's share of each times its capacity. Water cells recover toward their maximum in phase 10, like areas.
 
 ```typescript
 // Primary goods: diminishing returns on nature
@@ -56,10 +98,10 @@ Consumption has three parts: the area's purchasing power, the demand for each ne
 **Purchasing power** combines income and savings. Savings near `targetSavingsDays` of income are neutral. More savings raise demand and fewer lower it, mostly for needs with a high `wealthElasticity`. The same `savingsFactor` sets the wage workers accept (Labor allocation):
 
 ```typescript
-incomePerPersonPerDay = max(wageLevel, 0.1) * hoursPerWorkerDay * workforceShare
+incomePerPersonPerDay = max(averageWage, 0.1) * hoursPerWorkerDay * workforceShare
 savingsDays     = savings / max(population * incomePerPersonPerDay, epsilon)
 savingsFactor   = clamp(savingsDays / targetSavingsDays, savingsFactorMin, savingsFactorMax) ** savingsElasticity
-purchasingPower = max(wageLevel, 0.1) * savingsFactor
+purchasingPower = max(averageWage, 0.1) * savingsFactor
 ```
 
 The effect stabilizes itself. Consumption inside an area does not move money, but higher demand raises local prices, which pulls in imports and spends savings down toward the target. An area with depleted savings demands less, so its prices fall, it exports more and its savings refill.
@@ -133,9 +175,9 @@ Sea and air traffic reuse edges instead of adding a separate system. A route is 
 | Armies | Can embark from a running port owned by their government; crossing takes `seaTravelDaysPerDistance × distance` | Cannot use them |
 | Migration | Multiplied by `migrationFactorBySea` | Multiplied by `migrationFactorByAir` |
 
-- A **running level** is the built level times the staffed share (section 6, Infrastructure), so a route whose port or airport has no staff carries nothing.
+- A **running level** is the built level times the staffed share (section 5, Infrastructure), so a route whose port or airport has no staff carries nothing.
 - **Sea lanes** are laid by map generation between neighboring coasts (`isLane`). They carry no goods and no migrants; armies sail them from a running port of their own, and sea routes are measured along them. A world built without lanes keeps the sea routes it was given.
-- Built and taken down by governments (section 6, Infrastructure); captures leave port and airport levels intact. A route dropped by a rebuild is deactivated (`isActive` set to false) instead of deleted, so edge ids stay stable, and it is reactivated if a later rebuild picks the same pair again.
+- Built and taken down by governments (section 5, Infrastructure); captures leave port and airport levels intact. A route dropped by a rebuild is deactivated (`isActive` set to false) instead of deleted, so edge ids stay stable, and it is reactivated if a later rebuild picks the same pair again.
 - Rebuilds run only when a port or airport opens or closes (or an airport reaches the maximum level), done in phase 10 or when a command takes a level down, never as part of the normal per-tick work. Ties go to the lower area id.
 - Capacities and land transport costs follow the running levels in phase 10 of every tick.
 - An edge with no capacity (a lane, or a route whose ports stand idle) takes no part in trade, so it takes no share of an area's surplus.
@@ -181,7 +223,7 @@ valueAddedPerHour(good) =
    - sum over inputs of input.quantity * smoothedPrice[input.good])
   * marginalOutputPerWorker(good) / hoursPerWorkerDay
 
-wageLevel = sum(valueAddedPerHour * privateWorkers) / max(sum(privateWorkers), epsilon)
+averageWage = sum(valueAddedPerHour * privateWorkers) / max(sum(privateWorkers), epsilon)
 
 reservation = reservationWage * savingsFactor          // workers short of savings accept less
 needPerDay  = used / days + (isService ? 0 : (reserveDaysOf(good) * used / days - stock) / stockRecoveryDays)
@@ -208,7 +250,7 @@ else
 population *= exp(growth * demographyResponsiveness * days)
 
 attractiveness = (1 - migrationWageWeight) * satisfaction
-               + migrationWageWeight * wageLevel / (wageLevel + 1)
+               + migrationWageWeight * averageWage / (averageWage + 1)
 // per active, non-blocked edge, from the less attractive area to the more attractive one
 modeFactor = land: 1, sea: migrationFactorBySea, air: migrationFactorByAir
 migrants = population * fraction(migrationRatePerDay) * attractivenessDifference * modeFactor / edgeCount
@@ -235,11 +277,11 @@ A map is generated from a seed, the catalog and `WorldConfig.map`. Every random 
 
 4. **Areas and water cells.** Each land cell is an area, and every other cell of the rectangle a water cell, so land and sea tile the whole map. An area is coastal when it borders a water cell. A water cell's depth is its number of hops over water from the nearest land: 1 where it touches a coast. Productivity is the terrain value times 0.9 to 1.1 from noise. Population is the terrain density, ×1.3 on coasts, times 0.6 to 1.4 from noise, scaled to a mean of `meanAreaPopulation`.
 5. **Land edges** join neighboring land cells. Distance is between cell centers; `terrainFactor` is the mean land cost factor of the two areas; `travelDays` is `distance / 25 × terrainFactor`.
-6. **Sea lanes.** Each coastal area is linked by a lane to its `seaRoutesPerPort` nearest coastal areas by distance over water (a search over water cells), skipping areas it already shares a land edge with. Then, while some areas cannot reach the others, the shortest water lane from the group of area 0 to another group is added. Ports, airports and their routes come with the realms (section 6, Founding).
+6. **Sea lanes.** Each coastal area is linked by a lane to its `seaRoutesPerPort` nearest coastal areas by distance over water (a search over water cells), skipping areas it already shares a land edge with. Then, while some areas cannot reach the others, the shortest water lane from the group of area 0 to another group is added. Ports, airports and their routes come with the realms (section 5, Founding).
 7. **Natural capacity.** For each primary good, the eligible places are the areas whose terrain is in the good's `terrains` (`coast` meaning coastal areas; no `terrains` meaning every area) and the water cells it suits: `sea`, any water cell of depth at most `maximumLevel`, so that a port can reach it; `offshore`, depth 2 to `maximumLevel`, beyond the cells along the coast. If none is eligible, every area is. A noise field per good ranks them. A water cell has no people: it counts as `waterCellPopulationShare` of the population of its nearest coast (for a cell out at sea, the largest such value among its neighbors one hop nearer to land). The top places are chosen until both `presence[abundance]` of the eligible ones and enough population to supply world demand with `extractionLaborShare` of its workforce are reached. An area that holds no primary good gets its best-scoring common good, preferring one suited to its terrain. Capacity totals `capacityHeadroom` × reference demand × world population, split in proportion to population × (noise above the cut + 0.2).
 8. **Capitals.** `governmentCount` capitals: the most populous area, then each next one maximizing hops to the nearest capital over land and sea edges × √population. An area no capital reaches counts one hop beyond the farthest reachable area.
 
-The world is then initialized (Rule 6), a government is founded on each capital (section 6, Founding), and the world is warmed up.
+The world is then initialized (Rule 6), a government is founded on each capital (section 5, Founding), and the world is warmed up.
 
 ### Goods catalogs
 

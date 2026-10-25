@@ -10,7 +10,6 @@ A geographic economics sandbox in the browser. The map is split into areas that 
 | --- | --- |
 | [docs/specification/](docs/specification/README.md) | The rules of the game, section by section |
 | [docs/design-notes.md](docs/design-notes.md) | Why the rules are what they are: measurements, tuning and findings |
-| [docs/roadmap.md](docs/roadmap.md) | The build order, stage by stage, and open questions |
 | [apps/broker/README.md](apps/broker/README.md) | The Cloudflare Worker that connects players, and its TURN relay |
 
 ## Development

@@ -1,4 +1,4 @@
-// Edge costs and capacities for land borders and sea and air routes (specification §5, Sea and air routes).
+// Edge costs and capacities for land borders and sea and air routes (specification §4, Sea and air routes).
 import type { WorldConfig } from "./config";
 import { effectiveLevel } from "./infrastructure";
 import type { Area, Edge, EdgeMode } from "./types";
@@ -36,7 +36,7 @@ export function edgeTravelDays(config: WorldConfig, mode: EdgeMode, distance: nu
 
 /**
  * Tonnes per day per direction: infinite on land, none on a sea lane, and set on routes by the smaller port or
- * airport as it runs, its level times its staffed share (section 6, Infrastructure).
+ * airport as it runs, its level times its staffed share (section 5, Infrastructure).
  */
 export function edgeCapacityPerDay(config: WorldConfig, edge: Edge, a: Area, b: Area): number {
   const t = config.transport;

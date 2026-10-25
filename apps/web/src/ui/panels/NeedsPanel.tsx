@@ -1,5 +1,5 @@
 // What people of the selection, or of the realm when nothing is selected, could buy of what they need
-// (specification §10, Panels): necessities met and satisfaction with their history, and each need. The map shows
+// (specification §9, Panels): necessities met and satisfaction with their history, and each need. The map shows
 // necessities met.
 import { demographyOf, needsOf } from "../../state/selectors";
 import { useGame } from "../../state/store";

@@ -1,4 +1,4 @@
-// Natural resources (specification §10, Panels): what the selected areas can extract, and where one resource is
+// Natural resources (specification §9, Panels): what the selected areas can extract, and where one resource is
 // found. The map shows that resource's capacity.
 import { capacityMaximum, selectionSummary } from "../../state/selectors";
 import { useGame } from "../../state/store";

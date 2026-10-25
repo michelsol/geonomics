@@ -1,4 +1,4 @@
-// Numeric helpers shared by every phase (specification §4, rules 2 and 5).
+// Numeric helpers shared by every phase (specification §3, rules 2 and 5).
 import type { WorldConfig } from "./config";
 import type { Good } from "./types";
 

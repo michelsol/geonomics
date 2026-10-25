@@ -1,4 +1,4 @@
-// Roadmap stage 7: war as an economic activity (specification §7).
+// War as an economic activity (specification §6).
 import {
   type Army,
   applyCommand,
@@ -54,7 +54,7 @@ describe("weapons", () => {
   });
 });
 
-describe("the §7 example", () => {
+describe("the §6 example", () => {
   it("1,000 equipped soldiers take an unfortified area of 10,000 people in about 20 days", () => {
     const world = scenarios.twoAreas.build({ catalog: small });
     warmUp(world);

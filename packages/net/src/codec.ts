@@ -1,4 +1,4 @@
-// msgpack encoding of network messages (specification §9, Encoding). Typed arrays travel as msgpack extensions
+// msgpack encoding of network messages (specification §8, Encoding). Typed arrays travel as msgpack extensions
 // holding their raw little-endian bytes; a Float32Array that is mostly zeros travels sparse, as index and value pairs.
 import { ExtensionCodec, decode as msgpackDecode, encode as msgpackEncode } from "@msgpack/msgpack";
 

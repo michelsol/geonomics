@@ -1,4 +1,4 @@
-// Governments: founding, ownership, captures and policy resolution (specifications §6 and §7).
+// Governments: founding, ownership, captures and policy resolution (specifications §5 and §6).
 import { disbandArmy } from "./army";
 import { MinHeap } from "./heap";
 import { INFRASTRUCTURE_KINDS, levelOf } from "./infrastructure";
@@ -103,7 +103,7 @@ const MIXES: Record<AiMix, readonly Personality[]> = {
   aggressive: ["conqueror", "trader", "conqueror", "builder"],
 };
 
-/** Personalities for `count` realms in the mix's proportions, in a seeded order (specification §11). */
+/** Personalities for `count` realms in the mix's proportions, in a seeded order (specification §10). */
 export function aiPersonalities(world: World, mix: AiMix, count: number): Personality[] {
   const pattern = MIXES[mix];
   const personalities = Array.from({ length: count }, (_, i) => pattern[i % pattern.length] as Personality);
@@ -198,7 +198,7 @@ export function realmIncomePerDay(world: World, government: GovernmentId): numbe
   let income = 0;
   for (const id of (world.governments[government] as Government).ownedAreas) {
     const area = world.areas[id] as Area;
-    income += area.population * e.workforceShare * e.hoursPerWorkerDay * Math.max(area.wageLevel, 0.1);
+    income += area.population * e.workforceShare * e.hoursPerWorkerDay * Math.max(area.averageWage, 0.1);
   }
   return income;
 }

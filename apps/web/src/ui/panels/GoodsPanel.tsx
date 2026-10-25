@@ -1,4 +1,4 @@
-// One good across the world (specification §10, Panels): lowest, median and highest price with their areas, their
+// One good across the world (specification §9, Panels): lowest, median and highest price with their areas, their
 // history, and the goods carried between areas. The map shows the good's price.
 import { meanPrices, priceExtremes } from "../../state/selectors";
 import { useGame } from "../../state/store";

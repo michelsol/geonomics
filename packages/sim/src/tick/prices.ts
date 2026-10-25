@@ -1,4 +1,4 @@
-// Phase 6: prices (specification §5, Prices).
+// Phase 6: prices (specification §4, Prices).
 import { clamp, EPSILON, fractionPerTick } from "../math";
 import type { World } from "../types";
 import { policiesOf, scratchOf } from "./scratch";

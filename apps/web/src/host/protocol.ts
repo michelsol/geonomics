@@ -1,4 +1,4 @@
-// Messages between the main thread and the simulation worker (specification §9, Single player and Host loop).
+// Messages between the main thread and the simulation worker (specification §8, Single player and Host loop).
 import type {
   AiMix,
   AreaId,

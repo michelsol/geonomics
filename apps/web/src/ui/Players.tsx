@@ -1,5 +1,5 @@
 // Who is in the game, the invitation link and, for the host, releasing the realms of players who left
-// (specification §10, Lobby).
+// (specification §9, Lobby).
 import type { LobbyPlayer } from "@geonomics/net";
 import type { GovernmentSummary } from "@geonomics/sim";
 import { useState } from "react";

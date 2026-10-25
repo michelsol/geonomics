@@ -1,4 +1,4 @@
-// Phase 4: trade (specification §5, Trade). Flows are computed from the state before trade and applied together,
+// Phase 4: trade (specification §4, Trade). Flows are computed from the state before trade and applied together,
 // so the result never depends on the order of edges or areas. This is the hottest loop of the tick (edges × goods ×
 // 2 directions), so it works on typed arrays directly and skips idle edge-good pairs early.
 import { EPSILON, fractionPerTick, reserveDaysOf } from "../math";

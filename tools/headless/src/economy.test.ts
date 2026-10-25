@@ -1,4 +1,4 @@
-// Roadmap stage 3: the private economy runs on its own and converges (specification §4, Diagnostics).
+// The private economy runs on its own and converges (specification §3, Diagnostics).
 import {
   createConfig,
   createWorld,
@@ -95,7 +95,7 @@ describe.each(CATALOG_NAMES)("with the %s catalog", (catalog) => {
     const world = scenarios.chain10.build({ catalog: readCatalog(catalog) });
     const check = () => {
       for (const area of world.areas) {
-        for (const value of [area.population, area.savings, area.unemployedWorkers, area.wageLevel]) {
+        for (const value of [area.population, area.savings, area.unemployedWorkers, area.averageWage]) {
           expect(Number.isFinite(value)).toBe(true);
           expect(value).toBeGreaterThanOrEqual(0);
         }

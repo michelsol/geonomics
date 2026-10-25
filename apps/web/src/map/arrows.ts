@@ -1,4 +1,4 @@
-// Flow arrows of the migration and transport layers (specification §10, Map): geometry only, so it is testable
+// Flow arrows of the migration and transport layers (specification §9, Map): geometry only, so it is testable
 // without a renderer.
 
 /** Arrows span this part of the segment between two area centers, so they never hide the centers. */

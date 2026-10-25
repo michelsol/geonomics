@@ -1,5 +1,5 @@
 // The joining side: connects to the host, says hello, and reconnects after a dropped connection
-// (specification §9, Joining and Dropped connections).
+// (specification §8, Joining and Dropped connections).
 import type { PlayerId } from "@geonomics/sim";
 import { type Link, MessageLink } from "./link";
 import { PROTOCOL_VERSION, type ToClient, type ToHost } from "./messages";

@@ -1,4 +1,4 @@
-// Games with only AI realms (roadmap stage 10 exit): survival per personality, growth, trade and wars.
+// Games with only AI realms: survival per personality, growth, trade and wars.
 import {
   type AiMix,
   type Catalog,

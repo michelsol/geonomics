@@ -1,4 +1,4 @@
-// Rule 6: start near equilibrium, then warm up (specification §4).
+// Rule 6: start near equilibrium, then warm up (specification §3).
 import { reserveDaysOf } from "./math";
 import { computeValueAdded, workersFor } from "./tick/labor";
 import { produceArea } from "./tick/production";
@@ -43,7 +43,7 @@ export function referenceDemandPerPerson(world: World): Float64Array {
 
 /**
  * Rule 6, steps 1 to 5: prices at labor value, workers placed to cover local demand where local resources allow,
- * starting stock and savings, and a first wage level, so the first tick starts close to balance.
+ * starting stock and savings, and a first average wage, so the first tick starts close to balance.
  */
 export function initializeWorld(world: World): void {
   const consumerPerPerson = referenceConsumerDemandPerPerson(world);
@@ -61,9 +61,9 @@ export function initializeWorld(world: World): void {
       area.stock[g] = good.isService ? 0 : reserveDaysOf(good, world.config) * totalDemand;
     }
     placeWorkers(world, area, perPerson);
-    area.wageLevel = computeValueAdded(world, area, scratch, scratch.values);
+    area.averageWage = computeValueAdded(world, area, scratch, scratch.values);
     const e = world.config.economy;
-    const income = Math.max(area.wageLevel, 0.1) * e.hoursPerWorkerDay * e.workforceShare;
+    const income = Math.max(area.averageWage, 0.1) * e.hoursPerWorkerDay * e.workforceShare;
     area.savings = e.targetSavingsDays * area.population * income;
     area.satisfaction = 1;
     area.necessitySatisfaction = 1;
@@ -114,5 +114,5 @@ function placeWorkers(world: World, area: Area, perPerson: Float64Array): void {
   // The rest stay unemployed: production starts matched to demand, and they are the pool that government jobs and
   // armies hire from.
   area.unemployedWorkers = workforce - total;
-  produceArea(world, area, scratch, false); // marginal outputs for the first wage level
+  produceArea(world, area, scratch, false); // marginal outputs for the first average wage
 }

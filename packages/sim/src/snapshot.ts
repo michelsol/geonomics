@@ -1,4 +1,4 @@
-// What the host sends to the interface (specification §9, Snapshots and Single player): static data once, then
+// What the host sends to the interface (specification §8, Snapshots and Single player): static data once, then
 // snapshots of the dynamic state as seen by one government. Typed arrays are Float32Array, and every value is
 // structured-clone friendly, so snapshots cross a worker boundary as transferables or go through msgpack unchanged.
 import type { WorldConfig } from "./config";
@@ -122,8 +122,8 @@ export interface Snapshot {
     owner: Int16Array; // -1 for neutral
     population: Float32Array;
     naturalChange: Float32Array; // people per day gained by growth, or lost to starvation when negative
-    wageLevel: Float32Array;
-    // per member of the workforce and day, the unemployed included, in man-hours; NaN when empty (section 10, Income)
+    averageWage: Float32Array;
+    // per member of the workforce and day, the unemployed included, in man-hours; NaN when empty (section 9, Income)
     grossIncome: Float32Array;
     netIncome: Float32Array;
     employmentRate: Float32Array; // share of the workforce with a private or government job; NaN when empty
@@ -237,7 +237,7 @@ export function buildSnapshot(
     owner: new Int16Array(n),
     population: new Float32Array(n),
     naturalChange: new Float32Array(n),
-    wageLevel: new Float32Array(n),
+    averageWage: new Float32Array(n),
     grossIncome: new Float32Array(n),
     netIncome: new Float32Array(n),
     employmentRate: new Float32Array(n),
@@ -262,7 +262,7 @@ export function buildSnapshot(
     areas.owner[i] = area.owner ?? -1;
     areas.population[i] = area.population;
     areas.naturalChange[i] = (natural[i] ?? 0) / days;
-    areas.wageLevel[i] = area.wageLevel;
+    areas.averageWage[i] = area.averageWage;
     const income = incomeOf(world, area, scratch, wages);
     areas.grossIncome[i] = income.gross;
     areas.netIncome[i] = income.net;
@@ -434,7 +434,7 @@ export function snapshotTransferables(snapshot: Snapshot): ArrayBuffer[] {
   return buffers;
 }
 
-// Price table (specification §9, Price table)
+// Price table (specification §8, Price table)
 
 /**
  * Prices of every good in every area, quantized on a log scale between the floor and ceiling multiples of labor

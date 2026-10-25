@@ -1,4 +1,4 @@
-[Specification](README.md) · section 1 of 11
+[Specification](README.md) · section 1 of 10
 
 ## 1. Overview
 
@@ -13,5 +13,5 @@ The game runs in a browser, on desktop or mobile. The first human player hosts t
 - **Cheap per tick.** Cost is roughly proportional to (areas + edges) × goods. A few thousand areas must run comfortably on a phone.
 - **The government is a separate actor.** The base economy runs with no players at all. Human and AI governments use the same command interface.
 - **Open prices.** Every player, human or AI, sees the current price of every good in every area. Stocks, flows and government internals stay private. Markets themselves stay local: an area trades only with the areas its edges connect it to.
-- **Stability before realism.** Every adjustment is damped, bounded and scaled by global pace parameters (section 4).
+- **Stability before realism.** Every adjustment is damped, bounded and scaled by global pace parameters (section 3).
 - **Sandbox first.** There is no mandatory win condition; goals can be layered on later.

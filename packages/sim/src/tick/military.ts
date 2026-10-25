@@ -1,4 +1,4 @@
-// Phases 3, 7 and 8: equipment, desertion, marching, combat, sieges and captures (specification §7).
+// Phases 3, 7 and 8: equipment, desertion, marching, combat, sieges and captures (specification §6).
 import { canMarch, disbandArmy, returnSoldiers } from "../army";
 import { transferArea } from "../government";
 import { effectiveLevel } from "../infrastructure";
@@ -24,7 +24,7 @@ export function runEquipment(world: World): void {
 }
 
 /**
- * Phase 7, after taxes: soldiers desert for the larger of their wage shortfall against the realm's average wage level
+ * Phase 7, after taxes: soldiers desert for the larger of their wage shortfall against the realm's average wage
  * and the share of their pay left unpaid, like government workers. Deserters join the population where the army is.
  */
 export function runDesertion(world: World): void {
@@ -37,7 +37,7 @@ export function runDesertion(world: World): void {
     if (share === undefined) {
       const government = world.governments[army.owner] as Government;
       const unpaid = 1 - (scratch.paidShare[army.owner] ?? 1);
-      const shortfall = 1 - government.soldierWage / Math.max(realmWageLevel(world, government), EPSILON);
+      const shortfall = 1 - government.soldierWage / Math.max(realmAverageWage(world, government), EPSILON);
       share = desertion * Math.max(0, shortfall, unpaid);
       shares.set(army.owner, share);
     }
@@ -46,13 +46,13 @@ export function runDesertion(world: World): void {
   }
 }
 
-/** Average wage level of a realm's areas, weighted by population. */
-export function realmWageLevel(world: World, government: Government): number {
+/** Average wage of a realm's areas, weighted by population. */
+export function realmAverageWage(world: World, government: Government): number {
   let weighted = 0;
   let population = 0;
   for (const id of government.ownedAreas) {
     const area = world.areas[id] as Area;
-    weighted += area.wageLevel * area.population;
+    weighted += area.averageWage * area.population;
     population += area.population;
   }
   return population > EPSILON ? weighted / population : 1;

@@ -1,8 +1,8 @@
-[Specification](README.md) · section 3 of 11
+[Specification](README.md) · section 2 of 10
 
-## 3. Data model
+## 2. Data model
 
-The world is plain serializable data, owned by the simulation worker on the host. Per-good values are stored as `Float64Array`s indexed by `GoodId`, so each phase is a tight loop over typed arrays. `WorldConfig` is defined in section 4.
+The world is plain serializable data, owned by the simulation worker on the host. Per-good values are stored as `Float64Array`s indexed by `GoodId`, so each phase is a tight loop over typed arrays. `WorldConfig` is defined in section 3.
 
 ### Identifiers and world
 
@@ -19,7 +19,7 @@ type WaterId = number;       // index into World.waters
 interface World {
   tick: number;                         // number of ticks simulated since the game started
   gameDay: number;                      // elapsed game time in days (sum of gameDaysPerTick over all ticks)
-  config: WorldConfig;                  // all tunable parameters, including pace (section 4)
+  config: WorldConfig;                  // all tunable parameters, including pace (section 3)
   needs: Need[];                        // needs of the population, each satisfied by one or more goods
   goods: Good[];                        // catalog of goods, sorted so that every input comes before its outputs
   areas: Area[];                        // every area on the map
@@ -41,8 +41,8 @@ interface MapLayout {
 }
 // Cells for rendering are the Voronoi cells of the area positions followed by the water cells' positions.
 
-// A cell of sea (section 5, Map generation): no people, owner or market, but natural capacity that the ports
-// reaching it extract (section 6, Infrastructure).
+// A cell of sea (section 4, Map generation): no people, owner or market, but natural capacity that the ports
+// reaching it extract (section 5, Infrastructure).
 interface WaterCell {
   id: WaterId;                          // index of this cell in World.waters
   position: { x: number; y: number };   // map coordinates of the cell's center
@@ -125,20 +125,20 @@ interface Area {
   unemployedWorkers: number;            // workers without a private or government job
   terrain: Terrain;                     // set by map generation: sets productivity and land transport cost
   isCoastal: boolean;                   // set by map generation: the area touches navigable water
-  // Infrastructure (section 6, Infrastructure): built levels, 0 (none) to infrastructure.maximumLevel
+  // Infrastructure (section 5, Infrastructure): built levels, 0 (none) to infrastructure.maximumLevel
   portLevel: number;                    // coastal areas only: raises the capacity of the area's sea routes
   airportLevel: number;                 // raises the capacity of the area's air routes
   roadLevel: number;                    // lowers the transport cost of the area's land edges
   fortificationLevel: number;           // multiplies the area's defense
   staffing: Float64Array;               // per kind (port, airport, roads, fort): staffed share of the quota, 0 to 1
   siegeProgress: number;                // 0 to 1; the area changes owner when it reaches 1
-  militia: number;                      // militia still standing (section 7, Militia)
+  militia: number;                      // militia still standing (section 6, Militia)
   besiegingGovernment: GovernmentId | null; // government currently besieging the area, if any
 
   // Per-good arrays, indexed by GoodId
   stock: Float64Array;                  // units stored privately, available to consume or export
   price: Float64Array;                  // current local market price, in man-hours per unit
-  smoothedPrice: Float64Array;          // slow moving average of price, used for job decisions (section 4)
+  smoothedPrice: Float64Array;          // slow moving average of price, used for job decisions (section 3)
   privateWorkers: Float64Array;         // workers employed in private production of each good
   naturalCapacity: Float64Array;        // primary goods: current maximum extraction per day (0 otherwise)
   naturalCapacityMaximum: Float64Array; // primary goods: capacity the area recovers toward
@@ -156,7 +156,7 @@ interface Area {
   needConsumed: Float64Array;           // per NeedId: need units actually consumed, substitutes included
   satisfaction: number;                 // 0 to 1: tier-weighted share of need demand that was met
   necessitySatisfaction: number;        // 0 to 1: share of necessity need demand that was met
-  wageLevel: number;                    // average value added per private worker-hour, in man-hours
+  averageWage: number;                  // average value added per private worker-hour, in man-hours
 }
 
 type EdgeMode = "land" | "sea" | "air";
@@ -178,7 +178,7 @@ interface Edge {
 }
 ```
 
-Land edges join neighboring areas and never change. Map generation lays **sea lanes** between neighboring coasts. Sea and air edges between ports or airports are **routes**, rebuilt when ports or airports open, close or grow (section 5, Sea and air routes). Every system that walks edges, including trade, migration and marching, handles all three modes the same way, apart from the rules listed for each mode. `Area.edges` lists edges of all modes.
+Land edges join neighboring areas and never change. Map generation lays **sea lanes** between neighboring coasts. Sea and air edges between ports or airports are **routes**, rebuilt when ports or airports open, close or grow (section 4, Sea and air routes). Every system that walks edges, including trade, migration and marching, handles all three modes the same way, apart from the rules listed for each mode. `Area.edges` lists edges of all modes.
 
 ### Governments
 
@@ -199,7 +199,7 @@ type PolicyName =
   | "importTariffRate"                  // per good: share of the price charged on goods entering across a border
   | "exportTariffRate"                  // per good: share of the price charged on goods leaving across a border
   | "headTaxPerPersonPerDay"            // per area: flat tax per inhabitant per game day, in man-hours
-  | "staffWageShare"                    // per area: infrastructure staff pay, as a share of the area's wage level
+  | "staffWageShare"                    // per area: infrastructure staff pay, as a share of the area's average wage
   | "priceCeiling"                      // per good: maximum allowed local price
   | "priceFloor";                       // per good: minimum allowed local price
 
@@ -239,7 +239,7 @@ interface Government {
     | { kind: "human"; player: PlayerId }
     | { kind: "ai" };
   personality: "trader" | "builder" | "conqueror" | "idle"; // how the AI runs the realm whenever it controls it
-  aiMemory: AiMemory | null;            // what the AI keeps between decisions (section 11); null before its first
+  aiMemory: AiMemory | null;            // what the AI keeps between decisions (section 10); null before its first
   capital: AreaId | null;               // capital area; null once the government is eliminated
   isEliminated: boolean;                // true once the government owns no area
   treasury: number;                     // government money for the whole realm, in man-hours

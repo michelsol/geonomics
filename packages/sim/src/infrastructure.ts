@@ -1,4 +1,4 @@
-// Infrastructure levels, staffing and costs (specification §6, Infrastructure). Each kind's per-kind arrays follow
+// Infrastructure levels, staffing and costs (specification §5, Infrastructure). Each kind's per-kind arrays follow
 // INFRASTRUCTURE_KINDS.
 import type { WorldConfig } from "./config";
 import type { Area, GovernmentAreaState, InfrastructureKind, ResolvedPolicies } from "./types";
@@ -79,13 +79,13 @@ export function isBuilding(
   return canBuild(area, kind) && levelOf(area, kind) < target;
 }
 
-/** Staff pay as a share of the area's wage level: the policy in force, or the default. */
+/** Staff pay as a share of the area's average wage: the policy in force, or the default. */
 export const staffWageShareOf = (config: WorldConfig, policies: ResolvedPolicies): number =>
   policies.staffWageShare ?? config.infrastructure.defaultStaffWageShare;
 
 /**
  * What a government owes an area per game day for its infrastructure, before any shortfall of the treasury: staff
- * wages, `share` of the wage level per staff-hour, and the payments of the levels under construction.
+ * wages, `share` of the average wage per staff-hour, and the payments of the levels under construction.
  */
 export function infrastructureBillPerDay(
   config: WorldConfig,
@@ -93,7 +93,7 @@ export function infrastructureBillPerDay(
   state: GovernmentAreaState,
   share: number,
 ): { staff: number; construction: number } {
-  const hourly = share * Math.max(area.wageLevel, 0) * config.economy.hoursPerWorkerDay;
+  const hourly = share * Math.max(area.averageWage, 0) * config.economy.hoursPerWorkerDay;
   let staff = 0;
   let construction = 0;
   for (const [k, kind] of INFRASTRUCTURE_KINDS.entries()) {
