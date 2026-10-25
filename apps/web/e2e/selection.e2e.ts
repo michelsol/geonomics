@@ -111,5 +111,6 @@ test("the brush paints areas into the selection, and actions follow it", async (
   await page.getByRole("button", { name: "My realm", exact: true }).click();
   await expect(page.getByTestId("action-target")).toHaveText("Actions: your whole realm");
   await page.getByRole("navigation").getByRole("button", { name: "Policies", exact: true }).click();
-  await expect(page.getByTestId("head-tax")).toContainText("across the realm");
+  await expect(page.getByLabel("Policy", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("no-own-area")).toHaveCount(0);
 });

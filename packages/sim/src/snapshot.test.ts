@@ -79,7 +79,7 @@ describe("snapshots", () => {
     const buffers = snapshotTransferables(snapshot);
     expect(new Set(buffers).size).toBe(buffers.length);
     // Areas, edges (transport cost, capacity, flags, tonnage, migration), area details, depots.
-    expect(buffers.length).toBe(13 + 5 + 4 * 10 + 3);
+    expect(buffers.length).toBe(15 + 5 + 4 * 11 + 3);
     expect(snapshotTransferables(buildSnapshot(realmWorld(), 0, undefined, { flowGood: 0 })).length).toBe(
       buffers.length + 1,
     );
@@ -146,6 +146,46 @@ describe("snapshots", () => {
     const snapshot = buildSnapshot(world, null);
     expect(snapshot.areas.employmentRate[0]).toBeCloseTo(0.75, 6);
     expect(snapshot.areas.employmentRate[1]).toBeNaN();
+  });
+
+  it("carry each area's gross and net income per member of the workforce, and the wage of each private job", () => {
+    const world = realmWorld();
+    send(world, { type: "setJobTarget", area: 0, job: { kind: "fortify" }, targetWorkers: 50 });
+    runTick(world);
+    const { hoursPerWorkerDay, workforceShare } = world.config.economy;
+    const area = world.areas[0] as (typeof world.areas)[number];
+    const state = world.governments[0]?.areaStates.get(0);
+    const governmentWorkers = (state?.jobs ?? []).reduce((sum, job) => sum + job.workers, 0);
+    expect(governmentWorkers).toBeGreaterThan(0);
+    const snapshot = buildSnapshot(world, 0);
+    const detail = snapshot.detail[0];
+    const workforce = area.population * workforceShare;
+    let earned = 0;
+    let workers = 0;
+    for (const good of world.goods) {
+      earned += (area.privateWorkers[good.id] as number) * (detail?.wage[good.id] as number);
+      workers += area.privateWorkers[good.id] as number;
+    }
+    // Without taxes, gross and net income are the same: private wages and government wages over the workforce.
+    const governmentPay = governmentWorkers * (state?.wageOffer ?? 0) * hoursPerWorkerDay;
+    expect(snapshot.areas.grossIncome[0]).toBeCloseTo((earned + governmentPay) / workforce, 3);
+    expect(snapshot.areas.netIncome[0]).toBeCloseTo(snapshot.areas.grossIncome[0] as number, 5);
+    // The wage level is the private wages' mean, per hour, from before the tick's last moves between jobs.
+    expect(earned / workers / hoursPerWorkerDay).toBeCloseTo(area.wageLevel, 2);
+
+    // A head tax comes off net income, spread over the workforce; an allowance adds to it.
+    send(world, { type: "setRealmPolicy", setting: { policy: "headTaxPerPersonPerDay", good: null, value: 0.2 } });
+    const taxed = buildSnapshot(world, 0);
+    expect(taxed.areas.grossIncome[0]).toBeCloseTo(snapshot.areas.grossIncome[0] as number, 5);
+    expect(taxed.areas.netIncome[0]).toBeCloseTo((snapshot.areas.netIncome[0] as number) - 0.2 / workforceShare, 3);
+    send(world, { type: "setRealmPolicy", setting: { policy: "headTaxPerPersonPerDay", good: null, value: -0.2 } });
+    expect(buildSnapshot(world, 0).areas.netIncome[0]).toBeCloseTo(
+      (snapshot.areas.netIncome[0] as number) + 0.2 / workforceShare,
+      3,
+    );
+
+    (world.areas[1] as (typeof world.areas)[number]).population = 0;
+    expect(buildSnapshot(world, 0).areas.grossIncome[1]).toBeNaN();
   });
 
   it("carry each visible area's demand and consumption per need", () => {

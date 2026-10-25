@@ -168,12 +168,12 @@ export function JobsPanel() {
             }
           />
           <span className="muted">
-            mh/day · average income {target.realm ? "in the realm" : region ? "in the selection" : "here"}{" "}
+            mh/day · average private wage {target.realm ? "in the realm" : region ? "in the selection" : "here"}{" "}
             {fmt(averageWage * hoursPerDay)} mh/day
           </span>
         </div>
         <span className="muted">
-          Workers only take government jobs paying at least the average income where they live.
+          Workers only take government jobs paying at least the average private wage where they live.
         </span>
       </Section>
 
@@ -272,6 +272,7 @@ function EmploymentSection({ view, areas, label }: { view: View; areas: number[]
       good,
       workers: employment.privateWorkers[good.id] as number,
       output: employment.producedPerDay[good.id] as number,
+      wage: employment.wage[good.id] as number,
     }))
     .filter((row) => row.workers >= 0.5 || row.output > 1e-6)
     .sort((a, b) => b.workers - a.workers);
@@ -308,10 +309,16 @@ function EmploymentSection({ view, areas, label }: { view: View; areas: number[]
               Output/day
             </th>
             <th className="num">Per worker</th>
+            <th
+              className="num"
+              title="Value added per worker and day after production tax, in mh: what a worker in this job earns"
+            >
+              Wage/day
+            </th>
           </tr>
         </thead>
         <tbody>
-          {rows.map(({ good, workers, output }) => (
+          {rows.map(({ good, workers, output, wage }) => (
             <tr key={good.id}>
               <td title={good.unit}>{good.name}</td>
               <td className="num">{count(workers)}</td>
@@ -320,6 +327,7 @@ function EmploymentSection({ view, areas, label }: { view: View; areas: number[]
               </td>
               <td className="num">{fmt(output)}</td>
               <td className="num">{workers >= 0.5 ? fmt(output / workers) : "—"}</td>
+              <td className="num">{workers >= 0.5 ? fmt(wage) : "—"}</td>
             </tr>
           ))}
         </tbody>

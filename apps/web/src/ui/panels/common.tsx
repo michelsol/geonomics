@@ -1,8 +1,6 @@
 // Helpers shared by the panels.
 import type { GovernmentView, Snapshot, StaticData } from "@geonomics/sim";
-import type { SelectionSummary } from "../../state/selectors";
 import { type PanelName, useGame } from "../../state/store";
-import { fmt, Stat } from "../components";
 
 export type { PanelName };
 export interface PanelProps {
@@ -71,46 +69,6 @@ export function AreaLink({ area }: { area: number }) {
     <button type="button" className="link" onClick={() => select(area)}>
       {areaName(data, area)}
     </button>
-  );
-}
-
-/**
- * Income, real income and cost of living of some areas, for a stats grid: what a worker earns, what that buys here,
- * and how dear the needs are (specification §10, Panels). `testIds` prefixes the stats' test ids.
- */
-export function IncomeStats({
-  summary,
-  hoursPerDay,
-  several,
-  testIds = "",
-}: {
-  summary: SelectionSummary;
-  hoursPerDay: number;
-  several: boolean;
-  testIds?: string;
-}) {
-  const mean = several ? " Population-weighted mean over the areas." : "";
-  return (
-    <>
-      <Stat
-        label="Income"
-        value={`${fmt(summary.wageLevel * hoursPerDay)} mh/day`}
-        testId={`${testIds}income`}
-        title={`Value added per employed worker and day, in man-hours (an hour of an average worker's labor): with no capital or profits, the worker's whole income.${mean}`}
-      />
-      <Stat
-        label="Real income"
-        value={`${fmt(summary.realIncomeLevel * hoursPerDay)} mh/day`}
-        testId={`${testIds}real-income`}
-        title={`What the income buys at labor-value prices: the income over the cost of living.${mean}`}
-      />
-      <Stat
-        label="Cost of living"
-        value={summary.costOfLiving === null ? "—" : `×${fmt(summary.costOfLiving)}`}
-        testId={`${testIds}cost-of-living`}
-        title={`The local price of a typical basket of needs over its labor value: ×1 when needs cost what they take to make, more where they are dear.${mean}`}
-      />
-    </>
   );
 }
 

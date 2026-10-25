@@ -6,7 +6,7 @@ import {
   largestPopulation,
   priceOf,
   priceSpread,
-  realIncomes,
+  realNetIncomes,
   type Spread,
   spreadOf,
   transportFlows,
@@ -21,6 +21,7 @@ import {
   CELL_LINE,
   ERASE,
   employmentColor,
+  incomeColor,
   MIGRATION_ARROW,
   NEUTRAL,
   PICKED,
@@ -78,7 +79,7 @@ export class MapRenderer {
   private ownerKey = "";
   private largestPopulation = 0;
   private scale: Spread | null = null; // the prices or income layer's lowest, median and highest value
-  private incomes: Float32Array | null = null; // the income layer's real income per area
+  private incomes: Float32Array | null = null; // the income layer's real net income per area
 
   constructor(
     private readonly app: Application,
@@ -181,7 +182,7 @@ export class MapRenderer {
       case "satisfaction":
         return snapshot ? satisfactionColor(snapshot.areas.necessitySatisfaction[area] as number) : NEUTRAL;
       case "income":
-        return this.incomes && this.scale ? spreadColor(this.incomes[area] as number, this.scale) : NEUTRAL;
+        return this.incomes && this.scale ? incomeColor(this.incomes[area] as number, this.scale) : NEUTRAL;
       case "employment":
         return snapshot ? employmentColor(snapshot.areas.employmentRate[area] as number) : NEUTRAL;
     }
@@ -211,9 +212,9 @@ export class MapRenderer {
   private drawCells(state: GameState): void {
     const g = this.cells.clear();
     if (state.layer === "population" && state.snapshot) this.largestPopulation = largestPopulation(state.snapshot);
-    // Prices and real incomes are colored against the map's own lowest, median and highest values.
+    // Prices and real net incomes are colored against the map's own lowest, median and highest values.
     this.incomes =
-      state.layer === "income" && state.snapshot ? realIncomes(this.data, state.snapshot, state.priceTable) : null;
+      state.layer === "income" && state.snapshot ? realNetIncomes(this.data, state.snapshot, state.priceTable) : null;
     this.scale =
       state.layer === "prices" && state.priceTable
         ? priceSpread(this.data, state.priceTable, state.selectedGood)

@@ -20,8 +20,8 @@ import {
   flowMaximum,
   largestPopulation,
   priceSpread,
-  realIncomes,
   realmPopulation,
+  realNetIncomes,
   spreadOf,
   transportFlows,
 } from "../state/selectors";
@@ -467,15 +467,14 @@ function AreaLegend() {
         </div>
       );
     case "income": {
-      const hours = data?.config.economy.hoursPerWorkerDay ?? 1;
-      const scale = data && snapshot ? spreadOf(realIncomes(data, snapshot, table)) : null;
+      const scale = data && snapshot ? spreadOf(realNetIncomes(data, snapshot, table)) : null;
       return (
         <div className="legend" data-testid="legend">
-          <div title="Income per worker and day, over the local cost of living">Real income, mh/day</div>
+          <div title="Net income per member of the workforce and day, the unemployed included, over the local cost of living">
+            Real net income, mh/day
+          </div>
           <div className="bar" style={{ background: gradient(DIVERGING) }} />
-          {scale && (
-            <SpreadEnds scale={{ low: hours * scale.low, median: hours * scale.median, high: hours * scale.high }} />
-          )}
+          {scale && <SpreadEnds scale={scale} />}
         </div>
       );
     }

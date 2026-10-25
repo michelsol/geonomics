@@ -347,7 +347,6 @@ export function Join() {
 
 export function EndOfSession() {
   const summary = useGame((state) => state.summary);
-  const hoursPerDay = useGame((state) => state.data?.config.economy.hoursPerWorkerDay ?? 1);
   const backToMenu = useGame((state) => state.backToMenu);
   const role = useGame((state) => state.session.role);
   // A joined player leaves the host's page behind: the menu is a solo game of its own.
@@ -400,8 +399,11 @@ export function EndOfSession() {
                     <th className="num" title="The largest population the realm reached this session">
                       Peak
                     </th>
-                    <th className="num" title="Income per worker and day over the local cost of living, in man-hours">
-                      Real income, mh/day
+                    <th
+                      className="num"
+                      title="Net income per member of the workforce and day, the unemployed included, over the local cost of living, in man-hours"
+                    >
+                      Real net income, mh/day
                     </th>
                     <th className="num" title="Share of the need for necessities people could buy">
                       Necessities
@@ -423,7 +425,7 @@ export function EndOfSession() {
                       <td className="num">{count(realm.areas)}</td>
                       <td className="num">{count(realm.population)}</td>
                       <td className="num">{count(realm.peakPopulation)}</td>
-                      <td className="num">{realm.eliminated ? "—" : fmt(realm.realIncome * hoursPerDay)}</td>
+                      <td className="num">{realm.eliminated ? "—" : fmt(realm.realNetIncome)}</td>
                       <td className="num">{realm.eliminated ? "—" : pct(realm.necessitySatisfaction)}</td>
                       <td className="num">{count(realm.soldiers)}</td>
                     </tr>

@@ -1,10 +1,16 @@
 // The selected areas, one or several (specification §10, Selection): their figures and defense in one grid, a
 // sortable market table and the depot. Explanations show on hover.
 import { useState } from "react";
-import { type ConquestEstimate, conquestEstimate, type MarketRow, selectionSummary } from "../../state/selectors";
+import {
+  type ConquestEstimate,
+  conquestEstimate,
+  type MarketRow,
+  type SelectionSummary,
+  selectionSummary,
+} from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { count, fmt, pct, Section, Stat, Swatch } from "../components";
-import { areaName, IncomeStats, type PanelProps, usePublicView } from "./common";
+import { areaName, type PanelProps, usePublicView } from "./common";
 import { Depots } from "./Depots";
 
 export function AreaPanel({ onOpen }: PanelProps) {
@@ -25,7 +31,6 @@ function SelectionView({ areas, onOpen }: { areas: number[] } & PanelProps) {
     return <p className="muted">No area selected: tap one on the map, or paint several with the Brush.</p>;
 
   const summary = selectionSummary(data, snapshot, table, areas);
-  const hoursPerDay = data.config.economy.hoursPerWorkerDay;
   const partial = summary.withDetail < areas.length;
   const coverage = partial ? ` Over the ${summary.withDetail} of ${areas.length} areas you see in detail.` : "";
   // The foreign area that takes the most to conquer, and the strongest defense.
@@ -83,7 +88,7 @@ function SelectionView({ areas, onOpen }: { areas: number[] } & PanelProps) {
         )}
         <div className="stats">
           <Stat label="Population" value={count(summary.population)} testId="population" />
-          <IncomeStats summary={summary} hoursPerDay={hoursPerDay} several={single === null} />
+          <IncomeStats summary={summary} several={single === null} />
           <Stat
             label="Necessities met"
             value={pct(summary.necessitySatisfaction)}
@@ -150,6 +155,43 @@ function SelectionView({ areas, onOpen }: { areas: number[] } & PanelProps) {
 
       <MarketTable areas={areas} onOpen={onOpen} />
       <Depots areas={areas} />
+    </>
+  );
+}
+
+/**
+ * Gross, net and real net income, then the cost of living: what the workforce earns, what it keeps, and what that
+ * buys here (specification §10, Income).
+ */
+function IncomeStats({ summary, several }: { summary: SelectionSummary; several: boolean }) {
+  const each = " Per member of the workforce and day, the unemployed included, in man-hours.";
+  const mean = several ? " Population-weighted mean over the areas." : "";
+  return (
+    <>
+      <Stat
+        label="Avg gross income"
+        value={`${fmt(summary.grossIncome)} mh/day`}
+        testId="gross-income"
+        title={`Value added by private workers before production tax, plus the wages of government jobs.${each}${mean}`}
+      />
+      <Stat
+        label="Avg net income"
+        value={`${fmt(summary.netIncome)} mh/day`}
+        testId="net-income"
+        title={`Gross income less production, consumption and head taxes, plus the subsidies and allowances paid.${each}${mean}`}
+      />
+      <Stat
+        label="Avg real net income"
+        value={`${fmt(summary.realNetIncome)} mh/day`}
+        testId="real-net-income"
+        title={`What the net income buys at labor-value prices: the net income over the cost of living.${mean}`}
+      />
+      <Stat
+        label="Cost of living"
+        value={summary.costOfLiving === null ? "—" : `×${fmt(summary.costOfLiving)}`}
+        testId="cost-of-living"
+        title={`The local price of a typical basket of needs over its labor value: ×1 when needs cost what they take to make, more where they are dear.${mean}`}
+      />
     </>
   );
 }

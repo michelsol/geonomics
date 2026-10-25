@@ -26,7 +26,7 @@ export function Guide() {
             jobs, recruits and standing orders apply to your areas in the selection, shown in the bar, or to your whole
             realm when it holds none of them. Each panel colors the map with what it is about: realms for Area, Armies,
             Diplomacy and Game; the price of a good for Goods; population; necessities met for Needs; terrain striped
-            where a resource is found for Resources; real incomes for Policies; employment for Jobs. Goods and
+            where a resource is found for Resources; real net incomes for Policies; employment for Jobs. Goods and
             Population can also draw goods and people on the move. Dashed lines are sea routes, dotted lines air routes.
           </p>
         </section>

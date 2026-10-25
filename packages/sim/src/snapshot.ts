@@ -2,7 +2,9 @@
 // snapshots of the dynamic state as seen by one government. Typed arrays are Float32Array, and every value is
 // structured-clone friendly, so snapshots cross a worker boundary as transferables or go through msgpack unchanged.
 import type { WorldConfig } from "./config";
+import { incomeOf } from "./tick/labor";
 import { lastMigration, lastNaturalChange } from "./tick/population";
+import { scratchOf } from "./tick/scratch";
 import { lastTradeFlows, lastTradeTonnage } from "./tick/trade";
 import type {
   AreaId,
@@ -92,6 +94,7 @@ export interface AreaDetail {
   naturalCapacity: Float32Array; // current extraction capacity per day, after depletion
   needDemanded: Float32Array; // per need: need units the population wanted in the last tick
   needConsumed: Float32Array; // per need: need units it consumed, substitutes included
+  wage: Float32Array; // per good: value added per private worker-day after production tax, in man-hours
 }
 
 export interface Snapshot {
@@ -102,6 +105,9 @@ export interface Snapshot {
     population: Float32Array;
     naturalChange: Float32Array; // people per day gained by growth, or lost to starvation when negative
     wageLevel: Float32Array;
+    // per member of the workforce and day, the unemployed included, in man-hours; NaN when empty (section 10, Income)
+    grossIncome: Float32Array;
+    netIncome: Float32Array;
     employmentRate: Float32Array; // share of the workforce with a private or government job; NaN when empty
     satisfaction: Float32Array;
     necessitySatisfaction: Float32Array;
@@ -186,6 +192,8 @@ export function buildSnapshot(
     population: new Float32Array(n),
     naturalChange: new Float32Array(n),
     wageLevel: new Float32Array(n),
+    grossIncome: new Float32Array(n),
+    netIncome: new Float32Array(n),
     employmentRate: new Float32Array(n),
     satisfaction: new Float32Array(n),
     necessitySatisfaction: new Float32Array(n),
@@ -199,12 +207,17 @@ export function buildSnapshot(
   const natural = lastNaturalChange(world);
   const days = world.config.pace.gameDaysPerTick;
   const { workforceShare } = world.config.economy;
+  const scratch = scratchOf(world);
+  const wages = new Float64Array(world.goods.length);
   for (const area of world.areas) {
     const i = area.id;
     areas.owner[i] = area.owner ?? -1;
     areas.population[i] = area.population;
     areas.naturalChange[i] = (natural[i] ?? 0) / days;
     areas.wageLevel[i] = area.wageLevel;
+    const income = incomeOf(world, area, scratch, wages);
+    areas.grossIncome[i] = income.gross;
+    areas.netIncome[i] = income.net;
     const workforce = area.population * workforceShare;
     areas.employmentRate[i] =
       workforce > 0 ? Math.min(1, Math.max(0, 1 - area.unemployedWorkers / workforce)) : Number.NaN;
@@ -295,6 +308,8 @@ function visibleAreas(world: World, owned: readonly AreaId[]): AreaId[] {
 
 function detailOf(world: World, id: AreaId): AreaDetail {
   const area = world.areas[id] as World["areas"][number];
+  const wages = new Float64Array(world.goods.length);
+  incomeOf(world, area, scratchOf(world), wages);
   return {
     area: id,
     savings: area.savings,
@@ -309,6 +324,7 @@ function detailOf(world: World, id: AreaId): AreaDetail {
     naturalCapacity: Float32Array.from(area.naturalCapacity),
     needDemanded: Float32Array.from(area.needDemanded),
     needConsumed: Float32Array.from(area.needConsumed),
+    wage: Float32Array.from(wages),
   };
 }
 
@@ -355,6 +371,7 @@ export function snapshotTransferables(snapshot: Snapshot): ArrayBuffer[] {
       detail.naturalCapacity,
       detail.needDemanded,
       detail.needConsumed,
+      detail.wage,
     ])
       add(view);
   }

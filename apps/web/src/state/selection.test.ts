@@ -58,12 +58,10 @@ describe("splitting by population", () => {
 });
 
 describe("selection summary", () => {
-  it("sums people and weights wages by population, with trade inside the selection cancelling out", () => {
+  it("sums people and weights incomes by population, with trade inside the selection cancelling out", () => {
     const { world, data } = setup();
     const own = world.governments[0]?.ownedAreas.slice(0, 2) as [number, number];
     const [a, b] = own.map((id) => world.areas[id]) as [World["areas"][number], World["areas"][number]];
-    a.wageLevel = 1;
-    b.wageLevel = 2;
     a.population = 1000;
     b.population = 3000;
     a.imported[0] = 5; // 5 units of good 0 go from b to a
@@ -71,9 +69,11 @@ describe("selection summary", () => {
     b.exported[0] = 5;
     b.imported[0] = 0;
     const snapshot = buildSnapshot(world, 0);
+    snapshot.areas.grossIncome[a.id] = 1;
+    snapshot.areas.grossIncome[b.id] = 2;
     const summary = selectionSummary(data, snapshot, encodePriceTable(world), own);
     expect(summary.population).toBe(4000);
-    expect(summary.wageLevel).toBeCloseTo((1 * 1000 + 2 * 3000) / 4000, 5);
+    expect(summary.grossIncome).toBeCloseTo((1 * 1000 + 2 * 3000) / 4000, 5);
     expect(summary.withDetail).toBe(2);
     expect(summary.market[0]?.trade).toBeCloseTo(0, 5);
     expect(summary.owners).toEqual([{ owner: 0, areas: 2 }]);

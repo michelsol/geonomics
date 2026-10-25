@@ -61,15 +61,16 @@ test("a solo game runs, pauses, and takes commands", async ({ page }) => {
 
   await expect(page.getByTestId("policies").locator("th", { hasText: "Only in" })).toHaveCount(0);
 
-  // A realm head tax shows up as the tax in force.
+  // A realm head tax shows up among the policies.
+  const headTax = page.getByTestId("policies").locator("tr", { hasText: "Head tax" });
   await page.getByLabel("Policy", { exact: true }).selectOption("headTaxPerPersonPerDay");
   await page.getByLabel("Policy value").fill("0.25");
   await page.getByRole("button", { name: "Set", exact: true }).click();
-  await expect(page.getByTestId("head-tax")).toContainText("0.25");
+  await expect(headTax).toContainText("0.25 mh");
   // A negative head tax is an allowance paid to everyone.
   await page.getByLabel("Policy value").fill("-1");
   await page.getByRole("button", { name: "Set", exact: true }).click();
-  await expect(page.getByTestId("head-tax")).toContainText("-1 mh");
+  await expect(headTax).toContainText("-1 mh");
 
   // The Jobs tab shows how the workforce is employed.
   await openTab(page, "Jobs");
@@ -192,12 +193,14 @@ test("each panel shows its map layer, and flows when its checkbox is on", async 
 
   await openTab(page, "Jobs");
   await expect(legend).toContainText("Employment rate");
+  await expect(page.getByRole("columnheader", { name: "Wage/day" })).toBeVisible();
   await openTab(page, "Policies");
-  await expect(legend).toContainText("Real income");
-  for (const id of ["policy-income", "policy-real-income"]) await expect(page.getByTestId(id)).toContainText("mh/day");
-  await expect(page.getByTestId("policy-cost-of-living")).toHaveText(/^×[\d.]+$/);
-  await expect(page.getByTestId("policy-savings")).toContainText("mh");
+  await expect(legend).toContainText("Real net income");
   await openTab(page, "Area");
+  for (const id of ["gross-income", "net-income", "real-net-income"]) {
+    await expect(page.getByTestId(id)).toContainText("mh/day");
+  }
+  await expect(page.getByTestId("cost-of-living")).toHaveText(/^×[\d.]+$/);
   await expect(flowLegend).toHaveCount(0);
   await expect(legend).toHaveCount(0);
 });
@@ -243,10 +246,10 @@ test("a selection with none of your areas has no action target", async ({ page }
   await expect(page.getByTestId("employment-bar")).toHaveCount(0);
   await openTab(page, "Policies");
   await expect(page.getByTestId("no-own-area").first()).toBeVisible();
-  await expect(page.getByTestId("policy-income")).toHaveCount(0);
+  await expect(page.getByLabel("Policy", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Clear", exact: true }).click();
   await expect(target).toHaveText("Actions: your whole realm");
-  await expect(page.getByTestId("policy-income")).toBeVisible();
+  await expect(page.getByLabel("Policy", { exact: true })).toBeVisible();
   await openTab(page, "Jobs");
   await expect(page.getByTestId("employment-bar")).toBeVisible();
 });

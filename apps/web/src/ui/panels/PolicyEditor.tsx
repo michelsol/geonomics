@@ -2,7 +2,7 @@
 // applies to the selection's own areas, as an override in each, or realm-wide when the selection holds none or all.
 import type { PolicyName, PolicySetting } from "@geonomics/sim";
 import { useEffect, useState } from "react";
-import { actionTarget, policiesInForce } from "../../state/selectors";
+import { actionTarget } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { fmt, NumberField, Select } from "../components";
 import { areaName, goodOptions, NoOwnArea, useSend, useView } from "./common";
@@ -43,14 +43,12 @@ export function PolicyEditor() {
   const targetKey = target.realm ? "realm" : targetAreas.join(",");
   const perGood = policy !== "headTaxPerPersonPerDay";
   const settingGood = perGood && good !== ALL ? good : null;
-  // The setting in force for exactly this scope, policy and good, so the slider starts at the current level.
-  const valueIn = (settings: PolicySetting[] | undefined) =>
-    settings?.find((s) => s.policy === policy && s.good === settingGood)?.value ?? 0;
-  const values = target.realm
-    ? [valueIn(view?.government.realmPolicies)]
-    : targetAreas.map((a) => valueIn(view?.government.areaStates.find((s) => s.area === a)?.policyOverrides));
-  const current = values[0] ?? 0;
-  const varies = values.some((v) => v !== current);
+  // The setting for exactly this scope (for several areas, the first one's), policy and good, so the slider starts at
+  // the current level.
+  const settings: PolicySetting[] | undefined = target.realm
+    ? view?.government.realmPolicies
+    : view?.government.areaStates.find((s) => s.area === targetAreas[0])?.policyOverrides;
+  const current = settings?.find((s) => s.policy === policy && s.good === settingGood)?.value ?? 0;
   const shown = isRate(policy) ? Math.round(100 * current * 100) / 100 : current;
   // biome-ignore lint/correctness/useExhaustiveDependencies: refills only when the scope changes, not on every snapshot
   useEffect(() => setValue(shown), [policy, targetKey, settingGood]);
@@ -63,13 +61,6 @@ export function PolicyEditor() {
   const labelOf = (s: PolicySetting) =>
     s.policy === "headTaxPerPersonPerDay" ? policyLabel(s.policy) : `${policyLabel(s.policy)} · ${goodName(s.good)}`;
 
-  const realmHeadTax = government.realmPolicies.find((s) => s.policy === "headTaxPerPersonPerDay")?.value ?? 0;
-  const headTax = target.realm
-    ? realmHeadTax
-    : targetAreas.reduce(
-        (sum, a) => sum + (policiesInForce(government, a, data.goods.length)?.headTaxPerPersonPerDay ?? 0),
-        0,
-      ) / targetAreas.length;
   const overrides = government.areaStates.filter((s) => s.policyOverrides.length > 0);
 
   const setting = (): PolicySetting => ({ policy, good: settingGood, value: isRate(policy) ? value / 100 : value });
@@ -170,25 +161,8 @@ export function PolicyEditor() {
               Set
             </button>
           </div>
-          <div className="muted">
-            In force for this choice:{" "}
-            {varies ? "varies by area" : isRate(policy) ? `${fmt(100 * current)}%` : `${fmt(current)} mh`}
-          </div>
-          <div className="row muted" data-testid="head-tax">
-            Head tax in force{" "}
-            {target.realm
-              ? "across the realm"
-              : targetAreas.length > 1
-                ? "in the selection, on average"
-                : `in ${areaName(data, targetAreas[0] as number)}`}
-            : {fmt(headTax)} mh per person per day
-          </div>
         </>
       )}
-      <p className="hint">
-        A setting for one good beats one for all goods; a setting for one area beats the realm's. Negative production
-        taxes are subsidies.
-      </p>
     </div>
   );
 }

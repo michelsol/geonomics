@@ -39,7 +39,7 @@ export const DIVERGING = [0x2c6bb0, 0x8db8e0, 0xf2f2f2, 0xeba07e, 0xc0392b];
 export const SATISFACTION = [0xc0392b, 0xe6a03c, 0xe8d85a, 0x6fbf5a, 0x2e8b57];
 
 /**
- * A value against the map's own values (a good's prices, real incomes): white at the median, full blue at the lowest
+ * A value against the map's own values (a good's prices, real net incomes): white at the median, full blue at the lowest
  * and full red at the highest, on a log scale on each side; a side with no spread stays white.
  */
 export function spreadColor(
@@ -53,6 +53,11 @@ export function spreadColor(
   }
   const spread = Math.log(high / median);
   return ramp(DIVERGING, spread > 0 ? 0.5 + (0.5 * Math.log(value / median)) / spread : 0.5);
+}
+
+/** Real net income against the map's own (see spreadColor); an income of zero or less is the lowest, not grey. */
+export function incomeColor(value: number, scale: { low: number; median: number; high: number }): number {
+  return Number.isFinite(value) && value <= 0 ? ramp(DIVERGING, 0) : spreadColor(value, scale);
 }
 
 /**

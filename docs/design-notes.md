@@ -386,7 +386,11 @@ The prices layer first colored a good's price against its labor value, at full c
 
 ### Income and real income
 
-Starving areas could show high wages: food is dear, so a worker's output is worth many man-hours, which buy little locally. The income map therefore shows real income, income over the local cost of living, and a test run confirmed that starving areas then come out the poorest (a real income a sixth of the median or less). The interface calls the wage level income: with no capital or profits, value added per worker is all a worker earns. Jobs and Armies keep the nominal income, since workers compare government wage offers and soldiers their pay with it.
+Starving areas could show high wages: food is dear, so a worker's output is worth many man-hours, which buy little locally. The income map therefore shows real income, income over the local cost of living, and a test run confirmed that starving areas then come out the poorest (a real income a sixth of the median or less). Jobs and Armies keep the nominal average private wage, since workers compare government wage offers and soldiers their pay with it.
+
+### Gross, net and real net income
+
+The wage level counts only employed private workers and ignores taxes, so an area with mass unemployment or a crushing head tax still looked well off. Gross and net income are per member of the workforce, the unemployed earning nothing, and net income takes off what the government takes and adds what it pays. The host computes both, since the taxes and job wages behind them are private to each realm, and sends them as public figures like the wage level. Private value added uses the same marginal output as the wage level, so the mean of the per-job wages is the wage level and the figures agree with what drives demand and labor. Tariffs come out of the trade margin and already show in prices and the cost of living. Soldiers' pay goes to wherever the army stands, and soldiers are not part of the area's workforce, so neither is counted. Subsidies and allowances count as far as the treasury paid them.
 
 ### No stand-in for a foreign selection
 

@@ -81,8 +81,8 @@ describe("demography", () => {
   });
 });
 
-describe("cost of living and real income", () => {
-  it("is 1 at labor-value prices, rises with dear food, and divides income into real income", () => {
+describe("cost of living and real net income", () => {
+  it("is 1 at labor-value prices, rises with dear food, and divides net income into real net income", () => {
     const { world } = setup();
     for (const area of world.areas) for (const good of world.goods) area.price[good.id] = good.laborValue;
     const data = buildStaticData(world);
@@ -96,7 +96,8 @@ describe("cost of living and real income", () => {
     expect(living).toBeLessThan(2);
     const summary = selectionSummary(data, buildSnapshot(world, 0), table, [0]);
     expect(summary.costOfLiving).toBeCloseTo(living, 6);
-    expect(summary.realIncomeLevel).toBeCloseTo(summary.wageLevel / living, 6);
+    expect(summary.netIncome).toBeGreaterThan(0);
+    expect(summary.realNetIncome).toBeCloseTo(summary.netIncome / living, 6);
     expect(selectionSummary(data, buildSnapshot(world, 0), null, [0]).costOfLiving).toBeNull();
   });
 });

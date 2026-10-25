@@ -90,12 +90,13 @@ export function costsOfLiving(data: StaticData, table: Uint16Array): Float32Arra
   return costs;
 }
 
-/** Real income level of every area: income over the cost of living, or the income itself without a price table. */
-export function realIncomes(data: StaticData, snapshot: Snapshot, table: Uint16Array | null): Float32Array {
+/**
+ * Real net income of every area, per member of the workforce and day: net income over the cost of living, or the net
+ * income itself without a price table. NaN for an empty area.
+ */
+export function realNetIncomes(data: StaticData, snapshot: Snapshot, table: Uint16Array | null): Float32Array {
   const living = table ? costsOfLiving(data, table) : null;
-  return Float32Array.from(snapshot.areas.wageLevel, (wage, area) =>
-    (snapshot.areas.population[area] as number) > 0 ? wage / (living ? (living[area] as number) : 1) : Number.NaN,
-  );
+  return Float32Array.from(snapshot.areas.netIncome, (net, area) => net / (living ? (living[area] as number) : 1));
 }
 
 /** Lowest, median and highest of some values, leaving out those that are not finite and positive. */
@@ -186,6 +187,7 @@ export function conquestEstimate(data: StaticData, snapshot: Snapshot, area: num
 
 export interface Employment {
   privateWorkers: Float64Array; // per good
+  wage: Float64Array; // per good: value added per private worker-day, weighted by private workers
   producedPerDay: Float64Array; // per good, private and government output
   privateTotal: number;
   government: number;
@@ -202,6 +204,7 @@ export function employmentOf(
   const goods = data.goods.length;
   const result: Employment = {
     privateWorkers: new Float64Array(goods),
+    wage: new Float64Array(goods),
     producedPerDay: new Float64Array(goods),
     privateTotal: 0,
     government: 0,
@@ -214,6 +217,7 @@ export function employmentOf(
       for (let g = 0; g < goods; g++) {
         const workers = detail.privateWorkers[g] as number;
         result.privateWorkers[g] = (result.privateWorkers[g] as number) + workers;
+        result.wage[g] = (result.wage[g] as number) + workers * (detail.wage[g] as number);
         result.privateTotal += workers;
         result.producedPerDay[g] = (result.producedPerDay[g] as number) + (detail.produced[g] as number) / days;
       }
@@ -221,6 +225,10 @@ export function employmentOf(
     }
     const state = government.areaStates.find((s) => s.area === area);
     for (const job of state?.jobs ?? []) result.government += job.workers;
+  }
+  for (let g = 0; g < goods; g++) {
+    const workers = result.privateWorkers[g] as number;
+    result.wage[g] = workers > 0 ? (result.wage[g] as number) / workers : 0;
   }
   return result;
 }
@@ -321,8 +329,10 @@ export interface SelectionSummary {
   areas: number;
   owners: { owner: number; areas: number }[]; // -1: neutral; most areas first
   population: number;
-  wageLevel: number; // means weighted by population: income per worker-hour
-  realIncomeLevel: number; // income over the cost of living; the income itself without a price table
+  // Means weighted by population over the areas with a workforce, per member of the workforce and day, in man-hours
+  grossIncome: number;
+  netIncome: number;
+  realNetIncome: number; // net income over the cost of living; the net income itself without a price table
   costOfLiving: number | null; // null without a price table
   satisfaction: number;
   necessitySatisfaction: number;
@@ -352,8 +362,10 @@ export function selectionSummary(
   const days = data.config.pace.gameDaysPerTick;
   const market: MarketRow[] = data.goods.map(() => ({ price: 0, stock: 0, made: 0, used: 0, trade: 0 }));
   let population = 0;
-  let wage = 0;
-  let realIncome = 0;
+  let earning = 0; // people in the areas with a workforce
+  let gross = 0;
+  let net = 0;
+  let realNet = 0;
   let living = 0;
   let satisfaction = 0;
   let necessities = 0;
@@ -367,10 +379,14 @@ export function selectionSummary(
     owners.set(owner, (owners.get(owner) ?? 0) + 1);
     const people = snapshot.areas.population[area] as number;
     population += people;
-    const areaWage = snapshot.areas.wageLevel[area] as number;
+    const areaNet = snapshot.areas.netIncome[area] as number;
     const areaLiving = table ? costOfLiving(data, table, area) : 1;
-    wage += people * areaWage;
-    realIncome += (people * areaWage) / areaLiving;
+    if (Number.isFinite(areaNet)) {
+      earning += people;
+      gross += people * (snapshot.areas.grossIncome[area] as number);
+      net += people * areaNet;
+      realNet += (people * areaNet) / areaLiving;
+    }
     living += people * areaLiving;
     satisfaction += people * (snapshot.areas.satisfaction[area] as number);
     necessities += people * (snapshot.areas.necessitySatisfaction[area] as number);
@@ -400,12 +416,14 @@ export function selectionSummary(
   const count = Math.max(areas.length, 1);
   for (const row of market) row.price /= count;
   const weight = population > 0 ? 1 / population : 0;
+  const perEarner = earning > 0 ? 1 / earning : 0;
   return {
     areas: areas.length,
     owners: [...owners].map(([owner, n]) => ({ owner, areas: n })).sort((a, b) => b.areas - a.areas),
     population,
-    wageLevel: wage * weight,
-    realIncomeLevel: realIncome * weight,
+    grossIncome: gross * perEarner,
+    netIncome: net * perEarner,
+    realNetIncome: realNet * perEarner,
     costOfLiving: table && population > 0 ? living * weight : null,
     satisfaction: satisfaction * weight,
     necessitySatisfaction: necessities * weight,
@@ -525,7 +543,7 @@ export interface RealmResult {
   areas: number;
   population: number;
   peakPopulation: number;
-  realIncome: number; // income level over the cost of living, weighted by population; nominal without a price table
+  realNetIncome: number; // per member of the workforce and day, weighted by population; nominal without a price table
   necessitySatisfaction: number; // weighted by population
   soldiers: number; // in the realm's armies
   eliminated: boolean;
@@ -548,21 +566,22 @@ export function realmResults(
     areas: 0,
     population: 0,
     peakPopulation: Math.max(peaks[government.id] ?? 0, government.population),
-    realIncome: 0,
+    realNetIncome: 0,
     necessitySatisfaction: 0,
     soldiers: 0,
     eliminated: government.isEliminated,
     ai: government.ai,
     personality: government.personality,
   }));
-  const { owner, population, wageLevel, necessitySatisfaction } = snapshot.areas;
+  const { owner, population, netIncome, necessitySatisfaction } = snapshot.areas;
   for (let area = 0; area < owner.length; area++) {
     const result = results[owner[area] as number];
     if (!result) continue;
     const people = population[area] as number;
     result.areas++;
     result.population += people;
-    result.realIncome += (people * (wageLevel[area] as number)) / (living ? (living[area] as number) : 1);
+    const net = netIncome[area] as number;
+    if (Number.isFinite(net)) result.realNetIncome += (people * net) / (living ? (living[area] as number) : 1);
     result.necessitySatisfaction += people * (necessitySatisfaction[area] as number);
   }
   for (const army of snapshot.armies) {
@@ -571,7 +590,7 @@ export function realmResults(
   }
   for (const result of results) {
     if (result.population <= 0) continue;
-    result.realIncome /= result.population;
+    result.realNetIncome /= result.population;
     result.necessitySatisfaction /= result.population;
   }
   return results.sort((a, b) => Number(a.eliminated) - Number(b.eliminated) || b.population - a.population);

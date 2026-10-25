@@ -58,7 +58,7 @@ export function ArmiesPanel() {
           <span className="muted">{places.length > 0 ? "soldiers at" : "Soldiers are paid"}</span>
           <span
             className="row"
-            title="Paid to every soldier of the realm. Soldiers desert when paid less than the realm's average income, or when the treasury cannot pay them."
+            title="Paid to every soldier of the realm. Soldiers desert when paid less than the realm's average private wage, or when the treasury cannot pay them."
           >
             <NumberField
               label="Soldier wage"
@@ -84,7 +84,7 @@ export function ArmiesPanel() {
           <Stat label="Soldiers" value={count(soldiers)} />
           <Stat label="Pay per day" value={`${fmt(bill)} mh`} testId="army-bill" />
           <Stat
-            label="Realm average income"
+            label="Realm average private wage"
             value={`${fmt(averageWage)} mh/day`}
             title="Weighted by population. Soldiers paid less than this desert."
           />

@@ -32,6 +32,49 @@ export function computeValueAdded(world: World, area: Area, scratch: Scratch, ou
   return workers > EPSILON ? weighted / workers : area.wageLevel;
 }
 
+/**
+ * Gross and net income of an area per member of the workforce and day, the unemployed included (specification §10,
+ * Income), with the wage of each private job, its value added per worker-day after production tax, into `wages`.
+ * Gross income is private value added before production tax plus the government wages paid; net income takes off
+ * production, consumption and head taxes, and adds the subsidies and allowances paid. NaN without a workforce.
+ */
+export function incomeOf(
+  world: World,
+  area: Area,
+  scratch: Scratch,
+  wages: Float64Array,
+): { gross: number; net: number } {
+  const { hoursPerWorkerDay, workforceShare } = world.config.economy;
+  const days = world.config.pace.gameDaysPerTick;
+  const workforce = area.population * workforceShare;
+  computeValueAdded(world, area, scratch, wages);
+  const policies = policiesOf(world, area, scratch);
+  const marginal = scratch.marginalOutput[area.id] as Float64Array;
+  const owner = area.owner === null ? undefined : world.governments[area.owner];
+  const paidShare = owner ? (scratch.paidShare[owner.id] ?? 1) : 1;
+  // A tax is owed in full; a subsidy or allowance is paid as far as the treasury could.
+  const paid = (tax: number) => (tax > 0 ? tax : tax * paidShare);
+  let gross = 0;
+  let productionTax = 0;
+  let consumptionTax = 0;
+  for (const good of world.goods) {
+    const g = good.id;
+    wages[g] = (wages[g] as number) * hoursPerWorkerDay;
+    const workers = area.privateWorkers[g] as number;
+    const tax = (policies.productionTaxRate[g] as number) * (area.smoothedPrice[g] as number) * (marginal[g] as number);
+    gross += workers * ((wages[g] as number) + tax);
+    productionTax += workers * tax;
+    consumptionTax +=
+      ((policies.consumptionTaxRate[g] as number) * (area.consumed[g] as number) * (area.price[g] as number)) / days;
+  }
+  const state = owner?.areaStates.get(area.id);
+  for (const job of state?.jobs ?? []) gross += job.workers * (state?.wageOffer ?? 0) * hoursPerWorkerDay * paidShare;
+  if (workforce <= 0) return { gross: Number.NaN, net: Number.NaN };
+  const net =
+    gross - paid(productionTax) - paid(consumptionTax) - paid(policies.headTaxPerPersonPerDay * area.population);
+  return { gross: gross / workforce, net: net / workforce };
+}
+
 /** Workers needed to produce `unitsPerDay` of a good in an area; 0 when the area cannot produce it. */
 export function workersFor(
   world: World,
