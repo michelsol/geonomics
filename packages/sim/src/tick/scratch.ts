@@ -1,6 +1,6 @@
 // Reusable per-world buffers for the tick, so phases never allocate in the hot path. They hold only values
 // recomputed every tick, so they are kept outside the serializable World.
-import { WAGE_BAND_COUNT } from "../bands";
+import { CONSUMER_GROUP_COUNT, WAGE_BAND_COUNT } from "../bands";
 import { neutralPolicies } from "../government";
 import type { Area, AreaId, DemandTier, GoodId, GovernmentId, Need, ResolvedPolicies, World } from "../types";
 
@@ -30,6 +30,10 @@ export interface Scratch {
   groupPeople: Float64Array; // per consumer group (wage bands, then the unemployed), one area at a time
   groupLogPower: Float64Array; // per consumer group: log of its purchasing power
   groupBudget: Float64Array; // per consumer group: money left to spend this tick
+  groupNeedBought: Float64Array; // per consumer group and need, one area at a time: need units bought this tick
+  groupNecessityWanted: Float64Array; // per consumer group, one area at a time: necessities wanted, at reference value
+  groupShare: Float64Array; // per area and consumer group: share of the population, as of the last consumption phase
+  groupNecessityMet: Float64Array; // per area and consumer group: share of its necessities met, likewise
   positiveGapEdges: Float64Array[]; // per area, per good: edges where exporting the good pays this tick
   positiveGapImports: Float64Array[]; // per area, per good: edges where importing the good pays this tick
   exportRate: Float64Array[]; // per area, per good: sum of the area's outgoing shipping rates, units per day
@@ -126,6 +130,10 @@ function createScratch(world: World, previous: Scratch | undefined): Scratch {
     groupPeople: new Float64Array(WAGE_BAND_COUNT + 1),
     groupLogPower: new Float64Array(WAGE_BAND_COUNT + 1),
     groupBudget: new Float64Array(WAGE_BAND_COUNT + 1),
+    groupNeedBought: new Float64Array(CONSUMER_GROUP_COUNT * world.needs.length),
+    groupNecessityWanted: new Float64Array(CONSUMER_GROUP_COUNT),
+    groupShare: carried(previous?.groupShare, areaCount * CONSUMER_GROUP_COUNT),
+    groupNecessityMet: carried(previous?.groupNecessityMet, areaCount * CONSUMER_GROUP_COUNT),
     positiveGapEdges: world.areas.map(() => perGood()),
     positiveGapImports: world.areas.map(() => perGood()),
     exportRate: world.areas.map(() => perGood()),

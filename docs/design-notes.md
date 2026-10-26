@@ -501,6 +501,21 @@ Deaths were first linear in the unmet share, at `0.003 × (1 − s)` a day. The 
 
 On 300 areas over 40 years with squared deaths, population grows from 2.99 to 7.56 million and is nearly level by year 40 (6.15 million from year 32 with linear deaths), with necessities met at 0.82, food at 4.3 times its labor value and 43% unemployment. Without realms, the 60-area map settles at about 1.31 million from year 42 (1.05 million with linear deaths), with 54% unemployment.
 
+### Deaths by consumer group
+
+Squared deaths were first taken from the area's mean shortfall. Since each group buys with its own income, hunger lands on the unemployed and the low-paid, and the square of a mean understates it: with 30% of the people missing 60% of their necessities and the rest fed, the area's mean shortfall of 18% killed about 3.5% a year, where those people alone would lose about 11.8%. Each group now dies of its own shortfall, the stock shortage shared in proportion to what each group bought, and the Needs panel shows every group's share of the people and its necessities met.
+
+| 60 areas, 3 peaceful realms, 60 years | Area-wide squared deaths | Deaths by group |
+| --- | --- | --- |
+| Population, settled | about 1.40 million, from year 40 | about 1.30 million, from year 36 |
+| Necessities met, settled | 0.818 | 0.869 |
+| Births and deaths, settled | about 51,000 a year each | about 47,500 a year each |
+| Food price | 6.1× labor value | 5.9× labor value |
+| Unemployment | 44% | 40% |
+| Satisfaction | about 0.52 | about 0.59 |
+
+On 300 areas, population is nearly level at 7.12 million by year 38, with necessities met at 0.87; without realms, the 60-area map settles at about 1.22 million with 51% unemployment. With the regular 180-day warm-up, workers earning under 0.5 mh an hour are under 1% of the people. A game warmed up for only 10 days, as the end-to-end tests do, starts with a quarter of its people in jobs that add almost nothing and buy almost no food; they move to better jobs or unemployment within about 250 days.
+
 ### An income tax instead of the production tax
 
 The production tax fell on the gross value of output, inputs included, so it compounded along supply chains, and with no capital or profit in the model it was a tax on the same wages an income tax takes. It is gone. The income tax sets a rate per wage band (negative tops wages up), and its row for the unemployed is an amount per unemployed worker (negative: a benefit), which also raises the wage workers ask for by half the benefit. The consumption tax already taxes final purchases per good, as a value-added tax does. The AI taxes through the income tax on all bands, counting its base from the public gross income; its rates stay those of the personalities, and the probes show treasuries that still pay for infrastructure.

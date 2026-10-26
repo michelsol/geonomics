@@ -53,6 +53,7 @@ test("a solo game runs, pauses, and takes commands", async ({ page }) => {
   await page.getByRole("button", { name: "Clear", exact: true }).click();
   await expect(page.getByTestId("action-target")).toHaveText("Actions: your whole realm");
   await page.getByLabel("Income tax · all bands level").fill("10");
+  await expect(page.getByLabel("Income tax · under 0.5 mh/h level")).toHaveValue("10"); // every band follows
   await expect(page.getByTestId("policies")).toContainText("Income tax · all bands");
   await expect(page.getByTestId("policies")).toContainText("10%");
 
@@ -191,6 +192,9 @@ test("each panel shows its map layer, and flows when its checkbox is on", async 
   await openTab(page, "Needs");
   await expect(legend).toContainText("Necessities met");
   await expect(page.getByTestId("needs").locator("tbody tr").first()).toBeVisible();
+  const groups = page.getByTestId("consumer-groups").locator("tbody tr");
+  await expect(groups).toHaveCount(5); // the four wage bands and the unemployed
+  await expect(groups.last()).toContainText("Unemployed");
 
   await openTab(page, "Resources");
   await expect(legend).toContainText("Natural capacity of");

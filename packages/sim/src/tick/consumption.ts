@@ -1,5 +1,5 @@
 // Phase 3: consumption (specification §4, Consumption).
-import { WAGE_BAND_COUNT } from "../bands";
+import { CONSUMER_GROUP_COUNT, WAGE_BAND_COUNT } from "../bands";
 import { clamp, EPSILON } from "../math";
 import type { Area, ResolvedPolicies, World } from "../types";
 import { wageBands } from "./labor";
@@ -48,7 +48,10 @@ export function planDemand(world: World, area: Area, scratch: Scratch): void {
   const consumptionTax = policies.consumptionTaxRate;
   const share = scratch.weights;
   const unitPrice = scratch.values;
-  const { groupPeople: people, groupLogPower: logPower, groupBudget: budget } = scratch;
+  const { groupPeople: people, groupLogPower: logPower, groupBudget: budget, groupNeedBought: needBought } = scratch;
+  const necessityWanted = scratch.groupNecessityWanted;
+  const needCount = world.needs.length;
+  necessityWanted.fill(0);
 
   // Groups: the wage bands, then the unemployed. Every group owes the head tax for its people.
   wageBands(world, area, scratch);
@@ -93,13 +96,17 @@ export function planDemand(world: World, area: Area, scratch: Scratch): void {
     const logPrice = need.priceElasticity * Math.log(need.referenceUnitPrice / price);
     let wanted = 0;
     let bought = 0;
-    for (let index = 0; index <= WAGE_BAND_COUNT; index++) {
+    for (let index = 0; index < CONSUMER_GROUP_COUNT; index++) {
       const groupPeople = people[index] as number;
+      needBought[index * needCount + need.id] = 0;
       if (groupPeople <= 0) continue;
       const groupWanted =
         groupPeople * perPerson * Math.exp(logPrice + need.wealthElasticity * (logPower[index] as number));
       const groupBought = Math.min(groupWanted, (budget[index] as number) / price);
       budget[index] = Math.max(0, (budget[index] as number) - groupBought * price);
+      needBought[index * needCount + need.id] = groupBought;
+      if (need.tier === "necessity")
+        necessityWanted[index] = (necessityWanted[index] as number) + groupWanted * need.referenceUnitPrice;
       wanted += groupWanted;
       bought += groupBought;
     }
@@ -110,7 +117,8 @@ export function planDemand(world: World, area: Area, scratch: Scratch): void {
 
 /**
  * Consumes what `planDemand` left in `area.demanded` from stock, moving what a good lacks to its substitutes, and
- * measures satisfaction against what was wanted: what a group wanted but could not pay for counts as unmet.
+ * measures satisfaction against what was wanted: what a group wanted but could not pay for counts as unmet. Each
+ * group's necessities met is kept too, with a stock shortage shared in proportion to what each group bought.
  */
 function consumeArea(world: World, area: Area, scratch: Scratch): void {
   const { tierWeights } = world.config.economy;
@@ -119,6 +127,11 @@ function consumeArea(world: World, area: Area, scratch: Scratch): void {
   const consumptionTax = policies.consumptionTaxRate;
   const share = scratch.weights;
 
+  const needCount = world.needs.length;
+  const groupMet = scratch.groupNecessityMet;
+  const groupShare = scratch.groupShare;
+  const start = area.id * CONSUMER_GROUP_COUNT;
+  for (let index = 0; index < CONSUMER_GROUP_COUNT; index++) groupMet[start + index] = 0; // necessities got, for now
   area.consumed.fill(0);
   let weightedDemand = 0;
   let weightedConsumption = 0;
@@ -163,7 +176,22 @@ function consumeArea(world: World, area: Area, scratch: Scratch): void {
     if (need.tier === "necessity") {
       necessityDemand += demandValue;
       necessityConsumption += consumedValue;
+      // What each group bought, less its share of what the stock lacked.
+      let bought = 0;
+      for (let index = 0; index < CONSUMER_GROUP_COUNT; index++)
+        bought += scratch.groupNeedBought[index * needCount + need.id] as number;
+      const delivered = bought > EPSILON ? Math.min(1, needConsumed / bought) : 0;
+      for (let index = 0; index < CONSUMER_GROUP_COUNT; index++) {
+        const got = (scratch.groupNeedBought[index * needCount + need.id] as number) * delivered;
+        groupMet[start + index] = (groupMet[start + index] as number) + got * need.referenceUnitPrice;
+      }
     }
+  }
+  for (let index = 0; index < CONSUMER_GROUP_COUNT; index++) {
+    const wanted = scratch.groupNecessityWanted[index] as number;
+    groupMet[start + index] = wanted > EPSILON ? Math.min(1, (groupMet[start + index] as number) / wanted) : 1;
+    groupShare[start + index] =
+      area.population > EPSILON ? (scratch.groupPeople[index] as number) / area.population : 0;
   }
 
   area.satisfaction = weightedDemand > EPSILON ? weightedConsumption / weightedDemand : 1;

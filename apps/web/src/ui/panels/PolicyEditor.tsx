@@ -1,12 +1,12 @@
 // Taxes and price controls (specification §9, Panels): the settings in force, realm-wide and per area, then every
 // policy on one line, so none hides behind a menu. A setting applies to the selection's own areas, as an override in
 // each, or realm-wide when the selection holds none or all.
-import { type PolicyName, type PolicySetting, sameScope, WAGE_BAND_BOUNDARIES, WAGE_BAND_COUNT } from "@geonomics/sim";
+import { type PolicyName, type PolicySetting, sameScope, WAGE_BAND_COUNT } from "@geonomics/sim";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { actionTarget } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { fmt, Section, Select } from "../components";
-import { areaName, goodOptions, NoOwnArea, useSend, useView } from "./common";
+import { areaName, bandName, goodOptions, NoOwnArea, useSend, useView } from "./common";
 
 const ALL = -1; // "All goods" in the good select
 
@@ -39,16 +39,6 @@ const NAMES: Partial<Record<PolicyName, string>> = {
   priceCeiling: "Price ceiling",
   priceFloor: "Price floor",
 };
-
-/** A wage band in words: "under 0.5 mh/h", "0.5–1 mh/h", "over 2 mh/h"; null for every band. */
-export function bandName(band: number | null): string {
-  if (band === null) return "all bands";
-  const low = WAGE_BAND_BOUNDARIES[band - 1];
-  const high = WAGE_BAND_BOUNDARIES[band];
-  if (low === undefined) return `under ${high} mh/h`;
-  if (high === undefined) return `over ${low} mh/h`;
-  return `${low}–${high} mh/h`;
-}
 
 const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
@@ -246,10 +236,27 @@ function toStored(spec: ControlSpec, shown: number): number | null {
   return shown;
 }
 
+type Scope = Pick<PolicySetting, "policy" | "good" | "band">;
+
+/** Whether a setting is for one good or one band rather than all of them. */
+const isNarrow = (setting: Scope) => setting.good !== null || (setting.band ?? null) !== null;
+
+/**
+ * The value in force for a scope, in the order the simulation resolves settings: the area's own setting, the area's
+ * setting for every good or band, then the same two for the realm. Undefined when none applies.
+ */
+function effectiveValue(scope: Scope, realm: readonly PolicySetting[], area: readonly PolicySetting[] | undefined) {
+  const broad = { ...scope, good: null, band: null };
+  const find = (settings: readonly PolicySetting[] | undefined, wanted: Scope) =>
+    settings?.find((s) => sameScope(s, wanted));
+  return (find(area, scope) ?? find(area, broad) ?? find(realm, scope) ?? find(realm, broad))?.value;
+}
+
 /**
  * One policy on one line: its label, a slider with the level on its thumb, applied when released, and arrows for
  * fine steps, applied at once. The value starts at the setting in force for the action target (for several areas,
- * the first one's).
+ * the first one's), whether set for it alone, for every good or band, or for the realm. A setting for every good or
+ * band replaces the target's settings for single goods or bands, so their lines follow it.
  */
 function PolicyControl({ spec, good }: { spec: ControlSpec; good: number }) {
   const view = useView();
@@ -261,10 +268,13 @@ function PolicyControl({ spec, good }: { spec: ControlSpec; good: number }) {
   const targetAreas = target.realm ? [] : target.areas;
   const targetKey = target.realm ? "realm" : targetAreas.join(",");
   const scope = { policy: spec.policy, good: spec.perGood && good !== ALL ? good : null, band: spec.band ?? null };
-  const settings: PolicySetting[] | undefined = target.realm
-    ? view?.government.realmPolicies
-    : view?.government.areaStates.find((s) => s.area === targetAreas[0])?.policyOverrides;
-  const current = toShown(spec, settings?.find((s) => sameScope(s, scope))?.value);
+  const realmSettings = view?.government.realmPolicies ?? [];
+  const areaSettings = (area: number | undefined) =>
+    view?.government.areaStates.find((s) => s.area === area)?.policyOverrides;
+  const current = toShown(
+    spec,
+    effectiveValue(scope, realmSettings, target.realm ? undefined : areaSettings(targetAreas[0])),
+  );
   const [value, setValue] = useState(current);
   // biome-ignore lint/correctness/useExhaustiveDependencies: refills when the scope or the setting changes, not while dragging
   useEffect(() => setValue(current), [targetKey, scope.good, current]);
@@ -272,8 +282,18 @@ function PolicyControl({ spec, good }: { spec: ControlSpec; good: number }) {
   const apply = (shown: number) => {
     const setting: PolicySetting = { policy: spec.policy, good: scope.good, value: toStored(spec, shown) };
     if (scope.band !== null) setting.band = scope.band;
-    if (target.realm) send({ type: "setRealmPolicy", setting });
-    else for (const area of targetAreas) send({ type: "setAreaPolicy", area, setting });
+    const replaced = (settings: readonly PolicySetting[] | undefined) =>
+      isNarrow(scope) ? [] : (settings ?? []).filter((s) => s.policy === spec.policy && isNarrow(s));
+    if (target.realm) {
+      send({ type: "setRealmPolicy", setting });
+      for (const s of replaced(realmSettings)) send({ type: "setRealmPolicy", setting: { ...s, value: null } });
+    } else {
+      for (const area of targetAreas) {
+        send({ type: "setAreaPolicy", area, setting });
+        for (const s of replaced(areaSettings(area)))
+          send({ type: "clearAreaPolicy", area, policy: s.policy, good: s.good, band: s.band ?? null });
+      }
+    }
   };
   // React's onChange fires on every move; the native change event comes once the slider is released.
   const latestApply = useRef(apply);

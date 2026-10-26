@@ -1,7 +1,8 @@
 // Phase 9: births, deaths and migration (specification §4, Population).
+import { CONSUMER_GROUP_COUNT } from "../bands";
 import { EPSILON, fractionPerTick } from "../math";
 import type { Area, Edge, World } from "../types";
-import { scratchOf } from "./scratch";
+import { type Scratch, scratchOf } from "./scratch";
 
 export function runPopulation(world: World): void {
   const scratch = scratchOf(world);
@@ -13,8 +14,7 @@ export function runPopulation(world: World): void {
     // Births at a fixed rate; people lacking necessities die, with the square of the share not met, so small
     // shortfalls kill few and famine many. The population settles where the two match.
     const birthRate = p.birthRatePerDay;
-    const unmet = Math.max(0, 1 - area.necessitySatisfaction);
-    const deathRate = p.deathRatePerDay * unmet * unmet;
+    const deathRate = p.deathRatePerDay * squaredShortfall(scratch, area);
     const growth = birthRate - deathRate;
     // The population changes by exp(growth × time) − 1, that is growth × exposure, the days lived per inhabitant
     // over the tick; each flow is its rate times that exposure, so births less deaths is the change made.
@@ -61,6 +61,26 @@ export function runPopulation(world: World): void {
  */
 export function lastMigration(world: World): Float64Array {
   return scratchOf(world).edgeMigration;
+}
+
+/**
+ * The mean over the consumer groups, weighted by their people, of the square of each group's share of necessities not
+ * met: hunger concentrated on the poor kills as it would in each group alone. Before any consumption phase, or with no
+ * one in the groups, the area's own share stands in.
+ */
+function squaredShortfall(scratch: Scratch, area: Area): number {
+  const start = area.id * CONSUMER_GROUP_COUNT;
+  let people = 0;
+  let sum = 0;
+  for (let index = 0; index < CONSUMER_GROUP_COUNT; index++) {
+    const share = scratch.groupShare[start + index] as number;
+    const unmet = 1 - (scratch.groupNecessityMet[start + index] as number);
+    people += share;
+    sum += share * unmet * unmet;
+  }
+  if (people > EPSILON) return sum / people;
+  const unmet = Math.max(0, 1 - area.necessitySatisfaction);
+  return unmet * unmet;
 }
 
 /** People born in each area in the last population phase. Recomputed every tick and not part of the saved world. */

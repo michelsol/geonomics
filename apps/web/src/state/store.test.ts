@@ -1,4 +1,4 @@
-import { buildSnapshot, buildStaticData, encodePriceTable, type World } from "@geonomics/sim";
+import { buildSnapshot, buildStaticData, CONSUMER_GROUP_COUNT, encodePriceTable, type World } from "@geonomics/sim";
 import { describe, expect, it } from "vitest";
 import { createGame } from "../host/createGame";
 import type { ToWorker } from "../host/protocol";
@@ -6,6 +6,7 @@ import { DIVERGING, spreadColor } from "../map/colors";
 import { Series } from "./history";
 import {
   conquestEstimate,
+  consumerGroupsOf,
   costOfLiving,
   demographyOf,
   employmentOf,
@@ -55,6 +56,26 @@ describe("selectors", () => {
     expect(extremes.high.area).toBe(world.areas.length - 1);
     expect(extremes.median.price).toBeGreaterThan(extremes.low.price);
     expect(priceOf(data, table, 3, grain)).toBeCloseTo(world.areas[3]?.price[grain] as number, 3);
+  });
+});
+
+describe("consumer groups", () => {
+  it("sum each group's people over the areas and weight its necessities met by them", () => {
+    const { world } = setup();
+    const snapshot = buildSnapshot(world, 0);
+    const groups = CONSUMER_GROUP_COUNT;
+    snapshot.areas.population.fill(0);
+    snapshot.areas.population[0] = 1000;
+    snapshot.areas.population[1] = 3000;
+    snapshot.areas.groupShare.fill(0);
+    snapshot.areas.groupNecessityMet.fill(1);
+    snapshot.areas.groupShare[groups - 1] = 0.5; // area 0: half unemployed, all fed
+    snapshot.areas.groupShare[groups + groups - 1] = 0.1; // area 1: a tenth unemployed, unfed
+    snapshot.areas.groupNecessityMet[groups + groups - 1] = 0;
+    const unemployed = consumerGroupsOf(snapshot, [0, 1])[groups - 1];
+    expect(unemployed?.people).toBeCloseTo(800, 3); // float32 shares
+    expect(unemployed?.necessitiesMet).toBeCloseTo(500 / 800, 5);
+    expect(consumerGroupsOf(snapshot, [0, 1])[0]?.necessitiesMet).toBeNaN(); // nobody in the lowest band
   });
 });
 

@@ -259,11 +259,13 @@ A good is producible in an area if it is primary with natural capacity there, or
 
 ### Population
 
-Births and deaths are two flows. People are born at a fixed rate, whatever the necessities met. Deaths come on top, from any necessity not met: they rise with the square of the unmet share `1 − necessitySatisfaction`, so a small shortfall kills few people and a famine many. An area that fills up runs short until deaths match births, and its population settles where `necessitySatisfaction = 1 − sqrt(birthRatePerDay / deathRatePerDay)`, about 0.82 at the defaults.
+Births and deaths are two flows. People are born at a fixed rate, whatever the necessities met. Deaths come on top, from any necessity not met, and each consumer group (Consumption) dies of its own shortfall: deaths rise with the square of the group's unmet share, so a small shortfall kills few people and a famine many, and hunger concentrated on the poor kills as it would in that group alone. A group's necessities met is what it bought, less its share of any stock shortage (in proportion to what each group bought), over what it wanted. An area that fills up runs short until deaths match births: it settles where the people-weighted mean of the squared shortfalls equals `birthRatePerDay / deathRatePerDay`, a thirtieth at the defaults.
 
 ```typescript
 birthRate = birthRatePerDay
-deathRate = deathRatePerDay * (1 - necessitySatisfaction) ** 2
+shortfall = sum over groups of people(group) * (1 - necessitiesMet(group)) ** 2 / sum over groups of people(group)
+          // (1 - necessitySatisfaction) ** 2 before any consumption phase, or with nobody in the groups
+deathRate = deathRatePerDay * shortfall
 growth    = birthRate - deathRate
 time      = demographyResponsiveness * days
 population *= exp(growth * time)

@@ -1,6 +1,7 @@
 // Values derived from static data, snapshots and the price table.
 import {
   type AreaDetail,
+  CONSUMER_GROUP_COUNT,
   decodePrice,
   type GovernmentView,
   neutralPolicies,
@@ -570,6 +571,29 @@ export function demographyOf(snapshot: Snapshot, edges: readonly StaticEdge[], a
 export interface NeedRow {
   demanded: number;
   consumed: number;
+}
+
+/** One consumer group over some areas: its people, and the share of its necessities met. */
+export interface ConsumerGroup {
+  people: number;
+  necessitiesMet: number; // weighted by people; NaN with nobody in the group
+}
+
+/** The consumer groups (the wage bands, then the unemployed) over some areas, from public figures. */
+export function consumerGroupsOf(snapshot: Snapshot, areas: readonly number[]): ConsumerGroup[] {
+  const groups = Array.from({ length: CONSUMER_GROUP_COUNT }, () => ({ people: 0, necessitiesMet: 0 }));
+  for (const area of areas) {
+    const population = snapshot.areas.population[area] as number;
+    for (let g = 0; g < CONSUMER_GROUP_COUNT; g++) {
+      const group = groups[g] as ConsumerGroup;
+      const people = population * (snapshot.areas.groupShare[area * CONSUMER_GROUP_COUNT + g] as number);
+      group.people += people;
+      group.necessitiesMet += people * (snapshot.areas.groupNecessityMet[area * CONSUMER_GROUP_COUNT + g] as number);
+    }
+  }
+  for (const group of groups)
+    group.necessitiesMet = group.people > 0 ? group.necessitiesMet / group.people : Number.NaN;
+  return groups;
 }
 
 export function needsOf(

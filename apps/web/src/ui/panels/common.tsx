@@ -1,8 +1,23 @@
 // Helpers shared by the panels.
-import type { GovernmentView, Snapshot, StaticData } from "@geonomics/sim";
+import { type GovernmentView, type Snapshot, type StaticData, WAGE_BAND_BOUNDARIES } from "@geonomics/sim";
 import { type PanelName, useGame } from "../../state/store";
 
 export type { PanelName };
+
+/** A wage band in words: "under 0.5 mh/h", "0.5–1 mh/h", "over 2 mh/h"; null for every band. */
+export function bandName(band: number | null): string {
+  if (band === null) return "all bands";
+  const low = WAGE_BAND_BOUNDARIES[band - 1];
+  const high = WAGE_BAND_BOUNDARIES[band];
+  if (low === undefined) return `under ${high} mh/h`;
+  if (high === undefined) return `over ${low} mh/h`;
+  return `${low}–${high} mh/h`;
+}
+
+/** A consumer group in words: its wage band, or "unemployed" for the last group. */
+export function groupName(group: number): string {
+  return group < WAGE_BAND_BOUNDARIES.length + 1 ? bandName(group) : "unemployed";
+}
 export interface PanelProps {
   onOpen: (panel: PanelName) => void;
 }

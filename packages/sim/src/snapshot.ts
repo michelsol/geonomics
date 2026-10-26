@@ -1,6 +1,7 @@
 // What the host sends to the interface (specification §8, Snapshots and Single player): static data once, then
 // snapshots of the dynamic state as seen by one government. Typed arrays are Float32Array, and every value is
 // structured-clone friendly, so snapshots cross a worker boundary as transferables or go through msgpack unchanged.
+import { CONSUMER_GROUP_COUNT } from "./bands";
 import type { WorldConfig } from "./config";
 import { kindIndex } from "./infrastructure";
 import { incomeOf } from "./tick/labor";
@@ -130,6 +131,9 @@ export interface Snapshot {
     employmentRate: Float32Array; // share of the workforce with a private or government job; NaN when empty
     satisfaction: Float32Array;
     necessitySatisfaction: Float32Array;
+    // per area and consumer group (the wage bands, then the unemployed), as of the last consumption phase
+    groupShare: Float32Array; // share of the population: the group's workers and their dependents
+    groupNecessityMet: Float32Array; // share of the group's necessities met
     portLevel: Uint8Array;
     airportLevel: Uint8Array;
     roadLevel: Uint8Array;
@@ -245,6 +249,8 @@ export function buildSnapshot(
     employmentRate: new Float32Array(n),
     satisfaction: new Float32Array(n),
     necessitySatisfaction: new Float32Array(n),
+    groupShare: new Float32Array(n * CONSUMER_GROUP_COUNT),
+    groupNecessityMet: new Float32Array(n * CONSUMER_GROUP_COUNT),
     portLevel: new Uint8Array(n),
     airportLevel: new Uint8Array(n),
     roadLevel: new Uint8Array(n),
@@ -275,6 +281,10 @@ export function buildSnapshot(
       workforce > 0 ? Math.min(1, Math.max(0, 1 - area.unemployedWorkers / workforce)) : Number.NaN;
     areas.satisfaction[i] = area.satisfaction;
     areas.necessitySatisfaction[i] = area.necessitySatisfaction;
+    for (let g = i * CONSUMER_GROUP_COUNT; g < (i + 1) * CONSUMER_GROUP_COUNT; g++) {
+      areas.groupShare[g] = scratch.groupShare[g] as number;
+      areas.groupNecessityMet[g] = scratch.groupNecessityMet[g] as number;
+    }
     areas.portLevel[i] = area.portLevel;
     areas.airportLevel[i] = area.airportLevel;
     areas.roadLevel[i] = area.roadLevel;

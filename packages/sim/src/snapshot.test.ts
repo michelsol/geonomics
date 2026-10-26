@@ -99,7 +99,7 @@ describe("snapshots", () => {
     const buffers = snapshotTransferables(snapshot);
     expect(new Set(buffers).size).toBe(buffers.length);
     // Areas, edges (transport cost, capacity, flags, tonnage, migration), area details, depots.
-    expect(buffers.length).toBe(18 + 5 + 4 * 11 + 3);
+    expect(buffers.length).toBe(20 + 5 + 4 * 11 + 3);
     expect(snapshotTransferables(buildSnapshot(realmWorld(), 0, undefined, { flowGood: 0 })).length).toBe(
       buffers.length + 1,
     );

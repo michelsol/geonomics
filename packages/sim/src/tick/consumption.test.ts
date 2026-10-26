@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { WAGE_BAND_COUNT, wageBandOf } from "../bands";
+import { CONSUMER_GROUP_COUNT, WAGE_BAND_COUNT, wageBandOf } from "../bands";
 import { goodId, realmWorld, send } from "../testing";
 import type { Area, World } from "../types";
 import { planDemand, runConsumption } from "./consumption";
@@ -122,6 +122,33 @@ describe("the reservation wage", () => {
 });
 
 describe("population", () => {
+  it("dies by each group's own shortfall, so hunger among the unemployed kills more than the area's mean suggests", () => {
+    const world = realmWorld({ economy: { unemployedWageShare: 0 } });
+    const area = areaOf(world, 1);
+    const workforce = area.population * world.config.economy.workforceShare;
+    const employed = area.privateWorkers.reduce((sum, w) => sum + w, 0);
+    for (const good of world.goods)
+      area.privateWorkers[good.id] = ((area.privateWorkers[good.id] as number) * 0.7 * workforce) / employed;
+    area.unemployedWorkers = 0.3 * workforce;
+    runProduction(world);
+    runConsumption(world);
+    const scratch = scratchOf(world);
+    const start = area.id * CONSUMER_GROUP_COUNT;
+    const unemployed = start + CONSUMER_GROUP_COUNT - 1;
+    expect(scratch.groupNecessityMet[unemployed]).toBeCloseTo(0, 6); // no income: they bought nothing
+    expect(scratch.groupShare[unemployed]).toBeCloseTo(0.3, 6);
+    const shares = scratch.groupShare.subarray(start, start + CONSUMER_GROUP_COUNT);
+    expect(shares.reduce((sum, share) => sum + share, 0)).toBeCloseTo(1, 6);
+
+    const before = area.population;
+    const unmet = 1 - area.necessitySatisfaction;
+    const { birthRatePerDay, deathRatePerDay } = world.config.population;
+    runPopulation(world);
+    const days = world.config.pace.gameDaysPerTick;
+    expect(scratch.births[1]).toBeCloseTo(before * birthRatePerDay * days, 0);
+    expect(scratch.deaths[1]).toBeGreaterThan(2 * before * deathRatePerDay * unmet * unmet * days);
+  });
+
   it("is born at a fixed rate and dies with the square of the necessities not met, settling where the two match", () => {
     const flows = (satisfaction: number) => {
       const world = realmWorld();

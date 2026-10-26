@@ -1,13 +1,14 @@
 // What people of the selection, or of the realm when nothing is selected, could buy of what they need
-// (specification §9, Panels): necessities met and satisfaction with their history, and each need. The map shows
-// necessities met.
-import { DEMOGRAPHY_KEYS, demographyOf, needsOf } from "../../state/selectors";
+// (specification §9, Panels): necessities met and satisfaction with their history, each need, and each consumer
+// group. The map shows necessities met.
+import { consumerGroupsOf, DEMOGRAPHY_KEYS, demographyOf, needsOf } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { Chart } from "../Chart";
 import { fmt, pct, Section, Stat } from "../components";
-import { shownAreas, usePublicView } from "./common";
+import { groupName, shownAreas, usePublicView } from "./common";
 
 const TIERS = { necessity: "Necessity", comfort: "Comfort", luxury: "Luxury" } as const;
+const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 export function NeedsPanel() {
   const view = usePublicView();
@@ -23,6 +24,11 @@ export function NeedsPanel() {
   const series = history?.demographyOf(selection);
   const percent = (values: number[]) => values.map((value) => 100 * value);
   const people = Math.max(needs.detailPopulation, 1);
+  const groups = consumerGroupsOf(snapshot, areas);
+  const groupPeople = Math.max(
+    groups.reduce((sum, group) => sum + group.people, 0),
+    1,
+  );
 
   return (
     <>
@@ -87,6 +93,34 @@ export function NeedsPanel() {
             )}
           </>
         )}
+      </Section>
+
+      <Section
+        title="Consumer groups"
+        hint="Workers by the wage band of their job, and the unemployed, each with their dependents. Each group buys with its own income, and dies of its own shortfall."
+      >
+        <table data-testid="consumer-groups">
+          <thead>
+            <tr>
+              <th>Group</th>
+              <th className="num" title="Share of the people: the group's workers and their dependents">
+                People
+              </th>
+              <th className="num" title="Share of the group's need for necessities that it could buy">
+                Necessities met
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((group, index) => (
+              <tr key={groupName(index)}>
+                <td>{capitalized(groupName(index))}</td>
+                <td className="num">{pct(group.people / groupPeople)}</td>
+                <td className="num">{Number.isNaN(group.necessitiesMet) ? "—" : pct(group.necessitiesMet)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </Section>
 
       {series && series.length > 1 && (
