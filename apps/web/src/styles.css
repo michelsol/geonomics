@@ -121,10 +121,13 @@ input[type="range"] {
   gap: 10px;
 }
 .range-field input {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  width: 0; /* shrinks with the screen, not held at the browser's default slider width */
 }
 .range-field output {
-  flex: 0 0 6.5em;
+  flex: 0 0 auto;
+  min-width: 5.5em;
+  white-space: nowrap;
 }
 .check {
   display: flex;
@@ -188,7 +191,7 @@ input[type="range"] {
 }
 .form-grid {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 10px 12px;
   align-items: center;
 }
