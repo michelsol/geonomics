@@ -1,4 +1,4 @@
-// Phase 9: population growth, starvation and migration (specification §4, Population).
+// Phase 9: births, deaths and migration (specification §4, Population).
 import { EPSILON, fractionPerTick } from "../math";
 import type { Area, Edge, World } from "../types";
 import { scratchOf } from "./scratch";
@@ -8,20 +8,22 @@ export function runPopulation(world: World): void {
   const p = world.config.population;
   const { demographyResponsiveness, gameDaysPerTick: days } = world.config.pace;
 
-  const { births, starvation } = scratch;
+  const { births, deaths } = scratch;
   for (const area of world.areas) {
-    // Births at a fixed rate; people lacking necessities starve. The population settles where the two match.
-    const birthRate = p.growthRatePerDay;
-    const starvationRate = p.starvationRatePerDay * Math.max(0, 1 - area.necessitySatisfaction);
-    const growth = birthRate - starvationRate;
+    // Births at a fixed rate; people lacking necessities die, with the square of the share not met, so small
+    // shortfalls kill few and famine many. The population settles where the two match.
+    const birthRate = p.birthRatePerDay;
+    const unmet = Math.max(0, 1 - area.necessitySatisfaction);
+    const deathRate = p.deathRatePerDay * unmet * unmet;
+    const growth = birthRate - deathRate;
     // The population changes by exp(growth × time) − 1, that is growth × exposure, the days lived per inhabitant
-    // over the tick; each flow is its rate times that exposure, so births less starvation is the change made.
+    // over the tick; each flow is its rate times that exposure, so births less deaths is the change made.
     const time = demographyResponsiveness * days;
     const exposure = Math.abs(growth * time) < EPSILON ? time : Math.expm1(growth * time) / growth;
     const before = area.population;
     changePopulation(world, area, before * growth * exposure);
     births[area.id] = before * birthRate * exposure;
-    starvation[area.id] = Math.max(0, (births[area.id] as number) - (area.population - before));
+    deaths[area.id] = Math.max(0, (births[area.id] as number) - (area.population - before));
   }
 
   // Migration reads populations and attractiveness after growth, then applies every edge together.
@@ -66,9 +68,9 @@ export function lastBirths(world: World): Float64Array {
   return scratchOf(world).births;
 }
 
-/** People who starved in each area in the last population phase. Recomputed every tick and not part of the saved world. */
-export function lastStarvation(world: World): Float64Array {
-  return scratchOf(world).starvation;
+/** People who died in each area in the last population phase. Recomputed every tick and not part of the saved world. */
+export function lastDeaths(world: World): Float64Array {
+  return scratchOf(world).deaths;
 }
 
 /** Migration over an edge relative to a land border; sea and air routes carry migrants only while they run. */

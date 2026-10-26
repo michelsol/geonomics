@@ -7,7 +7,7 @@ export interface WorldConfig {
     maxTicksPerSecond: number; // wall-clock cap of the host loop; games start lower, at 2 on phones and 5 elsewhere
     gameDaysPerTick: number; // game days simulated per tick
     economyResponsiveness: number; // multiplier on price, trade, smoothing and labor rates
-    demographyResponsiveness: number; // multiplier on growth, starvation and migration rates
+    demographyResponsiveness: number; // multiplier on birth, death and migration rates
     militaryResponsiveness: number; // multiplier on marching, combat and siege rates
   };
   economy: {
@@ -53,8 +53,8 @@ export interface WorldConfig {
     migrationFactorByAir: number; // migration over an air route, relative to a land edge
   };
   population: {
-    growthRatePerDay: number; // births per person per day, whatever the necessities met
-    starvationRatePerDay: number; // share per day of the people lacking necessities who starve
+    birthRatePerDay: number; // births per person per day, whatever the necessities met
+    deathRatePerDay: number; // deaths per person per day when no necessity is met; with the square of the share not met
     migrationRatePerDay: number; // share of the attractiveness gap that migrates per day
     migrationWageWeight: number; // weight of average wage versus satisfaction in attractiveness
   };
@@ -165,8 +165,8 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
     migrationFactorByAir: 0.25,
   },
   population: {
-    growthRatePerDay: 0.0001,
-    starvationRatePerDay: 0.003,
+    birthRatePerDay: 0.0001,
+    deathRatePerDay: 0.003,
     migrationRatePerDay: 0.01,
     migrationWageWeight: 0.5,
   },

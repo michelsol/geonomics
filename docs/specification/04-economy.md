@@ -259,17 +259,17 @@ A good is producible in an area if it is primary with natural capacity there, or
 
 ### Population
 
-Births and starvation are two flows. People are born at a fixed rate, whatever the necessities met. Starvation comes on top: the people lacking necessities, the share `1 − necessitySatisfaction`, die at `starvationRatePerDay`. An area that fills up runs short of food until starvation matches births, and its population settles where `necessitySatisfaction = 1 − growthRatePerDay / starvationRatePerDay`, about 0.967 at the defaults.
+Births and deaths are two flows. People are born at a fixed rate, whatever the necessities met. Deaths come on top, from any necessity not met: they rise with the square of the unmet share `1 − necessitySatisfaction`, so a small shortfall kills few people and a famine many. An area that fills up runs short until deaths match births, and its population settles where `necessitySatisfaction = 1 − sqrt(birthRatePerDay / deathRatePerDay)`, about 0.82 at the defaults.
 
 ```typescript
-birthRate      = growthRatePerDay
-starvationRate = starvationRatePerDay * (1 - necessitySatisfaction)
-growth         = birthRate - starvationRate
-time           = demographyResponsiveness * days
-population    *= exp(growth * time)
+birthRate = birthRatePerDay
+deathRate = deathRatePerDay * (1 - necessitySatisfaction) ** 2
+growth    = birthRate - deathRate
+time      = demographyResponsiveness * days
+population *= exp(growth * time)
 // over the tick, each flow is its rate times the days lived: population * rate * (exp(growth * time) - 1) / growth
-births     = population * birthRate * (exp(growth * time) - 1) / growth
-starvation = births - change in population
+births = population * birthRate * (exp(growth * time) - 1) / growth
+deaths = births - change in population
 
 attractiveness = (1 - migrationWageWeight) * satisfaction
                + migrationWageWeight * averageWage / (averageWage + 1)
@@ -279,7 +279,7 @@ migrants = population * fraction(migrationRatePerDay) * attractivenessDifference
 // population and edgeCount (active, non-blocked edges) of the less attractive area
 ```
 
-Migration reads populations after growth and applies every edge together; migrants leave their savings behind. New inhabitants and migrants join `unemployedWorkers` in proportion to `workforceShare`; the labor phase places them. When population falls, from starvation or emigration, the lost workers (the same `workforceShare` of the loss) are taken from `unemployedWorkers` first, then from private jobs in proportion to their size. Government workers and soldiers are not affected.
+Migration reads populations after growth and applies every edge together; migrants leave their savings behind. New inhabitants and migrants join `unemployedWorkers` in proportion to `workforceShare`; the labor phase places them. When population falls, from deaths or emigration, the lost workers (the same `workforceShare` of the loss) are taken from `unemployedWorkers` first, then from private jobs in proportion to their size. Government workers and soldiers are not affected.
 
 ### Map generation
 

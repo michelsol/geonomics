@@ -11,7 +11,7 @@ import {
 } from "./snapshot";
 import { goodId, realmWorld, send } from "./testing";
 import { rebuildAirRoutes } from "./tick/infrastructure";
-import { lastBirths, lastMigration, lastStarvation } from "./tick/population";
+import { lastBirths, lastDeaths, lastMigration } from "./tick/population";
 import { runTick } from "./tick/tick";
 import { lastTradeFlows, lastTradeTonnage } from "./tick/trade";
 import { addEdge, createWaterCell, setWaterDepths } from "./world";
@@ -116,7 +116,7 @@ describe("snapshots", () => {
     expect(buildSnapshot(world, null).visibleAreas).toEqual([]);
   });
 
-  it("carry each area's births and starvation per day, which with migration make up its change", () => {
+  it("carry each area's births and deaths per day, which with migration make up its change", () => {
     const world = realmWorld({ pace: { gameDaysPerTick: 0.5 } });
     const valley = world.areas[1] as (typeof world.areas)[number];
     valley.naturalCapacity.fill(0);
@@ -128,19 +128,19 @@ describe("snapshots", () => {
     const snapshot = buildSnapshot(world, 0);
     const migration = lastMigration(world);
     const births = lastBirths(world);
-    const starvation = lastStarvation(world);
+    const deaths = lastDeaths(world);
     for (const area of world.areas) {
       let migrants = 0;
       for (const edge of world.edges) {
         if (edge.areaA === area.id) migrants -= migration[edge.id] as number;
         if (edge.areaB === area.id) migrants += migration[edge.id] as number;
       }
-      const natural = (births[area.id] as number) - (starvation[area.id] as number);
+      const natural = (births[area.id] as number) - (deaths[area.id] as number);
       expect(area.population - (before[area.id] as number)).toBeCloseTo(natural + migrants, 6);
       expect(snapshot.areas.births[area.id]).toBeCloseTo((births[area.id] as number) / 0.5, 2);
-      expect(snapshot.areas.starvation[area.id]).toBeCloseTo((starvation[area.id] as number) / 0.5, 2);
+      expect(snapshot.areas.deaths[area.id]).toBeCloseTo((deaths[area.id] as number) / 0.5, 2);
     }
-    expect(snapshot.areas.starvation[1]).toBeGreaterThan(snapshot.areas.births[1] as number); // the Valley starves
+    expect(snapshot.areas.deaths[1]).toBeGreaterThan(snapshot.areas.births[1] as number); // the Valley, without food
   });
 
   it("keep the last tick's flows when an air route opens after them", () => {
@@ -157,7 +157,7 @@ describe("snapshots", () => {
       Array.from(before.edges.migration),
     );
     expect(Array.from(after.areas.births)).toEqual(Array.from(before.areas.births));
-    expect(Array.from(after.areas.starvation)).toEqual(Array.from(before.areas.starvation));
+    expect(Array.from(after.areas.deaths)).toEqual(Array.from(before.areas.deaths));
     expect(Array.from(before.edges.migration).some((v) => v !== 0)).toBe(true);
   });
 

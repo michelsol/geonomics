@@ -122,7 +122,7 @@ describe("the reservation wage", () => {
 });
 
 describe("population", () => {
-  it("is born at a fixed rate and starves with the necessities not met, settling where the two match", () => {
+  it("is born at a fixed rate and dies with the square of the necessities not met, settling where the two match", () => {
     const flows = (satisfaction: number) => {
       const world = realmWorld();
       for (const area of world.areas) area.necessitySatisfaction = satisfaction;
@@ -131,21 +131,23 @@ describe("population", () => {
       const scratch = scratchOf(world);
       return {
         births: scratch.births[1] as number,
-        starvation: scratch.starvation[1] as number,
+        deaths: scratch.deaths[1] as number,
         change: (world.areas[1]?.population as number) - before,
         before,
       };
     };
-    const { growthRatePerDay, starvationRatePerDay } = realmWorld().config.population;
+    const { birthRatePerDay, deathRatePerDay } = realmWorld().config.population;
     const days = realmWorld().config.pace.gameDaysPerTick;
-    const settled = 1 - growthRatePerDay / starvationRatePerDay;
+    const settled = 1 - Math.sqrt(birthRatePerDay / deathRatePerDay);
     const full = flows(1);
-    expect(full.births).toBeCloseTo(full.before * growthRatePerDay * days, 3);
-    expect(full.starvation).toBeCloseTo(0, 6);
+    expect(full.births).toBeCloseTo(full.before * birthRatePerDay * days, 3);
+    expect(full.deaths).toBeCloseTo(0, 6);
+    const nearlyFull = flows(0.95);
+    expect(nearlyFull.deaths).toBeLessThan(nearlyFull.births / 10); // a small shortfall kills few
     expect(flows(settled).change).toBeCloseTo(0, 6);
     const short = flows(settled / 2);
     expect(short.change).toBeLessThan(0);
     expect(short.births).toBeCloseTo(full.births, 2);
-    expect(short.births - short.starvation).toBeCloseTo(short.change, 6);
+    expect(short.births - short.deaths).toBeCloseTo(short.change, 6);
   });
 });

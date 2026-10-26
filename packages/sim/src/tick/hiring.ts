@@ -62,7 +62,7 @@ export function runHiring(world: World): void {
   }
 }
 
-/** Government workers never exceed the workforce, which can shrink under them through starvation or migration. */
+/** Government workers never exceed the workforce, which can shrink under them through deaths or migration. */
 function capToWorkforce(area: Area, state: GovernmentAreaState, workforceShare: number): void {
   let workers = 0;
   for (const job of state.jobs) workers += job.workers;

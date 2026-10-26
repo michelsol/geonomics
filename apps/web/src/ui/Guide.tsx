@@ -38,7 +38,7 @@ export function Guide() {
             and fall where they pile up, so goods flow from cheap areas to dear ones, and people move toward work and
             food. Money is counted in man-hours (mh): one hour of an average worker's labor. Prices are public: the
             Goods panel shows where each good is cheapest and dearest. The Population and Needs panels show where people
-            are born, starve and move, and what they lack.
+            are born, die and move, and what they lack.
           </p>
         </section>
 

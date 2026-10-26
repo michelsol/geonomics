@@ -36,7 +36,7 @@ export interface Scratch {
   importPayment: Float64Array; // per area: money owed for this tick's imports
   migrationDelta: Float64Array; // per area: net migrants this tick
   births: Float64Array; // per area: people born this tick
-  starvation: Float64Array; // per area: people who starved this tick
+  deaths: Float64Array; // per area: people who died this tick
   attractiveness: Float64Array; // per area
   edgeTonnage: Float64Array; // per edge and direction (2 × edge + 0 for A→B, + 1 for B→A): tonnes this tick
   edgeMigration: Float64Array; // per edge: migrants this tick, positive from A to B
@@ -132,7 +132,7 @@ function createScratch(world: World, previous: Scratch | undefined): Scratch {
     importPayment: new Float64Array(areaCount),
     migrationDelta: new Float64Array(areaCount),
     births: carried(previous?.births, areaCount),
-    starvation: carried(previous?.starvation, areaCount),
+    deaths: carried(previous?.deaths, areaCount),
     attractiveness: new Float64Array(areaCount),
     // Last tick's flows outlive a new edge: snapshots read them after the jobs phase may add an air route.
     edgeTonnage: carried(previous?.edgeTonnage, world.edges.length * 2),

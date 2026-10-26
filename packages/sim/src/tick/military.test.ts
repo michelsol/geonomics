@@ -265,7 +265,7 @@ describe("combat and sieges", () => {
 describe("blocked edges", () => {
   it("stop migration between governments at war", () => {
     const migrateToMarch = (war: boolean) => {
-      const world = realmWorld({ population: { growthRatePerDay: 0, starvationRatePerDay: 0 } });
+      const world = realmWorld({ population: { birthRatePerDay: 0, deathRatePerDay: 0 } });
       areaOf(world, 1).satisfaction = 0.2; // the Valley is much less attractive than March
       if (war) send(world, { type: "declareWar", target: 1 });
       updateBlockedEdges(world);

@@ -4,7 +4,7 @@
 import type { WorldConfig } from "./config";
 import { kindIndex } from "./infrastructure";
 import { incomeOf } from "./tick/labor";
-import { lastBirths, lastMigration, lastStarvation } from "./tick/population";
+import { lastBirths, lastDeaths, lastMigration } from "./tick/population";
 import { scratchOf } from "./tick/scratch";
 import { lastTradeFlows, lastTradeTonnage } from "./tick/trade";
 import type {
@@ -122,7 +122,7 @@ export interface Snapshot {
     owner: Int16Array; // -1 for neutral
     population: Float32Array;
     births: Float32Array; // people born per day
-    starvation: Float32Array; // people who starved per day
+    deaths: Float32Array; // people who died per day
     averageWage: Float32Array;
     // per member of the workforce and day, the unemployed included, in man-hours; NaN when empty (section 9, Income)
     grossIncome: Float32Array;
@@ -238,7 +238,7 @@ export function buildSnapshot(
     owner: new Int16Array(n),
     population: new Float32Array(n),
     births: new Float32Array(n),
-    starvation: new Float32Array(n),
+    deaths: new Float32Array(n),
     averageWage: new Float32Array(n),
     grossIncome: new Float32Array(n),
     netIncome: new Float32Array(n),
@@ -255,7 +255,7 @@ export function buildSnapshot(
     militia: new Float32Array(n),
   };
   const births = lastBirths(world);
-  const starvation = lastStarvation(world);
+  const deaths = lastDeaths(world);
   const days = world.config.pace.gameDaysPerTick;
   const { workforceShare } = world.config.economy;
   const scratch = scratchOf(world);
@@ -265,7 +265,7 @@ export function buildSnapshot(
     areas.owner[i] = area.owner ?? -1;
     areas.population[i] = area.population;
     areas.births[i] = (births[i] ?? 0) / days;
-    areas.starvation[i] = (starvation[i] ?? 0) / days;
+    areas.deaths[i] = (deaths[i] ?? 0) / days;
     areas.averageWage[i] = area.averageWage;
     const income = incomeOf(world, area, scratch, wages);
     areas.grossIncome[i] = income.gross;

@@ -33,7 +33,7 @@ export function NeedsPanel() {
             label="Necessities met"
             value={pct(now.necessitySatisfaction)}
             testId="necessities-met"
-            title="Share of the need for necessities (food and the like) that people could buy. People lacking necessities starve, so a full area settles where starvation matches births."
+            title="Share of the need for necessities (food and the like) that people could buy. People lacking necessities die, so a full area settles where deaths match births."
           />
           <Stat
             label="Satisfaction"

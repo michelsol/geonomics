@@ -162,7 +162,7 @@ test("each panel shows its map layer, and flows when its checkbox is on", async 
   await expect(legend).toContainText("Population per area");
   await expect(page.getByTestId("population-total")).toHaveText(/^[\d,]+$/);
   await expect(page.getByTestId("births")).toHaveText(/^<?[\d.,]+[kM]?\/day$/);
-  await expect(page.getByTestId("starvation")).toHaveText(/^<?[\d.,]+[kM]?\/day$/);
+  await expect(page.getByTestId("deaths")).toHaveText(/^<?[\d.,]+[kM]?\/day$/);
   await page.getByLabel("Show migration flows").check();
   await expect(flowLegend).toContainText("People moving per day");
   await expect(legend).toContainText("Population per area"); // both at once

@@ -508,7 +508,7 @@ export function meanPrices(data: StaticData, table: Uint16Array, areas: readonly
 export interface Demography {
   population: number;
   births: number;
-  starvation: number; // people lost where necessities run short
+  deaths: number; // people lost where necessities run short
   immigration: number; // migrants coming in from outside the areas; moves between two of them cancel out
   emigration: number;
   necessitySatisfaction: number; // means weighted by population
@@ -519,7 +519,7 @@ export interface Demography {
 export const DEMOGRAPHY_KEYS = [
   "population",
   "births",
-  "starvation",
+  "deaths",
   "immigration",
   "emigration",
   "necessitySatisfaction",
@@ -531,7 +531,7 @@ export function demographyOf(snapshot: Snapshot, edges: readonly StaticEdge[], a
   const result: Demography = {
     population: 0,
     births: 0,
-    starvation: 0,
+    deaths: 0,
     immigration: 0,
     emigration: 0,
     necessitySatisfaction: 0,
@@ -542,7 +542,7 @@ export function demographyOf(snapshot: Snapshot, edges: readonly StaticEdge[], a
     const people = snapshot.areas.population[area] as number;
     result.population += people;
     result.births += snapshot.areas.births[area] as number;
-    result.starvation += snapshot.areas.starvation[area] as number;
+    result.deaths += snapshot.areas.deaths[area] as number;
     result.necessitySatisfaction += people * (snapshot.areas.necessitySatisfaction[area] as number);
     result.satisfaction += people * (snapshot.areas.satisfaction[area] as number);
   }

@@ -34,7 +34,7 @@ Each loop must react at least three times slower than the loop it depends on. Fa
 | Smoothed price used for jobs | `priceSmoothingRatePerDay` | 10 days |
 | Private job allocation | `laborMobilityRatePerDay` | 10 days |
 | Migration | `migrationRatePerDay` | about 70 days |
-| Population growth | `growthRatePerDay` | about 19 years to double |
+| Population growth | `birthRatePerDay` | about 19 years to double, with no deaths |
 
 A rate from a half-life: `rate = ln(2) / halfLifeDays`.
 
@@ -67,7 +67,7 @@ A game starts from a state that is already almost balanced:
 Three multipliers change the feel of a game without touching individual rates:
 
 - `economyResponsiveness` scales prices, trade, smoothing and labor. Lower is calmer and more stable; higher is snappier.
-- `demographyResponsiveness` scales population growth, starvation and migration.
+- `demographyResponsiveness` scales births, deaths and migration.
 - `militaryResponsiveness` scales marching, combat and sieges.
 
 To speed up a whole game, raise `gameDaysPerTick` or `maxTicksPerSecond`. To make the economy react faster relative to game time, raise `economyResponsiveness`. Rule 2 keeps both safe.
@@ -93,7 +93,7 @@ interface WorldConfig {
     maxTicksPerSecond: number;          // wall-clock cap of the host loop (default 10); games start lower, at 2 on phones and 5 elsewhere
     gameDaysPerTick: number;            // game days simulated per tick (default 1)
     economyResponsiveness: number;      // multiplier on price, trade, smoothing and labor rates (default 1)
-    demographyResponsiveness: number;   // multiplier on growth, starvation and migration rates (default 1)
+    demographyResponsiveness: number;   // multiplier on birth, death and migration rates (default 1)
     militaryResponsiveness: number;     // multiplier on marching, combat and siege rates (default 1)
   };
   economy: {
@@ -139,8 +139,8 @@ interface WorldConfig {
     migrationFactorByAir: number;       // migration over an air route, relative to a land edge (default 0.25)
   };
   population: {
-    growthRatePerDay: number;           // births per person per day, whatever the necessities met (default 0.0001)
-    starvationRatePerDay: number;       // share per day of the people lacking necessities who starve (default 0.003)
+    birthRatePerDay: number;            // births per person per day, whatever the necessities met (default 0.0001)
+    deathRatePerDay: number;            // deaths per person per day when no necessity is met; with the square of the unmet share (default 0.003)
     migrationRatePerDay: number;        // share of the attractiveness gap that migrates per day (default 0.01)
     migrationWageWeight: number;        // weight of average wage versus satisfaction in attractiveness (default 0.5)
   };

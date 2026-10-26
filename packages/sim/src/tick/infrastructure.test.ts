@@ -235,8 +235,8 @@ describe("migration", () => {
       const world = createWorld(catalog, createConfig(catalog), { areas, edges: [{ a: 0, b: 1, mode }], seed: 1 });
       for (const area of world.areas) area.staffing.fill(1); // the route runs
       updateInfrastructureEffects(world);
-      world.config.population.growthRatePerDay = 0; // migration only
-      world.config.population.starvationRatePerDay = 0;
+      world.config.population.birthRatePerDay = 0; // migration only
+      world.config.population.deathRatePerDay = 0;
       (world.areas[0] as World["areas"][number]).satisfaction = 0.5;
       (world.areas[1] as World["areas"][number]).satisfaction = 1;
       runPopulation(world);
@@ -256,8 +256,8 @@ describe("migration", () => {
       isCoastal: true,
     }));
     const world = createWorld(catalog, createConfig(catalog), { areas, edges: [{ a: 0, b: 1, mode: "sea" }], seed: 1 });
-    world.config.population.growthRatePerDay = 0; // migration only
-    world.config.population.starvationRatePerDay = 0;
+    world.config.population.birthRatePerDay = 0; // migration only
+    world.config.population.deathRatePerDay = 0;
     (world.areas[0] as World["areas"][number]).satisfaction = 0.5;
     runPopulation(world);
     expect(world.areas[1]?.population).toBe(10_000);

@@ -30,7 +30,7 @@ export {
   updateRouteCapacities,
 } from "./tick/infrastructure";
 export { realmAverageWage } from "./tick/military";
-export { lastBirths, lastMigration, lastStarvation } from "./tick/population";
+export { lastBirths, lastDeaths, lastMigration } from "./tick/population";
 export { hourlyOutputPerWorker } from "./tick/production";
 export { runTick, type TickOptions } from "./tick/tick";
 export { lastTradeFlows, lastTradeTonnage, type TradeFlow } from "./tick/trade";

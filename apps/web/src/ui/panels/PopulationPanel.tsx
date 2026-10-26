@@ -1,5 +1,5 @@
 // Population of the selection, or of the realm when nothing is selected (specification §9, Panels): people, births,
-// starvation, migrants in and out, and their history. The map shows population, with migration flows on request.
+// deaths, migrants in and out, and their history. The map shows population, with migration flows on request.
 import { DEMOGRAPHY_KEYS, demographyOf } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { Chart } from "../Chart";
@@ -23,7 +23,7 @@ export function PopulationPanel() {
   const { areas, heading } = shownAreas(data, government, selection);
   const now = demographyOf(snapshot, edges, areas);
   const series = history?.demographyOf(selection);
-  const net = now.births - now.starvation + now.immigration - now.emigration;
+  const net = now.births - now.deaths + now.immigration - now.emigration;
 
   return (
     <>
@@ -34,7 +34,7 @@ export function PopulationPanel() {
           <Stat
             label="Change"
             value={signedPerDay(net)}
-            title="Births less starvation, plus immigration less emigration."
+            title="Births less deaths, plus immigration less emigration."
           />
           <Stat
             label="Births"
@@ -43,10 +43,10 @@ export function PopulationPanel() {
             title="People born per day, at the same rate whatever the necessities met."
           />
           <Stat
-            label="Starvation"
-            value={perDay(now.starvation)}
-            testId="starvation"
-            title="People lost per day for lack of necessities, in proportion to the share not met. A full area settles where starvation matches births."
+            label="Deaths"
+            value={perDay(now.deaths)}
+            testId="deaths"
+            title="People dying per day for lack of necessities (food and the like), rising with the square of the share not met. A full area settles where deaths match births."
           />
           <Stat
             label="Immigration"
@@ -83,13 +83,21 @@ export function PopulationPanel() {
               height={140}
             />
           </Section>
-          <Section title="Per day">
+          <Section title="Births and deaths per day">
             <Chart
-              testId="demography-chart"
+              testId="births-deaths-chart"
               x={series.xs()}
               series={[
                 { label: "births", color: "#6fbf5a", values: series.channel(channel("births")) },
-                { label: "starvation", color: "#ef5d5d", values: series.channel(channel("starvation")) },
+                { label: "deaths", color: "#ef5d5d", values: series.channel(channel("deaths")) },
+              ]}
+            />
+          </Section>
+          <Section title="Migration per day">
+            <Chart
+              testId="migration-chart"
+              x={series.xs()}
+              series={[
                 { label: "immigration", color: "#5fa8f0", values: series.channel(channel("immigration")) },
                 { label: "emigration", color: "#f06fa0", values: series.channel(channel("emigration")) },
               ]}
