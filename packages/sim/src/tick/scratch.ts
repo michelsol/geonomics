@@ -35,13 +35,14 @@ export interface Scratch {
   exportRate: Float64Array[]; // per area, per good: sum of the area's outgoing shipping rates, units per day
   importPayment: Float64Array; // per area: money owed for this tick's imports
   migrationDelta: Float64Array; // per area: net migrants this tick
-  naturalChange: Float64Array; // per area: people gained by growth, or lost to starvation when negative, this tick
+  births: Float64Array; // per area: people born this tick
+  starvation: Float64Array; // per area: people who starved this tick
   attractiveness: Float64Array; // per area
   edgeTonnage: Float64Array; // per edge and direction (2 × edge + 0 for A→B, + 1 for B→A): tonnes this tick
   edgeMigration: Float64Array; // per edge: migrants this tick, positive from A to B
   flows: TradeFlows; // trade flows computed this tick, applied together
   stateWorkers: (Float64Array | null)[]; // per area, per good: workers of government produce jobs; null when none
-  taxDue: Float64Array; // per area: production and consumption taxes owed this tick
+  taxDue: Float64Array; // per area: taxes owed this tick
   paymentDue: Float64Array; // per area: subsidies and wages the treasury owes the inhabitants this tick
   paidShare: number[]; // per government: share of this tick's wages and subsidies the treasury could pay
   standingTrades: StandingTrade[]; // market trades issued by standing orders this tick
@@ -130,7 +131,8 @@ function createScratch(world: World, previous: Scratch | undefined): Scratch {
     exportRate: world.areas.map(() => perGood()),
     importPayment: new Float64Array(areaCount),
     migrationDelta: new Float64Array(areaCount),
-    naturalChange: carried(previous?.naturalChange, areaCount),
+    births: carried(previous?.births, areaCount),
+    starvation: carried(previous?.starvation, areaCount),
     attractiveness: new Float64Array(areaCount),
     // Last tick's flows outlive a new edge: snapshots read them after the jobs phase may add an air route.
     edgeTonnage: carried(previous?.edgeTonnage, world.edges.length * 2),

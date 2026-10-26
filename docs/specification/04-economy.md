@@ -259,17 +259,17 @@ A good is producible in an area if it is primary with natural capacity there, or
 
 ### Population
 
-Births need nearly every necessity met; starvation sets in only well below. In between, the population holds steady, so an area that fills up stops growing when its poorest start missing food, before anyone starves.
+Births and starvation are two flows. People are born at a fixed rate, whatever the necessities met. Starvation comes on top: the people lacking necessities, the share `1 − necessitySatisfaction`, die at `starvationRatePerDay`. An area that fills up runs short of food until starvation matches births, and its population settles where `necessitySatisfaction = 1 − growthRatePerDay / starvationRatePerDay`, about 0.967 at the defaults.
 
 ```typescript
-s = necessitySatisfaction
-if (s >= growthSatisfactionThreshold)
-  growth = growthRatePerDay * (s - growthSatisfactionThreshold) / (1 - growthSatisfactionThreshold)
-else if (s < starvationSatisfactionThreshold)
-  growth = -starvationRatePerDay * (starvationSatisfactionThreshold - s) / starvationSatisfactionThreshold
-else
-  growth = 0
-population *= exp(growth * demographyResponsiveness * days)
+birthRate      = growthRatePerDay
+starvationRate = starvationRatePerDay * (1 - necessitySatisfaction)
+growth         = birthRate - starvationRate
+time           = demographyResponsiveness * days
+population    *= exp(growth * time)
+// over the tick, each flow is its rate times the days lived: population * rate * (exp(growth * time) - 1) / growth
+births     = population * birthRate * (exp(growth * time) - 1) / growth
+starvation = births - change in population
 
 attractiveness = (1 - migrationWageWeight) * satisfaction
                + migrationWageWeight * averageWage / (averageWage + 1)

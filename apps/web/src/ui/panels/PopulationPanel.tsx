@@ -1,6 +1,6 @@
-// Population of the selection, or of the realm when nothing is selected (specification §9, Panels): people, births
-// & deaths, migrants in and out, and their history. The map shows population, with migration flows on request.
-import { demographyOf } from "../../state/selectors";
+// Population of the selection, or of the realm when nothing is selected (specification §9, Panels): people, births,
+// starvation, migrants in and out, and their history. The map shows population, with migration flows on request.
+import { DEMOGRAPHY_KEYS, demographyOf } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { Chart } from "../Chart";
 import { Checkbox, count, fmt, Section, Stat } from "../components";
@@ -8,6 +8,7 @@ import { shownAreas, usePublicView } from "./common";
 
 const perDay = (value: number) => `${fmt(value)}/day`;
 const signedPerDay = (value: number) => `${value > 0 ? "+" : ""}${perDay(value)}`;
+const channel = (key: (typeof DEMOGRAPHY_KEYS)[number]) => DEMOGRAPHY_KEYS.indexOf(key);
 
 export function PopulationPanel() {
   const view = usePublicView();
@@ -22,7 +23,7 @@ export function PopulationPanel() {
   const { areas, heading } = shownAreas(data, government, selection);
   const now = demographyOf(snapshot, edges, areas);
   const series = history?.demographyOf(selection);
-  const net = now.naturalChange + now.immigration - now.emigration;
+  const net = now.births - now.starvation + now.immigration - now.emigration;
 
   return (
     <>
@@ -30,12 +31,22 @@ export function PopulationPanel() {
         <h2 data-testid="population-of">{heading}</h2>
         <div className="stats">
           <Stat label="Population" value={count(now.population)} testId="population-total" />
-          <Stat label="Change" value={signedPerDay(net)} title="Births & deaths, plus immigration less emigration." />
           <Stat
-            label="Births & deaths"
-            value={signedPerDay(now.naturalChange)}
-            testId="births-deaths"
-            title="People gained per day where necessities are met, less those lost to starvation where they run short. The model keeps one net rate per area, not births and deaths apart."
+            label="Change"
+            value={signedPerDay(net)}
+            title="Births less starvation, plus immigration less emigration."
+          />
+          <Stat
+            label="Births"
+            value={perDay(now.births)}
+            testId="births"
+            title="People born per day, at the same rate whatever the necessities met."
+          />
+          <Stat
+            label="Starvation"
+            value={perDay(now.starvation)}
+            testId="starvation"
+            title="People lost per day for lack of necessities, in proportion to the share not met. A full area settles where starvation matches births."
           />
           <Stat
             label="Immigration"
@@ -68,7 +79,7 @@ export function PopulationPanel() {
             <Chart
               testId="population-chart"
               x={series.xs()}
-              series={[{ label: "population", color: "#9d93ea", values: series.channel(0) }]}
+              series={[{ label: "population", color: "#9d93ea", values: series.channel(channel("population")) }]}
               height={140}
             />
           </Section>
@@ -77,9 +88,10 @@ export function PopulationPanel() {
               testId="demography-chart"
               x={series.xs()}
               series={[
-                { label: "births & deaths", color: "#6fbf5a", values: series.channel(1) },
-                { label: "immigration", color: "#5fa8f0", values: series.channel(2) },
-                { label: "emigration", color: "#f06fa0", values: series.channel(3) },
+                { label: "births", color: "#6fbf5a", values: series.channel(channel("births")) },
+                { label: "starvation", color: "#ef5d5d", values: series.channel(channel("starvation")) },
+                { label: "immigration", color: "#5fa8f0", values: series.channel(channel("immigration")) },
+                { label: "emigration", color: "#f06fa0", values: series.channel(channel("emigration")) },
               ]}
             />
           </Section>

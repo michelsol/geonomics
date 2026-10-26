@@ -8,20 +8,20 @@ export function runPopulation(world: World): void {
   const p = world.config.population;
   const { demographyResponsiveness, gameDaysPerTick: days } = world.config.pace;
 
-  const natural = scratch.naturalChange;
-  const { growthSatisfactionThreshold: growthThreshold, starvationSatisfactionThreshold: starvationThreshold } = p;
+  const { births, starvation } = scratch;
   for (const area of world.areas) {
-    // Births above the growth threshold, starvation below the starvation threshold, neither in between.
-    const s = area.necessitySatisfaction;
-    const growth =
-      s >= growthThreshold
-        ? (p.growthRatePerDay * (s - growthThreshold)) / Math.max(1 - growthThreshold, EPSILON)
-        : s < starvationThreshold
-          ? (-p.starvationRatePerDay * (starvationThreshold - s)) / Math.max(starvationThreshold, EPSILON)
-          : 0;
+    // Births at a fixed rate; people lacking necessities starve. The population settles where the two match.
+    const birthRate = p.growthRatePerDay;
+    const starvationRate = p.starvationRatePerDay * Math.max(0, 1 - area.necessitySatisfaction);
+    const growth = birthRate - starvationRate;
+    // The population changes by exp(growth × time) − 1, that is growth × exposure, the days lived per inhabitant
+    // over the tick; each flow is its rate times that exposure, so births less starvation is the change made.
+    const time = demographyResponsiveness * days;
+    const exposure = Math.abs(growth * time) < EPSILON ? time : Math.expm1(growth * time) / growth;
     const before = area.population;
-    changePopulation(world, area, area.population * (Math.exp(growth * demographyResponsiveness * days) - 1));
-    natural[area.id] = area.population - before;
+    changePopulation(world, area, before * growth * exposure);
+    births[area.id] = before * birthRate * exposure;
+    starvation[area.id] = Math.max(0, (births[area.id] as number) - (area.population - before));
   }
 
   // Migration reads populations and attractiveness after growth, then applies every edge together.
@@ -61,12 +61,14 @@ export function lastMigration(world: World): Float64Array {
   return scratchOf(world).edgeMigration;
 }
 
-/**
- * People each area gained by growth, or lost to starvation when negative, in the last population phase. Recomputed
- * every tick and not part of the saved world.
- */
-export function lastNaturalChange(world: World): Float64Array {
-  return scratchOf(world).naturalChange;
+/** People born in each area in the last population phase. Recomputed every tick and not part of the saved world. */
+export function lastBirths(world: World): Float64Array {
+  return scratchOf(world).births;
+}
+
+/** People who starved in each area in the last population phase. Recomputed every tick and not part of the saved world. */
+export function lastStarvation(world: World): Float64Array {
+  return scratchOf(world).starvation;
 }
 
 /** Migration over an edge relative to a land border; sea and air routes carry migrants only while they run. */

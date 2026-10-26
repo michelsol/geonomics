@@ -368,6 +368,8 @@ The Resources panel keeps its own good, apart from the good of the Goods panel. 
 
 The model has one net rate of natural change per area (section 4, Population): an area whose necessities are met grows, and one short of them starves. Showing births and deaths apart would have meant inventing a split the model does not have, so the Population panel shows one signed figure, "Births & deaths", next to migration in and out.
 
+Births and starvation later became two flows (see Births and starvation apart), and the panel now shows both.
+
 ### No depot transfers
 
 Players could send goods between their own depots, paying transport and waiting for the goods to travel. The form took room in the Area panel and needed a pair of areas, while the panels now act on one selection, so its controls went first. Transfers were removed from the simulation as well; moving stock between depots may come back as a standing order.
@@ -481,6 +483,22 @@ Births now need necessities met above 0.98, and starvation starts below 0.9; in 
 | Treasuries | 63 million → 130 million | 63 million → 13–26 million |
 
 On 300 areas over 40 years with 8 realms the picture is the same: 2.99 million people grow at about 3.7% a year, about 80,000 starve over years 14–18 as food capacity binds, and the population then settles near 6.2 million with starvation close to zero, savings at 22 days and food at 3.9 times its labor value. Without realms, the 60-area map settles at about 1.05 million with unemployment near 45% (25–30% before) and a trickle of starvation, about 0.04% a year: nobody pays the unemployed a benefit there. Overall satisfaction falls to about 0.72 once the map is full, as many can no longer afford comforts.
+
+### Births and starvation apart
+
+The two thresholds gave way to two separate flows. Births run at `growthRatePerDay` whatever the necessities met, and the people lacking necessities starve at `starvationRatePerDay`. A full area runs short until starvation matches births, at `necessitySatisfaction = 1 − 0.0001 / 0.003`, about 0.967. Above its capacity there is less food per head and starvation outruns births; below it, the reverse, so the balance holds by itself. Population changes over years and prices over days, and the approach showed no swings.
+
+The cost is standing starvation: at the balance, deaths equal births, about 3.7% of the people a year, all replaced. A steeper starvation rate would move the balance closer to full necessities, but not lower those deaths.
+
+| 60 areas, 3 peaceful realms, 60 years | Thresholds | Two flows |
+| --- | --- | --- |
+| Population, settled | about 1.16 million | about 1.14 million, from year 24 |
+| Necessities met, settled | about 0.96 | 0.967 |
+| Births and starvation, settled | none either way | about 41,500 a year each |
+| Food price | 2.5 to 4.5× labor value | 4.6× labor value |
+| Satisfaction | about 0.72 | about 0.74 |
+
+On 300 areas over 40 years, population grows from 2.99 to 6.15 million and levels off from year 32, with births and starvation each about 224,000 a year. Without realms, the 60-area map settles at about 1.05 million from year 24, with 45% unemployment as before.
 
 ### An income tax instead of the production tax
 

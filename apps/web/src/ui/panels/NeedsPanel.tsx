@@ -1,7 +1,7 @@
 // What people of the selection, or of the realm when nothing is selected, could buy of what they need
 // (specification §9, Panels): necessities met and satisfaction with their history, and each need. The map shows
 // necessities met.
-import { demographyOf, needsOf } from "../../state/selectors";
+import { DEMOGRAPHY_KEYS, demographyOf, needsOf } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { Chart } from "../Chart";
 import { fmt, pct, Section, Stat } from "../components";
@@ -33,7 +33,7 @@ export function NeedsPanel() {
             label="Necessities met"
             value={pct(now.necessitySatisfaction)}
             testId="necessities-met"
-            title={`Share of the need for necessities (food and the like) that people could buy. Above ${pct(data.config.population.growthSatisfactionThreshold)} the population grows; below ${pct(data.config.population.starvationSatisfactionThreshold)} people starve.`}
+            title="Share of the need for necessities (food and the like) that people could buy. People lacking necessities starve, so a full area settles where starvation matches births."
           />
           <Stat
             label="Satisfaction"
@@ -95,8 +95,16 @@ export function NeedsPanel() {
             testId="needs-chart"
             x={series.xs()}
             series={[
-              { label: "necessities met (%)", color: "#6fbf5a", values: percent(series.channel(4)) },
-              { label: "satisfaction (%)", color: "#e8d85a", values: percent(series.channel(5)) },
+              {
+                label: "necessities met (%)",
+                color: "#6fbf5a",
+                values: percent(series.channel(DEMOGRAPHY_KEYS.indexOf("necessitySatisfaction"))),
+              },
+              {
+                label: "satisfaction (%)",
+                color: "#e8d85a",
+                values: percent(series.channel(DEMOGRAPHY_KEYS.indexOf("satisfaction"))),
+              },
             ]}
           />
         </Section>

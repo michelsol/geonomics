@@ -59,7 +59,7 @@ describe("selectors", () => {
 });
 
 describe("demography", () => {
-  it("nets growth and starvation into births & deaths, and counts only migrants crossing the edge", () => {
+  it("sums births and starvation, and counts only migrants crossing the edge", () => {
     const { world } = setup();
     const data = buildStaticData(world);
     const snapshot = buildSnapshot(world, 0);
@@ -68,16 +68,18 @@ describe("demography", () => {
       (edge) => (edge.areaA === a) !== (edge.areaB === a) && edge.areaA !== b && edge.areaB !== b,
     );
     const out = data.edges[outward] as (typeof data.edges)[number];
-    snapshot.areas.naturalChange.fill(0);
-    snapshot.areas.naturalChange[a] = 5;
-    snapshot.areas.naturalChange[b] = -3;
+    snapshot.areas.births.fill(0);
+    snapshot.areas.starvation.fill(0);
+    snapshot.areas.births[a] = 5;
+    snapshot.areas.births[b] = 1;
+    snapshot.areas.starvation[b] = 3;
     snapshot.edges.migration.fill(0);
     snapshot.edges.migration[0] = 10; // from a to b: inside the selection
     snapshot.edges.migration[outward] = out.areaA === a ? 4 : -4; // from a, out of the selection
     const both = demographyOf(snapshot, data.edges, [a, b]);
-    expect(both).toMatchObject({ naturalChange: 2, immigration: 0, emigration: 4 });
+    expect(both).toMatchObject({ births: 6, starvation: 3, immigration: 0, emigration: 4 });
     expect(both.population).toBeCloseTo((world.areas[a]?.population ?? 0) + (world.areas[b]?.population ?? 0), -1);
-    expect(demographyOf(snapshot, data.edges, [b])).toMatchObject({ naturalChange: -3, immigration: 10 });
+    expect(demographyOf(snapshot, data.edges, [b])).toMatchObject({ births: 1, starvation: 3, immigration: 10 });
   });
 });
 

@@ -139,10 +139,8 @@ interface WorldConfig {
     migrationFactorByAir: number;       // migration over an air route, relative to a land edge (default 0.25)
   };
   population: {
-    growthRatePerDay: number;           // relative growth per day at full necessity satisfaction (default 0.0001)
-    starvationRatePerDay: number;       // relative decline per day when no necessity is met (default 0.003)
-    growthSatisfactionThreshold: number;// necessity satisfaction above which population grows (default 0.98)
-    starvationSatisfactionThreshold: number; // necessity satisfaction below which people starve (default 0.9)
+    growthRatePerDay: number;           // births per person per day, whatever the necessities met (default 0.0001)
+    starvationRatePerDay: number;       // share per day of the people lacking necessities who starve (default 0.003)
     migrationRatePerDay: number;        // share of the attractiveness gap that migrates per day (default 0.01)
     migrationWageWeight: number;        // weight of average wage versus satisfaction in attractiveness (default 0.5)
   };

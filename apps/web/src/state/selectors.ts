@@ -507,7 +507,8 @@ export function meanPrices(data: StaticData, table: Uint16Array, areas: readonly
 /** Population and its movements over some areas (specification §9, Population panel), in people per day. */
 export interface Demography {
   population: number;
-  naturalChange: number; // births & deaths: growth, less starvation where necessities run short
+  births: number;
+  starvation: number; // people lost where necessities run short
   immigration: number; // migrants coming in from outside the areas; moves between two of them cancel out
   emigration: number;
   necessitySatisfaction: number; // means weighted by population
@@ -517,7 +518,8 @@ export interface Demography {
 /** The channels of a demography series, in order (see History.demography). */
 export const DEMOGRAPHY_KEYS = [
   "population",
-  "naturalChange",
+  "births",
+  "starvation",
   "immigration",
   "emigration",
   "necessitySatisfaction",
@@ -528,7 +530,8 @@ export const DEMOGRAPHY_KEYS = [
 export function demographyOf(snapshot: Snapshot, edges: readonly StaticEdge[], areas: readonly number[]): Demography {
   const result: Demography = {
     population: 0,
-    naturalChange: 0,
+    births: 0,
+    starvation: 0,
     immigration: 0,
     emigration: 0,
     necessitySatisfaction: 0,
@@ -538,7 +541,8 @@ export function demographyOf(snapshot: Snapshot, edges: readonly StaticEdge[], a
   for (const area of areas) {
     const people = snapshot.areas.population[area] as number;
     result.population += people;
-    result.naturalChange += snapshot.areas.naturalChange[area] as number;
+    result.births += snapshot.areas.births[area] as number;
+    result.starvation += snapshot.areas.starvation[area] as number;
     result.necessitySatisfaction += people * (snapshot.areas.necessitySatisfaction[area] as number);
     result.satisfaction += people * (snapshot.areas.satisfaction[area] as number);
   }

@@ -3,8 +3,8 @@
 export const HISTORY_SAMPLES = 365;
 /** Selections of several areas whose mean prices are recorded; the oldest is dropped beyond this. */
 export const TRACKED_SELECTIONS = 20;
-/** Population, births & deaths, immigration, emigration, necessities met and satisfaction (see DEMOGRAPHY_KEYS). */
-export const DEMOGRAPHY_CHANNELS = 6;
+/** Population, births, starvation, immigration, emigration, necessities met and satisfaction (see DEMOGRAPHY_KEYS). */
+export const DEMOGRAPHY_CHANNELS = 7;
 
 /** A ring buffer of samples: one x (game day) and a fixed number of channels per sample. */
 export class Series {

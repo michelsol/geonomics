@@ -11,7 +11,7 @@ import {
 } from "./snapshot";
 import { goodId, realmWorld, send } from "./testing";
 import { rebuildAirRoutes } from "./tick/infrastructure";
-import { lastMigration, lastNaturalChange } from "./tick/population";
+import { lastBirths, lastMigration, lastStarvation } from "./tick/population";
 import { runTick } from "./tick/tick";
 import { lastTradeFlows, lastTradeTonnage } from "./tick/trade";
 import { addEdge, createWaterCell, setWaterDepths } from "./world";
@@ -99,7 +99,7 @@ describe("snapshots", () => {
     const buffers = snapshotTransferables(snapshot);
     expect(new Set(buffers).size).toBe(buffers.length);
     // Areas, edges (transport cost, capacity, flags, tonnage, migration), area details, depots.
-    expect(buffers.length).toBe(17 + 5 + 4 * 11 + 3);
+    expect(buffers.length).toBe(18 + 5 + 4 * 11 + 3);
     expect(snapshotTransferables(buildSnapshot(realmWorld(), 0, undefined, { flowGood: 0 })).length).toBe(
       buffers.length + 1,
     );
@@ -116,7 +116,7 @@ describe("snapshots", () => {
     expect(buildSnapshot(world, null).visibleAreas).toEqual([]);
   });
 
-  it("carry each area's growth or starvation per day, which with migration makes up its change", () => {
+  it("carry each area's births and starvation per day, which with migration make up its change", () => {
     const world = realmWorld({ pace: { gameDaysPerTick: 0.5 } });
     const valley = world.areas[1] as (typeof world.areas)[number];
     valley.naturalCapacity.fill(0);
@@ -127,17 +127,20 @@ describe("snapshots", () => {
     runTick(world);
     const snapshot = buildSnapshot(world, 0);
     const migration = lastMigration(world);
-    const natural = lastNaturalChange(world);
+    const births = lastBirths(world);
+    const starvation = lastStarvation(world);
     for (const area of world.areas) {
       let migrants = 0;
       for (const edge of world.edges) {
         if (edge.areaA === area.id) migrants -= migration[edge.id] as number;
         if (edge.areaB === area.id) migrants += migration[edge.id] as number;
       }
-      expect(area.population - (before[area.id] as number)).toBeCloseTo((natural[area.id] as number) + migrants, 6);
-      expect(snapshot.areas.naturalChange[area.id]).toBeCloseTo((natural[area.id] as number) / 0.5, 2);
+      const natural = (births[area.id] as number) - (starvation[area.id] as number);
+      expect(area.population - (before[area.id] as number)).toBeCloseTo(natural + migrants, 6);
+      expect(snapshot.areas.births[area.id]).toBeCloseTo((births[area.id] as number) / 0.5, 2);
+      expect(snapshot.areas.starvation[area.id]).toBeCloseTo((starvation[area.id] as number) / 0.5, 2);
     }
-    expect(snapshot.areas.naturalChange[1]).toBeLessThan(0); // the Valley starves
+    expect(snapshot.areas.starvation[1]).toBeGreaterThan(snapshot.areas.births[1] as number); // the Valley starves
   });
 
   it("keep the last tick's flows when an air route opens after them", () => {
@@ -153,7 +156,8 @@ describe("snapshots", () => {
     expect(Array.from(after.edges.migration.subarray(0, before.edges.migration.length))).toEqual(
       Array.from(before.edges.migration),
     );
-    expect(Array.from(after.areas.naturalChange)).toEqual(Array.from(before.areas.naturalChange));
+    expect(Array.from(after.areas.births)).toEqual(Array.from(before.areas.births));
+    expect(Array.from(after.areas.starvation)).toEqual(Array.from(before.areas.starvation));
     expect(Array.from(before.edges.migration).some((v) => v !== 0)).toBe(true);
   });
 
