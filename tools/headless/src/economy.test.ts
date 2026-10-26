@@ -112,7 +112,7 @@ describe.each(CATALOG_NAMES)("with the %s catalog", (catalog) => {
       check();
     }
     expect(world.gameDay).toBe(5000);
-  });
+  }, 30_000); // about 1.5 s locally with the large catalog; shared CI runners are several times slower
 });
 
 it("is deterministic: the same seed gives the same world bit for bit", () => {
@@ -124,7 +124,7 @@ it("is deterministic: the same seed gives the same world bit for bit", () => {
   };
   expect(build(7)).toBe(build(7));
   expect(build(7)).not.toBe(build(8));
-});
+}, 30_000);
 
 it("substitutes bread for fish when fish runs short, keeping food satisfaction", () => {
   const catalog = readCatalog("small");
