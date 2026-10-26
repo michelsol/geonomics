@@ -3,7 +3,7 @@ import { expect, type Page, test } from "@playwright/test";
 /** Starts a small game with a short warm-up and takes the first realm. */
 async function startGame(page: Page) {
   await page.goto("/?warmup=10");
-  await page.getByLabel("Map size").selectOption("300");
+  await page.getByLabel("Map size").fill("300");
   await page.getByLabel("Goods catalog").selectOption("small");
   await page.getByRole("button", { name: "New game" }).click();
   await expect(page.getByRole("heading", { name: "Choose your realm" })).toBeVisible({ timeout: 60_000 });
@@ -48,13 +48,11 @@ test("a solo game runs, pauses, and takes commands", async ({ page }) => {
   }
   expect(await page.getByTestId("area-name").textContent()).not.toBe(capital);
 
-  // Every tax has its own controls; with nothing selected, a slider sets a realm-wide rate.
+  // Every tax has its own line; with nothing selected, a slider sets a realm-wide rate when released.
   await openTab(page, "Policies");
   await page.getByRole("button", { name: "Clear", exact: true }).click();
   await expect(page.getByTestId("action-target")).toHaveText("Actions: your whole realm");
   await page.getByLabel("Income tax · all bands level").fill("10");
-  await expect(page.getByLabel("Income tax · all bands value")).toHaveValue("10");
-  await page.getByRole("button", { name: "Set Income tax · all bands", exact: true }).click();
   await expect(page.getByTestId("policies")).toContainText("Income tax · all bands");
   await expect(page.getByTestId("policies")).toContainText("10%");
 
@@ -62,19 +60,25 @@ test("a solo game runs, pauses, and takes commands", async ({ page }) => {
 
   // A realm head tax shows up among the policies.
   const headTax = page.getByTestId("policies").locator("tr", { hasText: "Head tax" });
-  await page.getByLabel("Head tax value").fill("0.25");
-  await page.getByRole("button", { name: "Set Head tax", exact: true }).click();
+  await page.getByLabel("Head tax level").fill("0.25");
   await expect(headTax).toContainText("0.25 mh");
+  // An arrow steps it finely, at once.
+  await page.getByRole("button", { name: "Raise Head tax", exact: true }).click();
+  await expect(headTax).toContainText("0.3 mh");
   // A negative head tax is an allowance paid to everyone.
-  await page.getByLabel("Head tax value").fill("-1");
-  await page.getByRole("button", { name: "Set Head tax", exact: true }).click();
+  await page.getByLabel("Head tax level").fill("-1");
   await expect(headTax).toContainText("-1 mh");
 
   // The income tax's unemployed row, negative, is a benefit for every unemployed worker.
   const benefit = page.getByTestId("policies").locator("tr", { hasText: "Income tax · unemployed" });
-  await page.getByLabel("Income tax · unemployed value").fill("-2");
-  await page.getByRole("button", { name: "Set Income tax · unemployed", exact: true }).click();
+  await page.getByLabel("Income tax · unemployed level").fill("-2");
   await expect(benefit).toContainText("-2 mh");
+
+  // Price controls are multiples of labor value, for the good picked once for every goods policy.
+  await page.getByLabel("Price ceiling level").fill("2");
+  await expect(page.getByTestId("policies").locator("tr", { hasText: "Price ceiling · all goods" })).toContainText(
+    "2× labor value",
+  );
 
   // The Jobs tab shows how the workforce is employed.
   await openTab(page, "Jobs");
@@ -144,9 +148,9 @@ test("the market table sorts by column, and counts show no decimals", async ({ p
 
 test("the realm count is chosen at the start", async ({ page }) => {
   await page.goto("/?warmup=10");
-  await page.getByLabel("Map size").selectOption("300");
+  await page.getByLabel("Map size").fill("300");
   await page.getByLabel("Goods catalog").selectOption("small");
-  await page.getByLabel("Realms").selectOption("12");
+  await page.getByLabel("Realms").fill("12");
   await page.getByRole("button", { name: "New game" }).click();
   await expect(page.getByRole("heading", { name: "Choose your realm" })).toBeVisible({ timeout: 60_000 });
   await expect(page.locator(".realm-list button")).toHaveCount(12);
@@ -277,10 +281,10 @@ test("a selection with none of your areas has no action target", async ({ page }
   await expect(page.getByTestId("employment-bar")).toHaveCount(0);
   await openTab(page, "Policies");
   await expect(page.getByTestId("no-own-area").first()).toBeVisible();
-  await expect(page.getByLabel("Income tax · all bands value")).toHaveCount(0);
+  await expect(page.getByLabel("Income tax · all bands level")).toHaveCount(0);
   await page.getByRole("button", { name: "Clear", exact: true }).click();
   await expect(target).toHaveText("Actions: your whole realm");
-  await expect(page.getByLabel("Income tax · all bands value")).toBeVisible();
+  await expect(page.getByLabel("Income tax · all bands level")).toBeVisible();
   await openTab(page, "Jobs");
   await expect(page.getByTestId("employment-bar")).toBeVisible();
 });

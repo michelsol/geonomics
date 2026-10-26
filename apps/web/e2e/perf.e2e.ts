@@ -7,7 +7,7 @@ test("the map stays smooth on a 3,000-area map", async ({ page }, testInfo) => {
   test.skip(!!process.env.CI, "frame rates are measured locally");
   test.setTimeout(180_000);
   await page.goto("/?warmup=0");
-  await page.getByLabel("Map size").selectOption("3000");
+  await page.getByLabel("Map size").fill("3000");
   await page.getByLabel("Goods catalog").selectOption("large");
   await page.getByRole("button", { name: "New game" }).click();
   await expect(page.getByRole("heading", { name: "Choose your realm" })).toBeVisible({ timeout: 120_000 });

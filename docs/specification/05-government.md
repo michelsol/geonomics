@@ -30,7 +30,7 @@ Each policy plugs into exactly one phase of the tick.
 | `exportTariffRate` | Good | Trade | Added to the cost of goods leaving across a border. A very high value acts as a ban. |
 | `headTaxPerPersonPerDay` | Area | Taxes | Flat tax per inhabitant. Reliable revenue that drains savings and drives people away. Negative, it is an allowance paid to every inhabitant, as a subsidy. |
 | `staffWageShare` | Area | Taxes, Labor | Infrastructure staff pay as a share of the area's average wage (`defaultStaffWageShare` when unset). Staff come at 1 or more and leave below it (Infrastructure). |
-| `priceCeiling`, `priceFloor` | Good | Prices | Clamp the local price. Ceilings cause shortages; floors cause gluts. |
+| `priceCeiling`, `priceFloor` | Good | Prices | Clamp the local price, as a multiple of the good's labor value, so one setting suits every good. Ceilings cause shortages; floors cause gluts. |
 
 The player sets **realm policies** once and adds **area overrides** where needed.
 

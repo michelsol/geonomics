@@ -201,8 +201,8 @@ type PolicyName =
   | "exportTariffRate"                  // per good: share of the price charged on goods leaving across a border
   | "headTaxPerPersonPerDay"            // per area: flat tax per inhabitant per game day, in man-hours
   | "staffWageShare"                    // per area: infrastructure staff pay, as a share of the area's average wage
-  | "priceCeiling"                      // per good: maximum allowed local price
-  | "priceFloor";                       // per good: minimum allowed local price
+  | "priceCeiling"                      // per good: maximum allowed local price, a multiple of its labor value
+  | "priceFloor";                       // per good: minimum allowed local price, a multiple of its labor value
 
 interface PolicySetting {
   policy: PolicyName;                   // which policy this sets
@@ -219,8 +219,8 @@ interface ResolvedPolicies {            // flat arrays used by the tick; rebuilt
   exportTariffRate: Float64Array;       // per good
   headTaxPerPersonPerDay: number;       // for this area
   staffWageShare: number | null;        // for this area; null: infrastructure.defaultStaffWageShare
-  priceCeiling: Float64Array;           // per good; Infinity when there is no ceiling
-  priceFloor: Float64Array;             // per good; 0 when there is no floor
+  priceCeiling: Float64Array;           // per good, in multiples of labor value; Infinity when there is no ceiling
+  priceFloor: Float64Array;             // per good, in multiples of labor value; 0 when there is no floor
 }
 
 interface GovernmentAreaState {

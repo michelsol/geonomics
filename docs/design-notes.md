@@ -517,6 +517,10 @@ An island with no grain of its own, fed through a small air link, used to keep e
 
 The resolved policies lost the production tax and gained the income tax and the unemployed row, and the config gained four values, so saves of version 3 are refused.
 
+### Price controls in multiples of labor value
+
+The Policies tab gave every policy one line: a slider with its level on the thumb, applied when released, and arrows for fine steps, with one good picked for all the goods policies. A price ceiling or floor in man-hours could not have one slider for "all goods", whose prices differ by orders of magnitude, so price controls became multiples of each good's labor value, the unit the price bounds already used. Saved settings would have been read in the wrong unit, so saves of version 4 are refused.
+
 ## Open questions
 
 - **Tick time on large maps.** At 3,000 areas with the large catalog a tick takes about 50 ms in Node and 65 ms in the browser worker. The interface stays smooth because the simulation runs in a worker; only the top speed on large maps is limited. Worth revisiting if players need faster large maps.

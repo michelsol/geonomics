@@ -10,7 +10,7 @@ const PANELS = ["Area", "Goods", "Population", "Needs", "Resources", "Policies",
 async function checkLayout(page: Page) {
   await page.goto("/?warmup=10");
   expect(await fitsTheScreen(page)).toBe(true);
-  await page.getByLabel("Map size").selectOption("300");
+  await page.getByLabel("Map size").fill("300");
   await page.getByLabel("Goods catalog").selectOption("small");
   await page.getByRole("button", { name: "New game" }).click();
   await expect(page.getByRole("heading", { name: "Choose your realm" })).toBeVisible({ timeout: 60_000 });

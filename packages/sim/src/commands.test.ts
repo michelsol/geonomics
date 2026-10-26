@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { AI_PLAYER, MAXIMUM_MARKET_ORDERS, MAXIMUM_STANDING_ORDERS } from "./commands";
 import { foundGovernments } from "./government";
 import { goodId, PLAYER, realmWorld, send } from "./testing";
+import { runPrices } from "./tick/prices";
 import { runTick } from "./tick/tick";
 import type { Army, Command, GovernmentAreaState, StandingRule, World } from "./types";
 
@@ -84,6 +85,17 @@ describe("policies", () => {
     send(world, { type: "setAreaPolicy", area: 0, setting: { policy: "priceCeiling", good: grain, value: null } });
     expect(stateOf(world, 0).resolvedPolicies.priceCeiling[grain]).toBe(Number.POSITIVE_INFINITY);
     expect(stateOf(world, 1).resolvedPolicies.priceCeiling[grain]).toBe(3);
+  });
+
+  it("caps a price at its ceiling, a multiple of the good's labor value", () => {
+    const world = realmWorld();
+    send(world, { type: "setRealmPolicy", setting: { policy: "priceCeiling", good: grain, value: 2 } });
+    const area = world.areas[0] as World["areas"][number];
+    const laborValue = world.goods[grain]?.laborValue as number;
+    area.price[grain] = 5 * laborValue;
+    area.smoothedPrice[grain] = 5 * laborValue;
+    runPrices(world);
+    expect(area.price[grain]).toBeCloseTo(2 * laborValue, 9);
   });
 
   it("rejects out-of-range rates, malformed settings and foreign areas", () => {

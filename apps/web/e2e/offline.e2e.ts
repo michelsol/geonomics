@@ -18,7 +18,7 @@ test("the app is installable, and plays offline once loaded", async ({ page, con
   await context.setOffline(true);
   await page.reload();
   expect(await page.evaluate(() => navigator.serviceWorker.controller !== null)).toBe(true);
-  await page.getByLabel("Map size").selectOption("300");
+  await page.getByLabel("Map size").fill("300");
   await page.getByLabel("Goods catalog").selectOption("small");
   await page.getByRole("button", { name: "New game" }).click();
   await expect(page.getByRole("heading", { name: "Choose your realm" })).toBeVisible({ timeout: 60_000 });

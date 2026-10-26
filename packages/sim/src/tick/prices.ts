@@ -38,10 +38,11 @@ export function runPrices(world: World): void {
         total = clamp(stockPressure + e.priceFlowWeight * flowPressure, -1, 1);
       }
 
-      const floor = Math.max(good.laborValue * e.priceFloorMultiple, policies.priceFloor[g] as number);
+      // Price controls, like the bounds, are multiples of labor value.
+      const floor = good.laborValue * Math.max(e.priceFloorMultiple, policies.priceFloor[g] as number);
       const ceiling = Math.max(
         floor,
-        Math.min(good.laborValue * e.priceCeilingMultiple, policies.priceCeiling[g] as number),
+        good.laborValue * Math.min(e.priceCeilingMultiple, policies.priceCeiling[g] as number),
       );
       const smoothed = area.smoothedPrice[g] as number;
       const current = area.price[g] as number;

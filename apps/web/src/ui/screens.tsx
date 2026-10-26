@@ -9,14 +9,11 @@ import { hostEntered, stopHosting } from "../net/host";
 import { joinTarget, savedName } from "../net/options";
 import { applyUpdate } from "../pwa";
 import { useGame } from "../state/store";
-import { count, fmt, pct, Select, Swatch } from "./components";
+import { count, fmt, pct, RangeField, Select, Swatch } from "./components";
 import { controllerLabel, Invite, Players } from "./Players";
 
-const SIZES = [
-  { value: 300, label: "Small — 300 areas" },
-  { value: 1000, label: "Medium — 1,000 areas" },
-  { value: 3000, label: "Large — 3,000 areas" },
-] as const;
+const MAP_SIZE = { min: 50, max: 3000, step: 50 };
+const REALMS = { min: 1, max: 32, step: 1 };
 const CATALOGS: { value: CatalogName; label: string }[] = [
   { value: "small", label: "Small — 5 goods" },
   { value: "medium", label: "Medium — 14 goods" },
@@ -28,10 +25,6 @@ const AI_MIXES: { value: AiMix; label: string }[] = [
   { value: "peaceful", label: "Peaceful — traders and builders" },
   { value: "aggressive", label: "Aggressive — half conquerors" },
 ];
-
-const REALM_COUNTS = [4, 6, 8, 12, 16, 24, 32];
-/** Realms keep at least this many areas each on average. */
-const AREAS_PER_REALM = 8;
 
 /** Debug only: ?warmup=N shortens the warm-up, so end-to-end tests start quickly. */
 function warmupOverride(): number | undefined {
@@ -50,11 +43,7 @@ export function NewGame() {
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e6));
   const [chosenRealms, setRealms] = useState(8);
   const [aiMix, setAiMix] = useState<AiMix>("balanced");
-  const realmOptions = REALM_COUNTS.filter((n) => n * AREAS_PER_REALM <= areas).map((n) => ({
-    value: n,
-    label: `${n} realms`,
-  }));
-  const realms = Math.min(chosenRealms, (realmOptions.at(-1) as { value: number }).value);
+  const realms = Math.min(chosenRealms, areas); // at most one realm per area
 
   return (
     <main className="screen">
@@ -95,9 +84,23 @@ export function NewGame() {
               <label htmlFor="catalog">Goods</label>
               <Select label="Goods catalog" value={catalog} options={CATALOGS} onChange={setCatalog} />
               <label htmlFor="size">Map</label>
-              <Select label="Map size" value={areas} options={SIZES} onChange={setAreas} />
+              <RangeField
+                id="size"
+                label="Map size"
+                {...MAP_SIZE}
+                value={areas}
+                onChange={setAreas}
+                shown={`${count(areas)} areas`}
+              />
               <label htmlFor="realms">Realms</label>
-              <Select label="Realms" value={realms} options={realmOptions} onChange={setRealms} />
+              <RangeField
+                id="realms"
+                label="Realms"
+                {...REALMS}
+                value={realms}
+                onChange={setRealms}
+                shown={realms === 1 ? "1 realm" : `${realms} realms`}
+              />
               <label htmlFor="ai-mix">AI</label>
               <Select label="AI personalities" value={aiMix} options={AI_MIXES} onChange={setAiMix} />
               <label htmlFor="seed">Seed</label>

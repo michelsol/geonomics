@@ -11,9 +11,9 @@ async function openTab(page: Page, name: string) {
 async function host(browser: Browser) {
   const page = await (await browser.newContext()).newPage();
   await page.goto(`/${BROKER}&warmup=10`);
-  await page.getByLabel("Map size").selectOption("300");
+  await page.getByLabel("Map size").fill("300");
   await page.getByLabel("Goods catalog").selectOption("small");
-  await page.getByLabel("Realms").selectOption("4");
+  await page.getByLabel("Realms").fill("4");
   await page.getByRole("button", { name: "New game" }).click();
   await expect(page.getByRole("heading", { name: "Choose your realm" })).toBeVisible({ timeout: 60_000 });
   await page.getByRole("button", { name: "Invite players" }).click();
@@ -71,7 +71,6 @@ test("a host and a joined player share a game", async ({ browser }, testInfo) =>
   // The guest sets an income tax for its realm.
   await openTab(guest, "Policies");
   await guest.getByLabel("Income tax · all bands level").fill("12");
-  await guest.getByRole("button", { name: "Set Income tax · all bands", exact: true }).click();
   await expect(guest.getByTestId("policies")).toContainText("12%", { timeout: 15_000 });
 
   // Pausing on the host shows on the guest.

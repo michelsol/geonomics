@@ -258,7 +258,7 @@ function validateSetting(world: World, setting: PolicySetting): string | null {
   if (RATE_POLICIES.includes(policy)) {
     if (value < MINIMUM_TAX_RATE || value > MAXIMUM_TAX_RATE)
       return `tax rates must be within [${MINIMUM_TAX_RATE}, ${MAXIMUM_TAX_RATE}]`;
-  } else if (value < 0) return "prices must be non-negative";
+  } else if (value < 0) return "price controls must be non-negative";
   return null;
 }
 

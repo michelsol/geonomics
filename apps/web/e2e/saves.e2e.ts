@@ -3,7 +3,7 @@ import { expect, type Page, test } from "@playwright/test";
 /** Starts a small game with a short warm-up and takes the first realm. */
 async function startGame(page: Page) {
   await page.goto("/?warmup=10");
-  await page.getByLabel("Map size").selectOption("300");
+  await page.getByLabel("Map size").fill("300");
   await page.getByLabel("Goods catalog").selectOption("small");
   await page.getByRole("button", { name: "New game" }).click();
   await enterFirstRealm(page);

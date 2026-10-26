@@ -3,7 +3,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 /** Starts a small game with a short warm-up and takes the first realm, paused. */
 async function startGame(page: Page) {
   await page.goto("/?warmup=10");
-  await page.getByLabel("Map size").selectOption("300");
+  await page.getByLabel("Map size").fill("300");
   await page.getByLabel("Goods catalog").selectOption("small");
   await page.getByRole("button", { name: "New game" }).click();
   await expect(page.getByRole("heading", { name: "Choose your realm" })).toBeVisible({ timeout: 60_000 });
@@ -93,8 +93,7 @@ test("the brush paints areas into the selection, and actions follow it", async (
   const target = (await page.getByTestId("action-target").textContent()) ?? "";
   const owned = Number(/your (\d+) area/.exec(target)?.[1]);
   expect(owned).toBeGreaterThan(0);
-  await page.getByLabel("Income tax · all bands value").fill("12");
-  await page.getByRole("button", { name: "Set Income tax · all bands", exact: true }).click();
+  await page.getByLabel("Income tax · all bands level").fill("12");
   await expect(page.getByTestId("policies").locator("th", { hasText: "Only in" })).toHaveCount(owned);
 
   // Workers hired for the selection are a total, split over its areas.
@@ -111,6 +110,6 @@ test("the brush paints areas into the selection, and actions follow it", async (
   await page.getByRole("button", { name: "My realm", exact: true }).click();
   await expect(page.getByTestId("action-target")).toHaveText("Actions: your whole realm");
   await page.getByRole("navigation").getByRole("button", { name: "Policies", exact: true }).click();
-  await expect(page.getByLabel("Income tax · all bands value")).toBeVisible();
+  await expect(page.getByLabel("Income tax · all bands level")).toBeVisible();
   await expect(page.getByTestId("no-own-area")).toHaveCount(0);
 });

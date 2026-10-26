@@ -220,8 +220,8 @@ else
   flowPressure  = (required - supplied) / max(required, abs(supplied), epsilon)
   pressure      = clamp(stockPressure + priceFlowWeight * flowPressure, -1, 1)
 
-floor          = max(laborValue * priceFloorMultiple, policy priceFloor)
-ceiling        = min(laborValue * priceCeilingMultiple, policy priceCeiling)
+floor          = laborValue * max(priceFloorMultiple, policy priceFloor)     // price controls are multiples of labor value
+ceiling        = laborValue * min(priceCeilingMultiple, policy priceCeiling)
 targetPrice    = smoothedPrice * exp(scarcityPremium * pressure)
 logChange      = clamp(fraction(priceAdjustmentRatePerDay) * (log(targetPrice) - log(price)),
                        -log(1 + maxPriceChangePerTick), log(1 + maxPriceChangePerTick))

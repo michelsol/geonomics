@@ -89,13 +89,13 @@ describe("saves", () => {
   it("reject other files, and formats older or newer than this one", () => {
     expect(() => readSaveInfo(new Uint8Array([1, 2, 3, 4]))).toThrow("not a Geonomics save");
     expect(() => readSaveInfo(new Uint8Array([0x80])) /* an empty msgpack map */).toThrow("not a Geonomics save");
-    // The version follows the magic: a float64 4 (0xcb 40 10 00…) becomes 5 (0xcb 40 14 00…) or 3 (0xcb 40 08 00…).
+    // The version follows the magic: a float64 5 (0xcb 40 14 00…) becomes 6 (0xcb 40 18 00…) or 4 (0xcb 40 10 00…).
     const at = bytes.indexOf(0xcb);
     const future = bytes.slice();
-    future[at + 2] = 0x14;
-    expect(() => readSaveInfo(future)).toThrow("newer version of the game (format 5)");
+    future[at + 2] = 0x18;
+    expect(() => readSaveInfo(future)).toThrow("newer version of the game (format 6)");
     const past = bytes.slice();
-    past[at + 2] = 0x08;
-    expect(() => readSaveInfo(past)).toThrow("older version of the game (format 3)");
+    past[at + 2] = 0x10;
+    expect(() => readSaveInfo(past)).toThrow("older version of the game (format 4)");
   });
 });

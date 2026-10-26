@@ -115,6 +115,43 @@ export function NumberField({
   );
 }
 
+/** A slider with its value written after it. */
+export function RangeField({
+  value,
+  onChange,
+  label,
+  min,
+  max,
+  step,
+  id,
+  shown,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  id?: string;
+  shown: string;
+}) {
+  return (
+    <div className="range-field">
+      <input
+        id={id}
+        type="range"
+        aria-label={label}
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+      <output>{shown}</output>
+    </div>
+  );
+}
+
 export function Select<T extends string | number>({
   value,
   options,
