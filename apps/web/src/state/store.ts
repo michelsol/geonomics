@@ -129,6 +129,7 @@ export interface GameState {
   flows: Flows;
   showTransport: boolean; // the Goods panel draws transport flows
   showMigration: boolean; // the Population panel draws migration flows
+  flowsBetweenRealms: boolean; // flows are summed into one arrow per pair of realms, capital to capital
   mode: Mode;
   brush: Brush;
   peaceAreas: number[]; // areas picked on the map for a peace proposal
@@ -172,6 +173,7 @@ export interface GameState {
   openPanel(panel: PanelName): void;
   setShowTransport(show: boolean): void;
   setShowMigration(show: boolean): void;
+  setFlowsBetweenRealms(show: boolean): void;
   setLayer(layer: Layer): void;
   setFlows(flows: Flows): void;
   setMode(mode: Mode): void;
@@ -211,6 +213,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     flows: "none",
     showTransport: false,
     showMigration: false,
+    flowsBetweenRealms: false,
     mode: { kind: "select" },
     brush: { erase: false, size: "M" },
     peaceAreas: [],
@@ -372,6 +375,9 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     setShowMigration(show) {
       set({ showMigration: show, flows: panelFlows({ ...get(), showMigration: show }) });
       watchFlows();
+    },
+    setFlowsBetweenRealms(show) {
+      set({ flowsBetweenRealms: show });
     },
     setLayer(layer) {
       set({ layer });

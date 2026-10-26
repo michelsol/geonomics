@@ -16,6 +16,11 @@ export function arrowWidth(flow: number, maximum: number): number {
   return maximum > 0 ? 1 + 5 * Math.sqrt(Math.min(1, Math.abs(flow) / maximum)) : 1;
 }
 
+/** Arrow width in screen pixels for a flow between realms: 3 px plus up to 9 px, as there are only a few. */
+export function realmArrowWidth(flow: number, maximum: number): number {
+  return maximum > 0 ? 3 + 9 * Math.sqrt(Math.min(1, Math.abs(flow) / maximum)) : 3;
+}
+
 /**
  * Polygon of an arrow from (x1, y1) toward (x2, y2): a shaft of `width` and a triangular head, shifted `offset` to
  * the right of travel (screen coordinates, y down), as flat x, y pairs. `px` is one screen pixel in map units, so heads

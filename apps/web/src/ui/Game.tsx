@@ -1,6 +1,6 @@
 // The game screen: top bar, map and panels, as a sidebar on desktop or a bottom sheet on phones.
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
-import { arrowWidth } from "../map/arrows";
+import { arrowWidth, realmArrowWidth } from "../map/arrows";
 import {
   cssColor,
   DIVERGING,
@@ -20,6 +20,7 @@ import {
   flowMaximum,
   largestPopulation,
   priceSpread,
+  realmFlows,
   realmPopulation,
   realNetIncomes,
   spreadOf,
@@ -317,13 +318,14 @@ function TopBar() {
 }
 
 /** A legend arrow drawn at the width the map uses for `share` of the largest flow. */
-function SampleArrow({ color, share }: { color: number; share: number }) {
-  const width = arrowWidth(share, 1);
+function SampleArrow({ color, width }: { color: number; width: number }) {
   const head = Math.max(2 * width, 7);
+  const height = Math.max(16, head + 2);
+  const mid = height / 2;
   return (
-    <svg width="44" height="16" viewBox="0 0 44 16" aria-hidden="true">
+    <svg width="44" height={height} viewBox={`0 0 44 ${height}`} aria-hidden="true">
       <polygon
-        points={`2,${8 - width / 2} ${42 - head},${8 - width / 2} ${42 - head},${8 - head / 2} 42,8 ${42 - head},${8 + head / 2} ${42 - head},${8 + width / 2} 2,${8 + width / 2}`}
+        points={`2,${mid - width / 2} ${42 - head},${mid - width / 2} ${42 - head},${mid - head / 2} 42,${mid} ${42 - head},${mid + head / 2} ${42 - head},${mid + width / 2} 2,${mid + width / 2}`}
         fill={cssColor(color)}
         stroke="#0b111a"
         strokeWidth="1"
@@ -332,15 +334,26 @@ function SampleArrow({ color, share }: { color: number; share: number }) {
   );
 }
 
-function FlowScale({ color, maximum, unit }: { color: number; maximum: number; unit: string }) {
+function FlowScale({
+  color,
+  maximum,
+  unit,
+  betweenRealms,
+}: {
+  color: number;
+  maximum: number;
+  unit: string;
+  betweenRealms: boolean;
+}) {
   if (!(maximum > 0)) return <div className="muted">No flow right now</div>;
+  const widthOf = betweenRealms ? realmArrowWidth : arrowWidth;
   return (
     <div className="flow-scale">
       <span>
-        <SampleArrow color={color} share={0.05} /> {fmt(0.05 * maximum)}
+        <SampleArrow color={color} width={widthOf(0.05, 1)} /> {fmt(0.05 * maximum)}
       </span>
       <span>
-        <SampleArrow color={color} share={1} /> {fmt(maximum)} {unit}
+        <SampleArrow color={color} width={widthOf(1, 1)} /> {fmt(maximum)} {unit}
       </span>
     </div>
   );
@@ -360,20 +373,30 @@ function FlowLegend() {
   const flows = useGame((state) => state.flows);
   const snapshot = useGame((state) => state.snapshot);
   const data = useGame((state) => state.data);
+  const edges = useGame((state) => state.edges);
+  const governments = useGame((state) => state.governments);
   const selectedGood = useGame((state) => state.selectedGood);
+  const betweenRealms = useGame((state) => state.flowsBetweenRealms);
   // Derived here, not in the selector: a selector returning a fresh object would re-render forever.
   const transport = transportFlows({ snapshot, selectedGood });
+  if (flows === "none") return null;
+  // Between realms, the scale follows the summed arrows the map draws.
+  const maximum = (perEdge: ArrayLike<number> | null) =>
+    !snapshot || !perEdge
+      ? 0
+      : betweenRealms && data
+        ? realmFlows(data, snapshot, edges, governments, flows).reduce((most, f) => Math.max(most, f.flow), 0)
+        : flowMaximum(perEdge);
   switch (flows) {
-    case "none":
-      return null;
     case "migration":
       return (
         <div className="legend" data-testid="flow-legend">
-          <div>People moving per day, net per edge</div>
+          <div>People moving per day, {betweenRealms ? "net between realms" : "net per edge"}</div>
           <FlowScale
             color={MIGRATION_ARROW}
-            maximum={snapshot ? flowMaximum(snapshot.edges.migration) : 0}
+            maximum={maximum(snapshot?.edges.migration ?? null)}
             unit="people per day"
+            betweenRealms={betweenRealms}
           />
         </div>
       );
@@ -381,14 +404,17 @@ function FlowLegend() {
       const info = data?.goods[transport.good];
       return (
         <div className="legend" data-testid="flow-legend">
-          <div>{info?.name} carried per day, each direction</div>
+          <div>
+            {info?.name} carried per day{betweenRealms ? " between realms" : ""}, each direction
+          </div>
           {info?.isService ? (
             <div className="muted">Services are not carried between areas</div>
           ) : transport.flows ? (
             <FlowScale
               color={TRANSPORT_ARROW}
-              maximum={flowMaximum(transport.flows)}
+              maximum={maximum(transport.flows)}
               unit={`× ${info?.unit} per day`}
+              betweenRealms={betweenRealms}
             />
           ) : (
             <div className="muted">Waiting for the next snapshot…</div>

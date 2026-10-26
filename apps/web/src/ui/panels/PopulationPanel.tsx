@@ -18,6 +18,8 @@ export function PopulationPanel() {
   useGame((state) => state.historyVersion); // redraw the charts with every new sample
   const showMigration = useGame((state) => state.showMigration);
   const setShowMigration = useGame((state) => state.setShowMigration);
+  const betweenRealms = useGame((state) => state.flowsBetweenRealms);
+  const setBetweenRealms = useGame((state) => state.setFlowsBetweenRealms);
   if (!view) return <p className="muted">Waiting for the first snapshot…</p>;
   const { data, snapshot, government } = view;
   const { areas, heading } = shownAreas(data, government, selection);
@@ -70,6 +72,13 @@ export function PopulationPanel() {
           title="Arrows on the map for the people moving between areas"
           checked={showMigration}
           onChange={setShowMigration}
+        />
+        <Checkbox
+          label="Between realms only"
+          title="One arrow per pair of realms, from capital to capital, adding up every edge between them; neutral areas count as one group"
+          checked={betweenRealms}
+          disabled={!showMigration}
+          onChange={setBetweenRealms}
         />
       </section>
 

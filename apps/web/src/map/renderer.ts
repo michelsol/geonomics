@@ -3,10 +3,13 @@
 import { EDGE_ACTIVE, EDGE_BLOCKED, type Snapshot, type StaticData } from "@geonomics/sim";
 import { type Application, Container, FillPattern, Graphics, Matrix, Texture } from "pixi.js";
 import {
+  type GroupFlow,
   largestPopulation,
+  type Point,
   priceOf,
   priceSpread,
   reachOf,
+  realmFlows,
   realNetIncomes,
   type Spread,
   spreadOf,
@@ -14,7 +17,7 @@ import {
   waterCapacityMaximum,
 } from "../state/selectors";
 import type { GameState } from "../state/store";
-import { ARROW_MIN_SHARE, arrowPolygon, arrowWidth, MAX_ARROWS } from "./arrows";
+import { ARROW_MIN_SHARE, arrowPolygon, arrowWidth, MAX_ARROWS, realmArrowWidth } from "./arrows";
 import {
   AIR_ROUTE,
   ARROW_OUTLINE,
@@ -156,7 +159,14 @@ export class MapRenderer {
       this.drawRoutes(state, px);
       this.drawn.routes = routeInputs;
     }
-    const flowInputs = [state.flows, state.snapshot, state.selectedGood, this.lineScale];
+    const flowInputs = [
+      state.flows,
+      state.snapshot,
+      state.selectedGood,
+      state.flowsBetweenRealms,
+      state.governments,
+      this.lineScale,
+    ];
     if (changed(this.drawn.flows, flowInputs)) {
       this.drawFlows(state, px);
       this.drawn.flows = flowInputs;
@@ -383,42 +393,48 @@ export class MapRenderer {
     if (blocked) g.stroke({ width: 2.5 * px, color: BLOCKED, alpha: 0.9 });
   }
 
-  /** Flow arrows over the area layer: net migrants per edge, or the goods carried in each direction. */
+  /**
+   * Flow arrows over the area layer: net migrants per edge, or the goods carried in each direction; or, between realms
+   * only, the same summed across each border, capital to capital.
+   */
   private drawFlows(state: GameState, px: number): void {
     const g = this.flows.clear();
-    const edges = state.snapshot?.edges;
-    if (!edges || state.flows === "none") return;
+    const snapshot = state.snapshot;
+    const edges = snapshot?.edges;
+    if (!snapshot || !edges || state.flows === "none") return;
     const position = (area: number) => this.data.areas[area] as StaticData["areas"][number];
-    const candidates: { from: number; to: number; flow: number }[] = [];
+    const candidates: GroupFlow[] = [];
     let maximum = 0;
-    const add = (from: number, to: number, flow: number) => {
+    const add = (from: Point, to: Point, flow: number) => {
       if (flow <= 0) return;
       candidates.push({ from, to, flow });
       maximum = Math.max(maximum, flow);
     };
-    if (state.flows === "migration") {
+    if (state.flowsBetweenRealms) {
+      for (const f of realmFlows(this.data, snapshot, state.edges, state.governments, state.flows))
+        add(f.from, f.to, f.flow);
+    } else if (state.flows === "migration") {
       for (const [id, edge] of state.edges.entries()) {
         const flow = edges.migration[id] ?? 0;
-        if (flow > 0) add(edge.areaA, edge.areaB, flow);
-        else if (flow < 0) add(edge.areaB, edge.areaA, -flow);
+        if (flow > 0) add(position(edge.areaA), position(edge.areaB), flow);
+        else if (flow < 0) add(position(edge.areaB), position(edge.areaA), -flow);
       }
     } else {
       const { flows } = transportFlows(state);
       if (!flows) return;
       for (const [id, edge] of state.edges.entries()) {
-        add(edge.areaA, edge.areaB, flows[2 * id] ?? 0);
-        add(edge.areaB, edge.areaA, flows[2 * id + 1] ?? 0);
+        add(position(edge.areaA), position(edge.areaB), flows[2 * id] ?? 0);
+        add(position(edge.areaB), position(edge.areaA), flows[2 * id + 1] ?? 0);
       }
     }
     const shown = candidates.filter((c) => c.flow >= ARROW_MIN_SHARE * maximum);
     if (shown.length > MAX_ARROWS) shown.sort((a, b) => b.flow - a.flow).length = MAX_ARROWS;
     const sideways = state.flows === "transport"; // both directions of trade can share an edge
+    const widthOf = state.flowsBetweenRealms ? realmArrowWidth : arrowWidth;
     const polygons: number[][] = [];
     const outlines: number[][] = [];
-    for (const { from, to, flow } of shown) {
-      const a = position(from);
-      const b = position(to);
-      const width = arrowWidth(flow, maximum) * px;
+    for (const { from: a, to: b, flow } of shown) {
+      const width = widthOf(flow, maximum) * px;
       const offset = sideways ? width / 2 + px : 0;
       const polygon = arrowPolygon(a.x, a.y, b.x, b.y, width, offset, px);
       if (!polygon) continue;

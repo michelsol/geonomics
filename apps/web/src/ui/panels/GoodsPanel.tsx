@@ -16,6 +16,8 @@ export function GoodsPanel() {
   const selectGood = useGame((state) => state.selectGood);
   const showTransport = useGame((state) => state.showTransport);
   const setShowTransport = useGame((state) => state.setShowTransport);
+  const betweenRealms = useGame((state) => state.flowsBetweenRealms);
+  const setBetweenRealms = useGame((state) => state.setFlowsBetweenRealms);
   if (!view) return <p className="muted">Waiting for the first snapshot…</p>;
   const { data } = view;
   const info = data.goods[good];
@@ -40,6 +42,13 @@ export function GoodsPanel() {
           title="Arrows on the map for this good carried between areas"
           checked={showTransport}
           onChange={setShowTransport}
+        />
+        <Checkbox
+          label="Between realms only"
+          title="One arrow per pair of realms, from capital to capital, adding up every edge between them; neutral areas count as one group"
+          checked={betweenRealms}
+          disabled={!showTransport}
+          onChange={setBetweenRealms}
         />
       </Section>
 

@@ -3,6 +3,7 @@ import {
   type AreaDetail,
   CONSUMER_GROUP_COUNT,
   decodePrice,
+  type GovernmentSummary,
   type GovernmentView,
   neutralPolicies,
   type Personality,
@@ -310,6 +311,85 @@ export function transportFlows(state: { snapshot: Snapshot | null; selectedGood:
   good: number;
 } {
   return { flows: state.snapshot?.edges.goodFlow ?? null, good: state.selectedGood };
+}
+
+/** One arrow between two groups of areas: realms, or the neutral areas together. */
+export interface GroupFlow {
+  from: Point;
+  to: Point;
+  flow: number; // per day
+}
+
+const NEUTRAL = -1;
+
+/**
+ * Edge flows summed across each border into one arrow per pair of groups: every realm, and the neutral areas as one
+ * group. Transport keeps each direction apart; migration nets into one arrow toward the group that gains people.
+ * A realm's arrows start and end at its capital, or at the population-weighted center of its areas without one; the
+ * neutral group's at the population-weighted center of the neutral areas.
+ */
+export function realmFlows(
+  data: StaticData,
+  snapshot: Snapshot,
+  edges: readonly StaticEdge[],
+  governments: readonly GovernmentSummary[],
+  kind: "migration" | "transport",
+): GroupFlow[] {
+  const owner = snapshot.areas.owner;
+  const groupOf = (area: number) => owner[area] ?? NEUTRAL;
+  const totals = new Map<number, number>(); // keyed by (from + 1) * 65536 + (to + 1)
+  const add = (from: number, to: number, flow: number) => {
+    if (flow === 0 || from === to) return;
+    const key = (from + 1) * 65536 + (to + 1);
+    totals.set(key, (totals.get(key) ?? 0) + flow);
+  };
+  if (kind === "migration") {
+    const migration = snapshot.edges.migration;
+    for (let e = 0; e < Math.min(edges.length, migration.length); e++) {
+      const edge = edges[e] as StaticEdge;
+      const a = groupOf(edge.areaA);
+      const b = groupOf(edge.areaB);
+      // Signed migrants from A to B, gathered under the pair's lower group first so both ways net out.
+      if (a < b) add(a, b, migration[e] as number);
+      else add(b, a, -(migration[e] as number));
+    }
+  } else {
+    const flows = snapshot.edges.goodFlow;
+    if (!flows) return [];
+    for (let e = 0; e < Math.min(edges.length, flows.length / 2); e++) {
+      const edge = edges[e] as StaticEdge;
+      add(groupOf(edge.areaA), groupOf(edge.areaB), flows[2 * e] as number);
+      add(groupOf(edge.areaB), groupOf(edge.areaA), flows[2 * e + 1] as number);
+    }
+  }
+  if (totals.size === 0) return [];
+
+  // Anchors: capitals, else population-weighted centers.
+  const centers = new Map<number, { x: number; y: number; people: number }>();
+  for (const [id, area] of data.areas.entries()) {
+    const group = groupOf(id);
+    const people = Math.max(snapshot.areas.population[id] as number, 1e-9);
+    const center = centers.get(group) ?? { x: 0, y: 0, people: 0 };
+    center.x += people * area.x;
+    center.y += people * area.y;
+    center.people += people;
+    centers.set(group, center);
+  }
+  const anchor = (group: number): Point => {
+    const capital = group === NEUTRAL ? null : (governments[group]?.capital ?? null);
+    if (capital !== null && data.areas[capital]) return { x: data.areas[capital].x, y: data.areas[capital].y };
+    const center = centers.get(group);
+    return center && center.people > 0 ? { x: center.x / center.people, y: center.y / center.people } : { x: 0, y: 0 };
+  };
+
+  const result: GroupFlow[] = [];
+  for (const [key, total] of totals) {
+    const from = Math.floor(key / 65536) - 1;
+    const to = (key % 65536) - 1;
+    if (total > 0) result.push({ from: anchor(from), to: anchor(to), flow: total });
+    else if (total < 0) result.push({ from: anchor(to), to: anchor(from), flow: -total });
+  }
+  return result;
 }
 
 /** Policies in force in one of the government's areas, resolved from its settings as the host does. */

@@ -186,15 +186,22 @@ export function Checkbox({
   onChange,
   label,
   title,
+  disabled,
 }: {
   checked: boolean;
   onChange: (checked: boolean) => void;
   label: string;
   title?: string;
+  disabled?: boolean;
 }) {
   return (
-    <label className="check" title={title}>
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+    <label className={disabled ? "check muted" : "check"} title={title}>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
       {label}
     </label>
   );

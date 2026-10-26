@@ -171,6 +171,11 @@ test("each panel shows its map layer, and flows when its checkbox is on", async 
   await page.getByLabel("Show migration flows").check();
   await expect(flowLegend).toContainText("People moving per day");
   await expect(legend).toContainText("Population per area"); // both at once
+  // Between realms only: one arrow per pair of realms, summed over their borders.
+  await page.getByLabel("Between realms only").check();
+  await expect(flowLegend).toContainText("net between realms");
+  await page.getByLabel("Between realms only").uncheck();
+  await expect(flowLegend).toContainText("net per edge");
 
   await openTab(page, "Goods");
   await expect(legend).toContainText("Price of");
@@ -185,6 +190,9 @@ test("each panel shows its map layer, and flows when its checkbox is on", async 
   const otherName = (await other.textContent()) as string;
   await good.selectOption((await other.getAttribute("value")) as string);
   await expect(flowLegend).toContainText(`${otherName} carried per day`);
+  await page.getByLabel("Between realms only").check();
+  await expect(flowLegend).toContainText(`${otherName} carried per day between realms`);
+  await page.getByLabel("Between realms only").uncheck();
   // Goods are listed by name.
   const names = await good.locator("option").allTextContents();
   expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
