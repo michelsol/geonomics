@@ -1,6 +1,7 @@
 // Phase 0: command validation and application (specification §2, Commands and Command validation).
 import { armyPath, disbandArmy, planningOrigin, returnSoldiers } from "./army";
-import { resolvePolicies, settleRealm, transferArea, upsertSetting } from "./government";
+import { WAGE_BAND_COUNT } from "./bands";
+import { resolvePolicies, sameScope, settleRealm, transferArea, upsertSetting } from "./government";
 import type { Path } from "./graph";
 import { canBuild, INFRASTRUCTURE_KINDS, kindIndex, levelOf } from "./infrastructure";
 import { EPSILON } from "./math";
@@ -33,19 +34,13 @@ const MAXIMUM_WAGE_OFFER = 10;
 const MAXIMUM_STAFF_WAGE_SHARE = 5;
 
 const PER_GOOD_POLICIES: readonly PolicyName[] = [
-  "productionTaxRate",
   "consumptionTaxRate",
   "importTariffRate",
   "exportTariffRate",
   "priceCeiling",
   "priceFloor",
 ];
-const RATE_POLICIES: readonly PolicyName[] = [
-  "productionTaxRate",
-  "consumptionTaxRate",
-  "importTariffRate",
-  "exportTariffRate",
-];
+const RATE_POLICIES: readonly PolicyName[] = ["consumptionTaxRate", "importTariffRate", "exportTariffRate"];
 
 export interface CommandRejection {
   envelope: CommandEnvelope;
@@ -97,7 +92,7 @@ function validate(world: World, government: Government, command: Command): strin
     case "clearAreaPolicy":
       return (
         ownedState(world, government, command.area).reason ??
-        validateSetting(world, { policy: command.policy, good: command.good, value: null })
+        validateSetting(world, { policy: command.policy, good: command.good, band: command.band, value: null })
       );
     case "placeMarketOrder": {
       const { order } = command;
@@ -227,6 +222,23 @@ function validateGood(world: World, good: unknown): string | null {
 function validateSetting(world: World, setting: PolicySetting): string | null {
   if (!setting || typeof setting !== "object") return "malformed policy setting";
   const { policy, good, value } = setting;
+  const band = setting.band ?? null;
+  if (policy === "incomeTaxRate") {
+    if (good !== null) return "the income tax applies to wage bands, not a good";
+    if (band !== null && !isIndex(band, WAGE_BAND_COUNT)) return "unknown wage band"; // null: every band
+    if (value !== null && (typeof value !== "number" || !Number.isFinite(value))) return "policy value must be finite";
+    if (value !== null && (value < MINIMUM_TAX_RATE || value > MAXIMUM_TAX_RATE))
+      return `tax rates must be within [${MINIMUM_TAX_RATE}, ${MAXIMUM_TAX_RATE}]`;
+    return null;
+  }
+  if (band !== null) return "only the income tax applies to a wage band";
+  if (policy === "unemployedTaxPerDay") {
+    if (good !== null) return "the unemployed tax applies to an area, not a good";
+    // A negative value is a benefit the treasury pays every unemployed worker.
+    if (value !== null && (typeof value !== "number" || !Number.isFinite(value)))
+      return "the unemployed tax must be finite";
+    return null;
+  }
   if (policy === "headTaxPerPersonPerDay") {
     if (good !== null) return "head tax applies to an area, not a good";
     // A negative head tax is an allowance the treasury pays every inhabitant.
@@ -336,9 +348,7 @@ function execute(world: World, government: Government, command: Command): void {
     case "setRealmPolicy":
       // The realm has nothing to fall back on, so a null value removes its setting.
       if (command.setting.value === null)
-        government.realmPolicies = government.realmPolicies.filter(
-          (s) => !(s.policy === command.setting.policy && s.good === command.setting.good),
-        );
+        government.realmPolicies = government.realmPolicies.filter((s) => !sameScope(s, command.setting));
       else upsertSetting(government.realmPolicies, command.setting);
       for (const area of government.ownedAreas) resolvePolicies(government, area);
       return;
@@ -348,9 +358,7 @@ function execute(world: World, government: Government, command: Command): void {
       return;
     case "clearAreaPolicy": {
       const state = stateOf(government, command.area);
-      state.policyOverrides = state.policyOverrides.filter(
-        (s) => !(s.policy === command.policy && s.good === command.good),
-      );
+      state.policyOverrides = state.policyOverrides.filter((s) => !sameScope(s, command));
       resolvePolicies(government, command.area);
       return;
     }

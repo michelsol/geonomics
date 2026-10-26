@@ -2,7 +2,7 @@
 import { EPSILON } from "../math";
 import type { Area, Good, GovernmentAreaState, World } from "../types";
 import { depleteExtraction, extractionCapacity } from "../waters";
-import { policiesOf, type Scratch, scratchOf } from "./scratch";
+import { type Scratch, scratchOf } from "./scratch";
 
 /** Worker-hours per worker per game day at the area's productivity. */
 export function effectiveHoursPerWorkerDay(world: World, area: Area): number {
@@ -70,10 +70,6 @@ export function produceArea(world: World, area: Area, scratch: Scratch, commit: 
 
   const stateWorkers = commit ? scratch.stateWorkers[area.id] : null;
   const depot = stateWorkers ? stateOf(world, area).depot : null;
-  const policies = policiesOf(world, area, scratch);
-  const taxed = commit && policies !== scratch.neutralPolicies;
-  let tax = 0;
-  let subsidy = 0;
 
   const hours = effectiveHoursPerWorkerDay(world, area);
   for (const good of goods) {
@@ -129,11 +125,6 @@ export function produceArea(world: World, area: Area, scratch: Scratch, commit: 
     stock[g] = (stock[g] as number) + output;
     if (commit) {
       area.produced[g] = output + stateOutput;
-      if (taxed) {
-        const due = (policies.productionTaxRate[g] as number) * output * (area.price[g] as number);
-        if (due > 0) tax += due;
-        else subsidy -= due;
-      }
     }
 
     // Every user of this good comes later in the catalog, so its ration can be fixed now.
@@ -142,10 +133,6 @@ export function produceArea(world: World, area: Area, scratch: Scratch, commit: 
       requested += (maximumByLabor[user.good] as number) * user.quantity;
     ration[g] = Math.min(1, (stock[g] as number) / Math.max(requested, EPSILON));
     if (commit) area.inputDemanded[g] = requested;
-  }
-  if (taxed) {
-    scratch.taxDue[area.id] = (scratch.taxDue[area.id] as number) + tax;
-    scratch.paymentDue[area.id] = (scratch.paymentDue[area.id] as number) + subsidy;
   }
 }
 

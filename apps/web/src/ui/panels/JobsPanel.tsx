@@ -233,7 +233,7 @@ function EmploymentSection({ view, areas, label }: { view: View; areas: number[]
             <th className="num">Per worker</th>
             <th
               className="num"
-              title="Value added per worker and day after production tax, in mh: what a worker in this job earns"
+              title="Value added per worker and day before income tax, in mh: what a worker in this job earns"
             >
               Wage/day
             </th>

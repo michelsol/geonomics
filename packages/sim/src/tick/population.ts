@@ -9,13 +9,16 @@ export function runPopulation(world: World): void {
   const { demographyResponsiveness, gameDaysPerTick: days } = world.config.pace;
 
   const natural = scratch.naturalChange;
+  const { growthSatisfactionThreshold: growthThreshold, starvationSatisfactionThreshold: starvationThreshold } = p;
   for (const area of world.areas) {
+    // Births above the growth threshold, starvation below the starvation threshold, neither in between.
     const s = area.necessitySatisfaction;
-    const threshold = p.growthSatisfactionThreshold;
     const growth =
-      s >= threshold
-        ? (p.growthRatePerDay * (s - threshold)) / Math.max(1 - threshold, EPSILON)
-        : (-p.starvationRatePerDay * (threshold - s)) / Math.max(threshold, EPSILON);
+      s >= growthThreshold
+        ? (p.growthRatePerDay * (s - growthThreshold)) / Math.max(1 - growthThreshold, EPSILON)
+        : s < starvationThreshold
+          ? (-p.starvationRatePerDay * (starvationThreshold - s)) / Math.max(starvationThreshold, EPSILON)
+          : 0;
     const before = area.population;
     changePopulation(world, area, area.population * (Math.exp(growth * demographyResponsiveness * days) - 1));
     natural[area.id] = area.population - before;

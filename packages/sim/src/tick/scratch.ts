@@ -1,11 +1,15 @@
 // Reusable per-world buffers for the tick, so phases never allocate in the hot path. They hold only values
 // recomputed every tick, so they are kept outside the serializable World.
+import { WAGE_BAND_COUNT } from "../bands";
 import { neutralPolicies } from "../government";
-import type { Area, AreaId, GoodId, GovernmentId, ResolvedPolicies, World } from "../types";
+import type { Area, AreaId, DemandTier, GoodId, GovernmentId, Need, ResolvedPolicies, World } from "../types";
+
+const TIER_ORDER: DemandTier[] = ["necessity", "comfort", "luxury"];
 
 export interface Scratch {
   goodCount: number;
   needGoods: GoodId[][]; // per NeedId: goods that satisfy it, in catalog order
+  needsByTier: Need[]; // necessities first, then comforts, then luxuries, in catalog order within a tier
   unitsPerGood: Float64Array; // per GoodId: need units one unit provides; 0 for pure inputs
   users: { good: GoodId; quantity: number }[][]; // per GoodId: recipes that use it as an input
   transportWeight: Float64Array; // per GoodId
@@ -20,6 +24,12 @@ export interface Scratch {
   ration: Float64Array; // per good, one area at a time
   weights: Float64Array; // per good, one area at a time (consumption shares, labor weights)
   values: Float64Array; // per good, one area at a time (unit prices, value added)
+  jobWages: Float64Array; // per good, one area at a time: hourly wage of each private job (wageBands)
+  bandWorkers: Float64Array; // per area and wage band: workers whose wage falls in the band (wageBands)
+  bandWages: Float64Array; // per area and wage band: their hourly wages summed
+  groupPeople: Float64Array; // per consumer group (wage bands, then the unemployed), one area at a time
+  groupLogPower: Float64Array; // per consumer group: log of its purchasing power
+  groupBudget: Float64Array; // per consumer group: money left to spend this tick
   positiveGapEdges: Float64Array[]; // per area, per good: edges where exporting the good pays this tick
   positiveGapImports: Float64Array[]; // per area, per good: edges where importing the good pays this tick
   exportRate: Float64Array[]; // per area, per good: sum of the area's outgoing shipping rates, units per day
@@ -94,6 +104,7 @@ function createScratch(world: World, previous: Scratch | undefined): Scratch {
   return {
     goodCount,
     needGoods,
+    needsByTier: TIER_ORDER.flatMap((tier) => world.needs.filter((need) => need.tier === tier)),
     unitsPerGood: Float64Array.from(world.goods, (good) => good.satisfies?.unitsPerGood ?? 0),
     users,
     transportWeight: Float64Array.from(world.goods, (good) => good.transportWeight),
@@ -108,6 +119,12 @@ function createScratch(world: World, previous: Scratch | undefined): Scratch {
     ration: perGood(),
     weights: perGood(),
     values: perGood(),
+    jobWages: perGood(),
+    bandWorkers: carried(previous?.bandWorkers, areaCount * WAGE_BAND_COUNT),
+    bandWages: carried(previous?.bandWages, areaCount * WAGE_BAND_COUNT),
+    groupPeople: new Float64Array(WAGE_BAND_COUNT + 1),
+    groupLogPower: new Float64Array(WAGE_BAND_COUNT + 1),
+    groupBudget: new Float64Array(WAGE_BAND_COUNT + 1),
     positiveGapEdges: world.areas.map(() => perGood()),
     positiveGapImports: world.areas.map(() => perGood()),
     exportRate: world.areas.map(() => perGood()),

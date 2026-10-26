@@ -194,7 +194,8 @@ interface JobAssignment {
 }
 
 type PolicyName =
-  | "productionTaxRate"                 // per good: share of production value taxed; negative = subsidy
+  | "incomeTaxRate"                     // per wage band: share of wages taxed; negative tops them up
+  | "unemployedTaxPerDay"               // per area: per unemployed worker per game day, in man-hours; negative = a benefit
   | "consumptionTaxRate"                // per good: share added to the price consumers pay
   | "importTariffRate"                  // per good: share of the price charged on goods entering across a border
   | "exportTariffRate"                  // per good: share of the price charged on goods leaving across a border
@@ -205,12 +206,14 @@ type PolicyName =
 
 interface PolicySetting {
   policy: PolicyName;                   // which policy this sets
-  good: GoodId | null;                  // the good it applies to; null for head tax, or every good for a per-good policy
+  good: GoodId | null;                  // the good it applies to; null for area policies, or every good for a per-good policy
+  band?: number | null;                 // income tax only: the wage band, 0 to 3; null or absent for every band
   value: number | null;                 // the rate or price; null restores the neutral value (no tax, ceiling or floor)
 }
 
 interface ResolvedPolicies {            // flat arrays used by the tick; rebuilt only when a setting changes
-  productionTaxRate: Float64Array;      // per good, realm default merged with area overrides
+  incomeTaxRate: Float64Array;          // per wage band, realm default merged with area overrides
+  unemployedTaxPerDay: number;          // for this area; negative = a benefit
   consumptionTaxRate: Float64Array;     // per good
   importTariffRate: Float64Array;       // per good
   exportTariffRate: Float64Array;       // per good
@@ -311,7 +314,7 @@ Players and AI act only through commands. The host queues them and applies them 
 type Command =
   | { type: "setRealmPolicy"; setting: PolicySetting }
   | { type: "setAreaPolicy"; area: AreaId; setting: PolicySetting }
-  | { type: "clearAreaPolicy"; area: AreaId; policy: PolicyName; good: GoodId | null }
+  | { type: "clearAreaPolicy"; area: AreaId; policy: PolicyName; good: GoodId | null; band?: number | null }
   | { type: "placeMarketOrder"; order: Omit<MarketOrder, "id"> }
   | { type: "cancelMarketOrder"; orderId: number }
   | { type: "setJobTarget"; area: AreaId; job: GovernmentJob; targetWorkers: number }
@@ -346,7 +349,7 @@ The host validates every command before applying it. A rejected command changes 
 | Sender | `player` must be the controller of `government` (`"ai"` for an AI government; the host never accepts that id from the network), and the government must not be eliminated |
 | Ownership | Every area, army, order or depot a command references must belong to the sending government |
 | Numbers | Every number must be finite; quantities, worker targets, soldiers and prices must be ≥ 0 |
-| Policies | Production and consumption tax rates and tariffs must be within [−1, 5]; head tax any finite number (negative: an allowance); ceilings and floors ≥ 0; the staff wage within [0, 5]. Head tax and the staff wage take no good; every other policy takes one good, or none for every good |
+| Policies | Income and consumption tax rates and tariffs must be within [−1, 5]; only the income tax takes a wage band, 0 to 3 or none for every band; the unemployed tax and head tax any finite number (negative: a benefit, an allowance); ceilings and floors ≥ 0; the staff wage within [0, 5]. Head tax and the staff wage take no good; every other policy takes one good, or none for every good |
 | Wages | `wageOffer` and the soldier wage must be within [0, 10] |
 | Recruiting | At least one soldier, and no more than the area's unemployed and private workers |
 | Armies | `moveArmy` needs a reachable destination under the marching rules; `disbandArmy` at most the army's soldiers |

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { WAGE_BAND_COUNT } from "../bands";
 import { reserveDaysOf } from "../math";
 import { goodId, realmWorld, send, totalMoney } from "../testing";
 import type { GovernmentAreaState, JobAssignment, World } from "../types";
+import { runConsumption } from "./consumption";
 import { runHiring } from "./hiring";
 import { evaluateStandingOrders, runMarket } from "./market";
 import { hourlyOutputPerWorker, runProduction } from "./production";
@@ -113,14 +115,14 @@ describe("policies", () => {
       send(
         world,
         area === undefined
-          ? { type: "setRealmPolicy", setting: { policy: "productionTaxRate", good, value } }
-          : { type: "setAreaPolicy", area, setting: { policy: "productionTaxRate", good, value } },
+          ? { type: "setRealmPolicy", setting: { policy: "consumptionTaxRate", good, value } }
+          : { type: "setAreaPolicy", area, setting: { policy: "consumptionTaxRate", good, value } },
       );
     expect(set(grain, 0.3)).toBeNull();
     expect(set(null, 0.1)).toBeNull(); // sent after, yet the grain rate stays more specific
     expect(set(null, 0.2, 1)).toBeNull();
     expect(set(tools, 0.05, 1)).toBeNull();
-    const rates = (area: number) => Array.from(stateOf(world, area).resolvedPolicies.productionTaxRate);
+    const rates = (area: number) => Array.from(stateOf(world, area).resolvedPolicies.consumptionTaxRate);
     expect(rates(0)[grain]).toBeCloseTo(0.3, 12);
     expect(rates(0)[tools]).toBeCloseTo(0.1, 12);
     // The area's setting for every good overrides the realm's, even the realm's setting for grain.
@@ -196,18 +198,36 @@ describe("taxes, subsidies and wages (phase 5)", () => {
     expect(scratchOf(world).paidShare[0]).toBeCloseTo(0.25, 12);
   });
 
-  it("pays production subsidies and collects production taxes", () => {
+  it("collects the income tax on the wage bands, and tops wages up when it is negative", () => {
     const world = withoutStaff(realmWorld());
-    const grain = goodId(world, "grain");
-    send(world, { type: "setAreaPolicy", area: 0, setting: { policy: "productionTaxRate", good: grain, value: -0.5 } });
-    send(world, { type: "setAreaPolicy", area: 1, setting: { policy: "productionTaxRate", good: grain, value: 0.5 } });
-    const before = [areaOf(world, 0).savings, areaOf(world, 1).savings];
+    const income = { policy: "incomeTaxRate", good: null } as const;
+    send(world, { type: "setAreaPolicy", area: 0, setting: { ...income, value: -0.5 } });
+    send(world, { type: "setAreaPolicy", area: 1, setting: { ...income, value: 0.5 } });
     runProduction(world);
-    const subsidy = 0.5 * (areaOf(world, 0).produced[grain] as number) * (areaOf(world, 0).price[grain] as number);
-    const tax = 0.5 * (areaOf(world, 1).produced[grain] as number) * (areaOf(world, 1).price[grain] as number);
+    runConsumption(world); // sorts the workers into their wage bands
+    const scratch = scratchOf(world);
+    scratch.taxDue.fill(0);
+    scratch.paymentDue.fill(0);
+    const hours = world.config.economy.hoursPerWorkerDay;
+    const wagesOf = (area: number) =>
+      scratch.bandWages.subarray(area * WAGE_BAND_COUNT, (area + 1) * WAGE_BAND_COUNT).reduce((sum, w) => sum + w, 0);
+    const [topUp, tax] = [0.5 * wagesOf(0) * hours, 0.5 * wagesOf(1) * hours];
+    expect(tax).toBeGreaterThan(0);
+    const before = [areaOf(world, 0).savings, areaOf(world, 1).savings];
     runTaxes(world);
-    expect(areaOf(world, 0).savings - (before[0] as number)).toBeCloseTo(subsidy, 6);
+    expect(areaOf(world, 0).savings - (before[0] as number)).toBeCloseTo(topUp, 6);
     expect((before[1] as number) - areaOf(world, 1).savings).toBeCloseTo(tax, 6);
+  });
+
+  it("pays a negative unemployed tax to every unemployed worker as a benefit", () => {
+    const world = withoutStaff(realmWorld());
+    send(world, { type: "setRealmPolicy", setting: { policy: "unemployedTaxPerDay", good: null, value: -2 } });
+    const area = areaOf(world, 1);
+    area.unemployedWorkers = 1000;
+    const savings = area.savings;
+    scratchOf(world).paymentDue.fill(0);
+    runTaxes(world);
+    expect(area.savings - savings).toBeCloseTo(2 * 1000, 6);
   });
 });
 
@@ -301,7 +321,9 @@ describe("money", () => {
     const grain = goodId(world, "grain");
     send(world, { type: "setRealmPolicy", setting: { policy: "headTaxPerPersonPerDay", good: null, value: 0.2 } });
     send(world, { type: "setRealmPolicy", setting: { policy: "consumptionTaxRate", good: grain, value: 0.3 } });
-    send(world, { type: "setRealmPolicy", setting: { policy: "productionTaxRate", good: grain, value: -0.2 } });
+    send(world, { type: "setRealmPolicy", setting: { policy: "incomeTaxRate", good: null, value: 0.1 } });
+    send(world, { type: "setRealmPolicy", setting: { policy: "incomeTaxRate", good: null, band: 0, value: -0.2 } });
+    send(world, { type: "setRealmPolicy", setting: { policy: "unemployedTaxPerDay", good: null, value: -0.5 } });
     send(world, { type: "setRealmPolicy", setting: { policy: "exportTariffRate", good: grain, value: 0.2 } });
     send(world, { type: "setWageOffer", area: 1, wageOffer: 2 });
     send(world, { type: "setJobTarget", area: 1, job: GRAIN_JOB, targetWorkers: 300 });

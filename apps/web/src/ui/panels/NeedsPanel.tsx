@@ -33,7 +33,7 @@ export function NeedsPanel() {
             label="Necessities met"
             value={pct(now.necessitySatisfaction)}
             testId="necessities-met"
-            title="Share of the need for necessities (food and the like) that people could buy. Below the growth threshold, people starve."
+            title={`Share of the need for necessities (food and the like) that people could buy. Above ${pct(data.config.population.growthSatisfactionThreshold)} the population grows; below ${pct(data.config.population.starvationSatisfactionThreshold)} people starve.`}
           />
           <Stat
             label="Satisfaction"

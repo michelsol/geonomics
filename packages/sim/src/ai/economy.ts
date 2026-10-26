@@ -1,5 +1,5 @@
-// An AI's economy (specification §10): the realm tax, the soldier wage, infrastructure and the personality's standing
-// orders.
+// An AI's economy (specification §10): the realm income tax, the benefit for the unemployed, the soldier wage,
+// infrastructure and the personality's standing orders.
 import { canBuild, INFRASTRUCTURE_KINDS, levelCost } from "../infrastructure";
 import { snapshotLevel } from "../snapshot";
 import type { AiMemory, AreaId, Command, InfrastructureKind, Personality, StandingRule } from "../types";
@@ -14,6 +14,8 @@ const MINIMUM_WAGE = 0.1; // war can push an area's average wage below zero
 const TAX_STEP_DOWN = 0.01;
 const WAGE_PREMIUM = 1.1; // soldiers are paid above the realm's average wage, so nobody deserts
 const GRANARIES = 5; // a builder keeps staples in this many of its most populous areas
+const SURPLUS_PAYOUT_DAYS = 365; // a treasury above twice its reserve pays the excess out as a benefit over this long
+const BENEFIT_CHANGE = 0.1; // the benefit changes only when it would move by more than this share
 
 export function decideEconomy(
   view: AiView,
@@ -24,6 +26,7 @@ export function decideEconomy(
   commands: Command[],
 ): void {
   setTax(realm, memory, traits, commands);
+  setBenefit(view, realm, commands);
   setSoldierWage(realm, commands);
   manageInfrastructure(view, realm, traits, commands);
   placeStandingOrders(view, realm, memory, traits, personality, commands);
@@ -47,7 +50,34 @@ function setTax(realm: Realm, memory: AiMemory, traits: Traits, commands: Comman
   }
   rate = round(Math.min(traits.maximumTax, Math.max(traits.minimumTax, rate)), 0.005);
   if (Math.abs(rate - current) > 1e-9)
-    commands.push({ type: "setRealmPolicy", setting: { policy: "productionTaxRate", good: null, value: rate } });
+    commands.push({ type: "setRealmPolicy", setting: { policy: "incomeTaxRate", good: null, value: rate } });
+}
+
+/**
+ * Money above twice the reserve goes back to the realm's people as a benefit for the unemployed, paid out over about
+ * a year, so the treasury does not drain the savings it taxes. Below the reserve, the benefit stops.
+ */
+function setBenefit(view: AiView, realm: Realm, commands: Command[]): void {
+  const { areas } = view.snapshot;
+  const { workforceShare } = view.data.config.economy;
+  let unemployed = 0;
+  for (const area of realm.owned) {
+    const employment = areas.employmentRate[area] as number;
+    if (Number.isFinite(employment))
+      unemployed += (areas.population[area] as number) * workforceShare * (1 - employment);
+  }
+  const setting = realm.government.realmPolicies.find((s) => s.policy === "unemployedTaxPerDay" && s.good === null);
+  const current = Math.max(0, -(setting?.value ?? 0));
+  const treasury = realm.government.treasury;
+  let benefit = current;
+  if (treasury > 2 * realm.reserve && unemployed > 0)
+    benefit = round((treasury - 2 * realm.reserve) / SURPLUS_PAYOUT_DAYS / unemployed, 0.01);
+  else if (treasury < realm.reserve) benefit = 0;
+  if (benefit === current || Math.abs(benefit - current) <= BENEFIT_CHANGE * current) return;
+  commands.push({
+    type: "setRealmPolicy",
+    setting: { policy: "unemployedTaxPerDay", good: null, value: benefit > 0 ? -benefit : null },
+  });
 }
 
 function setSoldierWage(realm: Realm, commands: Command[]): void {

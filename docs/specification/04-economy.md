@@ -31,7 +31,7 @@ An area's **savings** is the private money held by its inhabitants. Transactions
 | Exports to neighbors, transport included | Into savings | Trade phase |
 | Imports from neighbors | Out of savings | Trade phase |
 | Taxes | Savings to treasury | Tax phase |
-| Subsidies | Treasury to savings | Tax phase |
+| Subsidies, wage top-ups, allowances and benefits for the unemployed | Treasury to savings | Tax phase |
 | Government and army wages | Treasury to savings | Tax phase |
 | Government purchases on the local market | Treasury to savings | Market phase |
 | Government sales on the local market | Savings to treasury | Market phase |
@@ -93,15 +93,24 @@ Private production draws inputs from the area's stock. Government production dra
 
 ### Consumption
 
-Consumption has three parts: the area's purchasing power, the demand for each need split between the goods that satisfy it, and a spillover pass when some of those goods run out.
+Consumption has four parts: the groups that buy and what each can spend, the demand for each need split between the goods that satisfy it, the budget each group spends on it, and a spillover pass when some of the goods run out.
 
-**Purchasing power** combines income and savings. Savings near `targetSavingsDays` of income are neutral. More savings raise demand and fewer lower it, mostly for needs with a high `wealthElasticity`. The same `savingsFactor` sets the wage workers accept (Labor allocation):
+**Groups.** An area's consumers buy in groups: the workers of each **wage band**, then the unemployed, each with the people who depend on them (`population × workers / workforce`). The bands are fixed hourly wages: under 0.5, 0.5 to 1, 1 to 2 and over 2 man-hours. Private workers earn their job's value added (Labor allocation), government workers their wage offer and infrastructure staff their share of the average wage, both as far as the treasury paid them. A band's income per worker-hour is its workers' mean wage less its income tax rate (section 5, Policies). The unemployed live on a share of the average wage that the employed pass on, plus the benefit when the unemployed tax is negative:
+
+```typescript
+bandIncome       = meanWage(band) * (1 - incomeTaxRate[band])
+unemployedIncome = unemployedWageShare * max(averageWage, 0) - unemployedTaxPerDay / hoursPerWorkerDay
+income(group)    = max(0, income - headTaxPerPersonPerDay / workforceShare / hoursPerWorkerDay)  // each owes the head tax for its people
+```
+
+**Purchasing power** combines a group's income and the area's savings. Savings near `targetSavingsDays` of income are neutral. More savings raise demand and fewer lower it, mostly for needs with a high `wealthElasticity`. The same `savingsFactor` sets the wage workers accept (Labor allocation):
 
 ```typescript
 incomePerPersonPerDay = max(averageWage, 0.1) * hoursPerWorkerDay * workforceShare
 savingsDays     = savings / max(population * incomePerPersonPerDay, epsilon)
 savingsFactor   = clamp(savingsDays / targetSavingsDays, savingsFactorMin, savingsFactorMax) ** savingsElasticity
-purchasingPower = max(averageWage, 0.1) * savingsFactor
+purchasingPower(group) = max(income(group), 0.01) * savingsFactor
+budget(group)   = income(group) * hoursPerWorkerDay * days * workers(group) * savingsFactor
 ```
 
 The effect stabilizes itself. Consumption inside an area does not move money, but higher demand raises local prices, which pulls in imports and spends savings down toward the target. An area with depleted savings demands less, so its prices fall, it exports more and its savings refill.
@@ -115,16 +124,23 @@ share[g]         = g.satisfies.preference * unitPrice[g] ** -need.substitutionEl
                    / sum of the same over all goods of the need
 needPrice        = sum over goods of the need of share[g] * unitPrice[g]
 
-needDemanded = population * need.demandPerPersonPerDay * days
-             * (need.referenceUnitPrice / needPrice) ** need.priceElasticity
-             * purchasingPower ** need.wealthElasticity
-demanded[g]  = needDemanded * share[g] / g.satisfies.unitsPerGood
+// needs in tier order, necessities first; per group:
+wanted(group) = people(group) * need.demandPerPersonPerDay * days
+              * (need.referenceUnitPrice / needPrice) ** need.priceElasticity
+              * purchasingPower(group) ** need.wealthElasticity
+bought(group) = min(wanted(group), budget(group) / needPrice)
+budget(group) -= bought(group) * needPrice
+
+needDemanded = sum over groups of wanted        // what people wanted, the reference for satisfaction
+demanded[g]  = (sum over groups of bought) * share[g] / g.satisfies.unitsPerGood
 consumed[g]  = min(stock[g], demanded[g])
 ```
 
+A group buys what its money pays for, necessities first, then comforts, then luxuries. Purchases inside an area move no money, as every trade there cancels out: the budget only caps quantities. The market sees what was bought (`demanded`), which drives prices and the labor plan; what a group wanted but could not pay for counts as unmet need.
+
 **Spillover:** after the first pass, the need units left unmet by goods that ran out are spread over the goods of the same need that still have stock, in proportion to `share` and capped by that stock. One pass is enough. `demanded` keeps the value from before spillover, so a scarce good keeps its upward price pressure while its substitutes cover the shortfall. `needConsumed` is the sum of `consumed[g] × unitsPerGood` over the need's goods.
 
-`referenceUnitPrice` is `needPrice` computed once at startup, with every consumer price equal to labor value. At those prices and at a purchasing power of 1, an area demands exactly `demandPerPersonPerDay`. A substitution elasticity of 0 keeps shares fixed by preference; 2 to 4 lets consumers switch strongly toward the cheapest good while keeping some variety.
+`referenceUnitPrice` is `needPrice` computed once at startup, with every consumer price equal to labor value. At those prices and at a purchasing power of 1, a group wants exactly `demandPerPersonPerDay` per person. A substitution elasticity of 0 keeps shares fixed by preference; 2 to 4 lets consumers switch strongly toward the cheapest good while keeping some variety.
 
 `necessitySatisfaction` is the sum of `needConsumed` divided by the sum of `needDemanded` over necessity needs, each valued at its `referenceUnitPrice` so that needs measured in different units add up. `satisfaction` is the same ratio over all needs, with each need also weighted by its tier in `tierWeights`.
 
@@ -215,21 +231,22 @@ smoothedPrice  = clamp(smoothedPrice + fraction(priceSmoothingRatePerDay) * (pri
 
 ### Labor allocation
 
-Workers move toward a target allocation: the labor needed to meet total demand, exports included, and to bring the stock back to its reserve, tilted toward jobs whose value added beats the **reservation wage**, the value per hour below which workers would rather stay unemployed. Value added is computed from smoothed prices and after production taxes or subsidies.
+Workers move toward a target allocation: the labor needed to meet total demand, exports included, and to bring the stock back to its reserve, tilted toward jobs whose value added beats the **reservation wage**, the value per hour below which workers would rather stay unemployed. Value added is computed from smoothed prices; a job is weighed after the income tax of its wage band.
 
 ```typescript
 valueAddedPerHour(good) =
-  (smoothedPrice[good] * (1 - productionTaxRate[good])
-   - sum over inputs of input.quantity * smoothedPrice[input.good])
+  (smoothedPrice[good] - sum over inputs of input.quantity * smoothedPrice[input.good])
   * marginalOutputPerWorker(good) / hoursPerWorkerDay
 
 averageWage = sum(valueAddedPerHour * privateWorkers) / max(sum(privateWorkers), epsilon)
+afterTax(job) = valueAddedPerHour(job) * (1 - incomeTaxRate[band(valueAddedPerHour(job))])   // when positive
 
 reservation = reservationWage * savingsFactor          // workers short of savings accept less
+            + benefitReservationShare * max(0, -unemployedTaxPerDay) / hoursPerWorkerDay   // a benefit, more
 needPerDay  = used / days + (isService ? 0 : (reserveDaysOf(good) * used / days - stock) / stockRecoveryDays)
 needed(job) = isPrimary ? -capacity * ln(1 - min(needPerDay, 0.95 * capacity) / capacity) / hourlyOutputPerWorker
                         : needPerDay / hourlyOutputPerWorker
-target(job) = needed(job) * exp(min(5, (valueAddedPerHour(job) - reservation)
+target(job) = needed(job) * exp(min(5, (afterTax(job) - reservation)
                                        / (laborAllocationTemperature * reservation)))
 // scale all targets down together if they exceed the available private workforce; the rest is unemployed
 change(job) = fraction(laborMobilityRatePerDay) * (target(job) - workers(job))
@@ -242,11 +259,16 @@ A good is producible in an area if it is primary with natural capacity there, or
 
 ### Population
 
+Births need nearly every necessity met; starvation sets in only well below. In between, the population holds steady, so an area that fills up stops growing when its poorest start missing food, before anyone starves.
+
 ```typescript
-if (necessitySatisfaction >= growthSatisfactionThreshold)
-  growth = growthRatePerDay * (necessitySatisfaction - threshold) / (1 - threshold)
+s = necessitySatisfaction
+if (s >= growthSatisfactionThreshold)
+  growth = growthRatePerDay * (s - growthSatisfactionThreshold) / (1 - growthSatisfactionThreshold)
+else if (s < starvationSatisfactionThreshold)
+  growth = -starvationRatePerDay * (starvationSatisfactionThreshold - s) / starvationSatisfactionThreshold
 else
-  growth = -starvationRatePerDay * (threshold - necessitySatisfaction) / threshold
+  growth = 0
 population *= exp(growth * demographyResponsiveness * days)
 
 attractiveness = (1 - migrationWageWeight) * satisfaction

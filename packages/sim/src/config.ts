@@ -26,6 +26,8 @@ export interface WorldConfig {
     laborMobilityRatePerDay: number; // speed at which private workers move toward the target allocation
     laborAllocationTemperature: number; // softness of the value-added tilt on labor targets, relative to the reservation wage
     reservationWage: number; // value added per hour below which workers prefer unemployment, at target savings
+    benefitReservationShare: number; // share of the unemployment benefit, per hour, added to the reservation wage
+    unemployedWageShare: number; // share of the average wage an unemployed worker lives on, before any benefit
     stockRecoveryDays: number; // labor plans to bring a stock back to its reserve over this many days
     maxPriceChangePerTick: number; // largest relative price change in one tick
     maxLaborShiftPerTick: number; // largest share of a workforce changing jobs in one tick
@@ -54,6 +56,7 @@ export interface WorldConfig {
     growthRatePerDay: number; // relative growth per day at full necessity satisfaction
     starvationRatePerDay: number; // relative decline per day when no necessity is met
     growthSatisfactionThreshold: number; // necessity satisfaction above which population grows
+    starvationSatisfactionThreshold: number; // necessity satisfaction below which people starve
     migrationRatePerDay: number; // share of the attractiveness gap that migrates per day
     migrationWageWeight: number; // weight of average wage versus satisfaction in attractiveness
   };
@@ -137,6 +140,8 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
     laborMobilityRatePerDay: 0.07,
     laborAllocationTemperature: 1,
     reservationWage: 1,
+    benefitReservationShare: 0.5,
+    unemployedWageShare: 0.5,
     stockRecoveryDays: 5,
     maxPriceChangePerTick: 0.1,
     maxLaborShiftPerTick: 0.02,
@@ -164,7 +169,8 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
   population: {
     growthRatePerDay: 0.0001,
     starvationRatePerDay: 0.003,
-    growthSatisfactionThreshold: 0.9,
+    growthSatisfactionThreshold: 0.98,
+    starvationSatisfactionThreshold: 0.9,
     migrationRatePerDay: 0.01,
     migrationWageWeight: 0.5,
   },

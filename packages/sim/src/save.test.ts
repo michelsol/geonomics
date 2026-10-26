@@ -37,7 +37,7 @@ function commandsAt(world: World, offset: number): CommandEnvelope[] {
   const realm = world.governments[0] as World["governments"][number];
   const capital = realm.capital ?? 0;
   const commands: Record<number, Command> = {
-    0: { type: "setRealmPolicy", setting: { policy: "productionTaxRate", good: null, value: 0.07 } },
+    0: { type: "setRealmPolicy", setting: { policy: "incomeTaxRate", good: null, value: 0.07 } },
     3: { type: "recruitArmy", area: capital, soldiers: 150 },
     7: { type: "setInfrastructureTarget", area: capital, kind: "fort", level: 2 },
     12: {
@@ -89,13 +89,13 @@ describe("saves", () => {
   it("reject other files, and formats older or newer than this one", () => {
     expect(() => readSaveInfo(new Uint8Array([1, 2, 3, 4]))).toThrow("not a Geonomics save");
     expect(() => readSaveInfo(new Uint8Array([0x80])) /* an empty msgpack map */).toThrow("not a Geonomics save");
-    // The version follows the magic: a float64 3 (0xcb 40 08 00…) becomes 4 (0xcb 40 10 00…) or 2 (0xcb 40 00 00…).
+    // The version follows the magic: a float64 4 (0xcb 40 10 00…) becomes 5 (0xcb 40 14 00…) or 3 (0xcb 40 08 00…).
     const at = bytes.indexOf(0xcb);
     const future = bytes.slice();
-    future[at + 2] = 0x10;
-    expect(() => readSaveInfo(future)).toThrow("newer version of the game (format 4)");
+    future[at + 2] = 0x14;
+    expect(() => readSaveInfo(future)).toThrow("newer version of the game (format 5)");
     const past = bytes.slice();
-    past[at + 2] = 0x00;
-    expect(() => readSaveInfo(past)).toThrow("older version of the game (format 2)");
+    past[at + 2] = 0x08;
+    expect(() => readSaveInfo(past)).toThrow("older version of the game (format 3)");
   });
 });

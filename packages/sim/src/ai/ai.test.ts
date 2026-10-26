@@ -14,7 +14,7 @@ import { perceive } from "./view";
 
 const government = (world: World, id: number) => world.governments[id] as Government;
 const taxOf = (g: Government) =>
-  g.realmPolicies.find((s) => s.policy === "productionTaxRate" && s.good === null)?.value ?? 0;
+  g.realmPolicies.find((s) => s.policy === "incomeTaxRate" && (s.band ?? null) === null)?.value ?? 0;
 
 /** The test realms with the AI running government `id` as `personality`. */
 function aiWorld(personalities: Partial<Record<number, Personality>>, config?: DeepPartial<WorldConfig>): World {
@@ -54,6 +54,18 @@ describe("the economy", () => {
     const kinds = trader.standingOrders.map((order) => order.rule.kind);
     expect(kinds).toContain("buyBelowPrice");
     expect(kinds).toContain("sellAbovePrice");
+  });
+
+  it("pays a treasury far above its reserve out as a benefit for the unemployed, and stops below the reserve", () => {
+    const benefitOf = (g: Government) =>
+      Math.max(0, -(g.realmPolicies.find((s) => s.policy === "unemployedTaxPerDay" && s.good === null)?.value ?? 0));
+    const world = aiWorld({ 1: "trader" });
+    days(world, 2); // the starting treasury holds many times the reserve
+    const trader = government(world, 1);
+    expect(benefitOf(trader)).toBeGreaterThan(0);
+    trader.treasury = 0;
+    days(world, 10);
+    expect(benefitOf(trader)).toBe(0);
   });
 
   it("raises the tax when the treasury runs short and keeps falling", () => {

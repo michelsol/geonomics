@@ -40,22 +40,39 @@ describe("policies", () => {
   it("applies realm defaults to every owned area and lets an override win in one area", () => {
     const world = realmWorld();
     expect(
-      send(world, { type: "setRealmPolicy", setting: { policy: "productionTaxRate", good: grain, value: 0.2 } }),
+      send(world, { type: "setRealmPolicy", setting: { policy: "consumptionTaxRate", good: grain, value: 0.2 } }),
     ).toBeNull();
-    for (const area of [0, 1, 2]) expect(stateOf(world, area).resolvedPolicies.productionTaxRate[grain]).toBe(0.2);
+    for (const area of [0, 1, 2]) expect(stateOf(world, area).resolvedPolicies.consumptionTaxRate[grain]).toBe(0.2);
     expect(
       send(world, {
         type: "setAreaPolicy",
         area: 1,
-        setting: { policy: "productionTaxRate", good: grain, value: -0.1 },
+        setting: { policy: "consumptionTaxRate", good: grain, value: -0.1 },
       }),
     ).toBeNull();
-    expect(stateOf(world, 1).resolvedPolicies.productionTaxRate[grain]).toBe(-0.1);
-    expect(stateOf(world, 0).resolvedPolicies.productionTaxRate[grain]).toBe(0.2);
-    expect(send(world, { type: "clearAreaPolicy", area: 1, policy: "productionTaxRate", good: grain })).toBeNull();
-    expect(stateOf(world, 1).resolvedPolicies.productionTaxRate[grain]).toBe(0.2);
+    expect(stateOf(world, 1).resolvedPolicies.consumptionTaxRate[grain]).toBe(-0.1);
+    expect(stateOf(world, 0).resolvedPolicies.consumptionTaxRate[grain]).toBe(0.2);
+    expect(send(world, { type: "clearAreaPolicy", area: 1, policy: "consumptionTaxRate", good: grain })).toBeNull();
+    expect(stateOf(world, 1).resolvedPolicies.consumptionTaxRate[grain]).toBe(0.2);
     // The other government's area is untouched.
-    expect(stateOf(world, 3, 1).resolvedPolicies.productionTaxRate[grain]).toBe(0);
+    expect(stateOf(world, 3, 1).resolvedPolicies.consumptionTaxRate[grain]).toBe(0);
+  });
+
+  it("sets the income tax for every band, then for one band, and clears an area's band override", () => {
+    const world = realmWorld();
+    const rates = (area: number) => Array.from(stateOf(world, area).resolvedPolicies.incomeTaxRate);
+    send(world, { type: "setRealmPolicy", setting: { policy: "incomeTaxRate", good: null, band: 2, value: 0.3 } });
+    send(world, { type: "setRealmPolicy", setting: { policy: "incomeTaxRate", good: null, value: 0.1 } });
+    expect(rates(0)).toEqual([0.1, 0.1, 0.3, 0.1]); // the band setting stays more specific
+    const override = { policy: "incomeTaxRate", good: null, band: 0, value: -0.2 } as const;
+    expect(send(world, { type: "setAreaPolicy", area: 1, setting: override })).toBeNull();
+    expect(rates(1)).toEqual([-0.2, 0.1, 0.3, 0.1]);
+    expect(send(world, { type: "clearAreaPolicy", area: 1, policy: "incomeTaxRate", good: null, band: 1 })).toBeNull();
+    expect(rates(1)[0]).toBe(-0.2); // another band's override stays
+    send(world, { type: "clearAreaPolicy", area: 1, policy: "incomeTaxRate", good: null, band: 0 });
+    expect(rates(1)).toEqual(rates(0));
+    send(world, { type: "setRealmPolicy", setting: { policy: "unemployedTaxPerDay", good: null, value: -2 } });
+    expect(stateOf(world, 2).resolvedPolicies.unemployedTaxPerDay).toBe(-2); // a benefit
   });
 
   it("sets head tax per area and removes a ceiling with a null value", () => {
@@ -73,7 +90,15 @@ describe("policies", () => {
     const world = realmWorld();
     const set = (policy: string, good: number | null, value: number | null) =>
       send(world, { type: "setRealmPolicy", setting: { policy, good, value } as never });
-    expect(set("productionTaxRate", grain, 6)).toMatch(/within/);
+    expect(set("consumptionTaxRate", grain, 6)).toMatch(/within/);
+    expect(set("productionTaxRate", grain, 0.1)).toMatch(/unknown policy/); // replaced by the income tax
+    const band = (policy: string, b: number | null, value: number) =>
+      send(world, { type: "setRealmPolicy", setting: { policy, good: null, band: b, value } as never });
+    expect(band("incomeTaxRate", 4, 0.1)).toMatch(/unknown wage band/);
+    expect(band("incomeTaxRate", 1, 6)).toMatch(/within/);
+    expect(band("headTaxPerPersonPerDay", 1, 1)).toMatch(/only the income tax/);
+    expect(set("incomeTaxRate", grain, 0.1)).toMatch(/not a good/);
+    expect(set("unemployedTaxPerDay", null, Number.NaN)).toMatch(/finite/);
     expect(set("importTariffRate", grain, -1.5)).toMatch(/within/);
     expect(set("consumptionTaxRate", grain, Number.NaN)).toMatch(/finite/);
     expect(set("headTaxPerPersonPerDay", grain, 1)).toMatch(/not a good/);
@@ -82,7 +107,7 @@ describe("policies", () => {
     expect(set("priceFloor", 99, 1)).toMatch(/unknown good/);
     expect(set("lowerTaxes", grain, 0)).toMatch(/unknown policy/);
     expect(
-      send(world, { type: "setAreaPolicy", area: 3, setting: { policy: "productionTaxRate", good: grain, value: 0 } }),
+      send(world, { type: "setAreaPolicy", area: 3, setting: { policy: "consumptionTaxRate", good: grain, value: 0 } }),
     ).toMatch(/not owned/);
     expect(send(world, { type: "clearAreaPolicy", area: 42, policy: "priceFloor", good: grain })).toMatch(
       /unknown area/,

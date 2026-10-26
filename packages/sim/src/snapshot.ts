@@ -112,7 +112,7 @@ export interface AreaDetail {
   naturalCapacity: Float32Array; // current extraction capacity per day, after depletion: land plus staffed waters
   needDemanded: Float32Array; // per need: need units the population wanted in the last tick
   needConsumed: Float32Array; // per need: need units it consumed, substitutes included
-  wage: Float32Array; // per good: value added per private worker-day after production tax, in man-hours
+  wage: Float32Array; // per good: value added per private worker-day before income tax, in man-hours
 }
 
 export interface Snapshot {

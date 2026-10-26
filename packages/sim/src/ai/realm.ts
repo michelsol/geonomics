@@ -16,8 +16,8 @@ export interface Realm {
   jobSpendingPerDay: number; // government wages owed per day at the current staffing
   soldierSpendingPerDay: number; // soldiers' wages owed per day
   netPerDay: number | null; // treasury change per day since the last decision; null at the first
-  taxRate: number; // the realm production tax rate
-  incomePerDay: number; // production taxes owed per day at that rate, from the owned areas' output and prices
+  taxRate: number; // the realm income tax rate, for every wage band
+  incomePerDay: number; // income tax owed per day at that rate, from the owned areas' public gross income
   reserve: number; // treasury the personality wants to keep: some days of income
   border: AreaId[]; // owned areas next to another realm's area, most populous first
 }
@@ -66,16 +66,15 @@ export function assess(view: AiView, memory: AiMemory, traits: Traits): Realm {
   const soldierSpendingPerDay = soldiers * government.soldierWage * hours;
   const elapsed = memory.lastDecisionDay === null ? 0 : day - memory.lastDecisionDay;
   const netPerDay = elapsed > 0 ? (government.treasury - memory.lastTreasury) / elapsed : null;
-  const setting = government.realmPolicies.find((s) => s.policy === "productionTaxRate" && s.good === null);
+  const setting = government.realmPolicies.find((s) => s.policy === "incomeTaxRate" && (s.band ?? null) === null);
   const taxRate = setting?.value ?? 0;
-  let output = 0;
+  const { workforceShare } = view.data.config.economy;
+  let wages = 0; // gross income of the owned areas per day, the income tax's base
   for (const area of owned) {
-    const detail = view.detail.get(area);
-    if (!detail) continue;
-    for (let good = 0; good < detail.produced.length; good++)
-      output += (detail.produced[good] as number) * (detail.price[good] as number);
+    const income = areas.grossIncome[area] as number;
+    if (Number.isFinite(income)) wages += income * (areas.population[area] as number) * workforceShare;
   }
-  const incomePerDay = (taxRate * output) / view.data.config.pace.gameDaysPerTick;
+  const incomePerDay = taxRate * wages;
   const border = [...owned].filter((area) =>
     (view.neighbors[area] ?? []).some((other) => {
       const owner = areas.owner[other] as number;

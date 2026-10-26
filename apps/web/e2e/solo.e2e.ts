@@ -48,29 +48,33 @@ test("a solo game runs, pauses, and takes commands", async ({ page }) => {
   }
   expect(await page.getByTestId("area-name").textContent()).not.toBe(capital);
 
-  // Policies open on the production tax; with nothing selected, the slider sets a realm-wide rate.
+  // Every tax has its own controls; with nothing selected, a slider sets a realm-wide rate.
   await openTab(page, "Policies");
   await page.getByRole("button", { name: "Clear", exact: true }).click();
   await expect(page.getByTestId("action-target")).toHaveText("Actions: your whole realm");
-  await expect(page.getByLabel("Policy", { exact: true })).toHaveValue("productionTaxRate");
-  await page.getByLabel("Policy level").fill("10");
-  await expect(page.getByLabel("Policy value")).toHaveValue("10");
-  await page.getByRole("button", { name: "Set", exact: true }).click();
-  await expect(page.getByTestId("policies")).toContainText("Production tax · all goods");
+  await page.getByLabel("Income tax · all bands level").fill("10");
+  await expect(page.getByLabel("Income tax · all bands value")).toHaveValue("10");
+  await page.getByRole("button", { name: "Set Income tax · all bands", exact: true }).click();
+  await expect(page.getByTestId("policies")).toContainText("Income tax · all bands");
   await expect(page.getByTestId("policies")).toContainText("10%");
 
   await expect(page.getByTestId("policies").locator("th", { hasText: "Only in" })).toHaveCount(0);
 
   // A realm head tax shows up among the policies.
   const headTax = page.getByTestId("policies").locator("tr", { hasText: "Head tax" });
-  await page.getByLabel("Policy", { exact: true }).selectOption("headTaxPerPersonPerDay");
-  await page.getByLabel("Policy value").fill("0.25");
-  await page.getByRole("button", { name: "Set", exact: true }).click();
+  await page.getByLabel("Head tax value").fill("0.25");
+  await page.getByRole("button", { name: "Set Head tax", exact: true }).click();
   await expect(headTax).toContainText("0.25 mh");
   // A negative head tax is an allowance paid to everyone.
-  await page.getByLabel("Policy value").fill("-1");
-  await page.getByRole("button", { name: "Set", exact: true }).click();
+  await page.getByLabel("Head tax value").fill("-1");
+  await page.getByRole("button", { name: "Set Head tax", exact: true }).click();
   await expect(headTax).toContainText("-1 mh");
+
+  // The income tax's unemployed row, negative, is a benefit for every unemployed worker.
+  const benefit = page.getByTestId("policies").locator("tr", { hasText: "Income tax · unemployed" });
+  await page.getByLabel("Income tax · unemployed value").fill("-2");
+  await page.getByRole("button", { name: "Set Income tax · unemployed", exact: true }).click();
+  await expect(benefit).toContainText("-2 mh");
 
   // The Jobs tab shows how the workforce is employed.
   await openTab(page, "Jobs");
@@ -272,10 +276,10 @@ test("a selection with none of your areas has no action target", async ({ page }
   await expect(page.getByTestId("employment-bar")).toHaveCount(0);
   await openTab(page, "Policies");
   await expect(page.getByTestId("no-own-area").first()).toBeVisible();
-  await expect(page.getByLabel("Policy", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Income tax · all bands value")).toHaveCount(0);
   await page.getByRole("button", { name: "Clear", exact: true }).click();
   await expect(target).toHaveText("Actions: your whole realm");
-  await expect(page.getByLabel("Policy", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Income tax · all bands value")).toBeVisible();
   await openTab(page, "Jobs");
   await expect(page.getByTestId("employment-bar")).toBeVisible();
 });

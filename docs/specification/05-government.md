@@ -23,8 +23,9 @@ Each policy plugs into exactly one phase of the tick.
 
 | Policy | Applies per | Phase | Effect |
 | --- | --- | --- | --- |
-| `productionTaxRate` | Good | Production, Labor | Taxes private output at the market price, and lowers value added, so workers leave the taxed good. Negative values are subsidies. |
-| `consumptionTaxRate` | Good | Consumption | Raises the consumer price, so demand drops, mostly for elastic goods. Negative values are subsidies. |
+| `incomeTaxRate` | Wage band (or every band) | Consumption, Taxes, Labor | A share of the wages of each wage band (section 4, Consumption): it lowers what the band's workers buy, and what a job is worth to them, so workers leave jobs it pushes below the reservation wage. Negative values top wages up, paid by the treasury. |
+| `unemployedTaxPerDay` | Area | Consumption, Taxes, Labor | Man-hours per unemployed worker per day. Negative, it is a **benefit** paid to every unemployed worker: it adds to what they buy, and raises the wage workers ask for. Shown as the unemployed row of the income tax. |
+| `consumptionTaxRate` | Good | Consumption | Raises the consumer price, so demand drops, mostly for elastic goods. Negative values are subsidies. It is the tax on final purchases, as a value-added tax would be. |
 | `importTariffRate` | Good | Trade | Added to the cost of goods entering across a border. |
 | `exportTariffRate` | Good | Trade | Added to the cost of goods leaving across a border. A very high value acts as a ban. |
 | `headTaxPerPersonPerDay` | Area | Taxes | Flat tax per inhabitant. Reliable revenue that drains savings and drives people away. Negative, it is an allowance paid to every inhabitant, as a subsidy. |
@@ -42,14 +43,15 @@ The player sets **realm policies** once and adds **area overrides** where needed
 
 ### Tax collection
 
-Taxes are owed on this tick's private output and consumption at the market price, plus the head tax:
+Taxes are owed on this tick's wages and consumption, plus the unemployed and head taxes. The wage bands are those of this tick's consumption phase:
 
 ```typescript
-taxDue  = sum over goods of max(0, productionTaxRate) * privatelyProduced * price
+taxDue  = sum over bands of max(0, incomeTaxRate) * bandWages * hoursPerWorkerDay * days
         + sum over goods of max(0, consumptionTaxRate) * consumed * price
+        + max(0, unemployedTaxPerDay) * unemployedWorkers * days
         + max(0, headTaxPerPersonPerDay) * population * days
-subsidy = the same production and consumption terms for negative rates, as positive amounts
-        + max(0, -headTaxPerPersonPerDay) * population * days     // a negative head tax: an allowance
+subsidy = the same income, consumption, unemployed and head terms for negative values, as positive amounts:
+          wage top-ups, consumption subsidies, benefits for the unemployed and allowances
 // tariffs were already collected in money during trade
 
 paidInMoney = min(taxDue, area.savings)

@@ -46,9 +46,11 @@ export function Guide() {
           <h2>Running your realm</h2>
           <ul>
             <li>
-              <b>Policies</b>: taxes and tariffs (a negative tax is a subsidy), head tax (negative: an allowance for
-              everyone), price ceilings and floors, for the selection or the whole realm. Taxes fill your treasury but
-              slow the economy down. Standing orders buy cheap and sell dear for your depots on their own.
+              <b>Policies</b>: an income tax by wage band, with a row for the unemployed (negative: a benefit), a head
+              tax (negative: an allowance for everyone), consumption taxes and tariffs per good (a negative tax is a
+              subsidy), price ceilings and floors, for the selection or the whole realm. People buy with what they earn,
+              so the unemployed and the low-paid feel dear food first. Taxes fill your treasury but slow the economy
+              down. Standing orders buy cheap and sell dear for your depots on their own.
             </li>
             <li>
               <b>Depots</b>: the Area panel shows what your government holds in the selected areas, bought on the

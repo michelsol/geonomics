@@ -68,10 +68,10 @@ test("a host and a joined player share a game", async ({ browser }, testInfo) =>
     timeout: 15_000,
   });
 
-  // The guest sets a production tax for its realm.
+  // The guest sets an income tax for its realm.
   await openTab(guest, "Policies");
-  await guest.getByLabel("Policy level").fill("12");
-  await guest.getByRole("button", { name: "Set", exact: true }).click();
+  await guest.getByLabel("Income tax · all bands level").fill("12");
+  await guest.getByRole("button", { name: "Set Income tax · all bands", exact: true }).click();
   await expect(guest.getByTestId("policies")).toContainText("12%", { timeout: 15_000 });
 
   // Pausing on the host shows on the guest.

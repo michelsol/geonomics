@@ -450,6 +450,54 @@ In the two-year AI-only game (small catalog, 300 areas), fish sells at about 4.5
 
 Saves of version 2 have no water cells, and their coastal areas hold the fish that is now at sea, so they are refused like version 1.
 
+## Incomes, taxes and the population boom
+
+### Why population crashed instead of levelling off
+
+A long peaceful game (60 areas, small catalog, 3 peaceful AI realms, 60 years headless) grew at the full 3.7% a year for 12 years while unemployment rose from 19% to 33% and the average wage fell from 1.58 to 0.60, with necessities 100% met throughout. Around year 14 food capacity was reached, food went to the price ceiling (10× labor value) and about 40,000 people starved a year. Population then crept up to 1.72 million and settled at necessities met = 0.907, just above the threshold, with a quarter of the people in areas below it.
+
+Two rules caused it. Births looked only at necessities met, which measured what people chose to buy, so nothing slowed them before the land gave out. And nobody's purchases depended on their own income: one purchasing power, the employed's wage times the savings factor, applied to every inhabitant, and buying inside an area moves no money, so the unemployed ate as well as anyone and a benefit for them could change nothing. The AI made it harsher: it spent only 40–60% of its tax income, and treasuries went from 63 million to 130 million while private savings fell from 68 million to 0.2 million. Without realms money stayed constant, but the wall still came at year 14.
+
+### Buying from one's own income
+
+Consumers now buy in groups: the workers of each wage band, and the unemployed, each with the people who depend on them. A group's budget is its income times the savings factor, and it spends it on necessities first. The budget only caps quantities, since money spent inside an area stays there; what a group wanted but could not pay for counts as unmet need. The unemployed live on half the average wage (`unemployedWageShare`), standing for what families pass on: with nothing at all, the 20–40% of the workforce the economy does not need from the start would starve on day one.
+
+One group per job would have cost about 60% more tick time on the 3,000-area large map (56 groups × 10 needs per area). Four bands keep it to five groups. The bands are fixed wages, not shares of the local average, so a tax rate set for a band means the same thing in every area and over time, as real tax brackets do. The measured cost is about 10% on that map (98.9 ms per tick against 89.6 ms, on a busier machine than the earlier timings).
+
+Placing the starting workers needed one more step. Demand used to start at the reference basket for everyone; it now starts there, and workers are placed again for what the groups buy at the wages that placement gives, three passes in all, so the first tick still produces within 10% of what is bought. Stocks must be set before each placement, since placing runs a production pass that rations inputs from them: without it, bread had no grain, its marginal output and the starting wage came out near zero, and the map started with a third of its money.
+
+### Births stop before starvation
+
+Births now need necessities met above 0.98, and starvation starts below 0.9; in between, the population holds steady. With budgets, necessities slip as the poorest are priced out of food, so births stop there, and an overshoot lands in the steady zone. A rule tying births to real income was tried first: it needed two calibrated incomes and still let some areas starve on a 300-area map, so it gave way to this simpler one. Raising the growth threshold to 0.99 made no difference: necessities stay fully met until food capacity binds and then fall within a couple of years, faster than births react.
+
+| 60 areas, 3 peaceful realms | Before | After |
+| --- | --- | --- |
+| Population, settled | 1.72 million, at the starvation line | about 1.16 million |
+| Starvation | about 40,000 a year from year 14, then lasting | about 7,000 over years 16–18, then none |
+| Necessities met, settled | 0.907 | about 0.96 |
+| Food price | at the 10× ceiling | 2.5 to 4.5× labor value |
+| Unemployment | 19% → 33% | 24% → 33% |
+| Private savings | 68 million → 0.2 million | 68 million → about 105 million (21–35 days) |
+| Treasuries | 63 million → 130 million | 63 million → 13–26 million |
+
+On 300 areas over 40 years with 8 realms the picture is the same: 2.99 million people grow at about 3.7% a year, about 80,000 starve over years 14–18 as food capacity binds, and the population then settles near 6.2 million with starvation close to zero, savings at 22 days and food at 3.9 times its labor value. Without realms, the 60-area map settles at about 1.05 million with unemployment near 45% (25–30% before) and a trickle of starvation, about 0.04% a year: nobody pays the unemployed a benefit there. Overall satisfaction falls to about 0.72 once the map is full, as many can no longer afford comforts.
+
+### An income tax instead of the production tax
+
+The production tax fell on the gross value of output, inputs included, so it compounded along supply chains, and with no capital or profit in the model it was a tax on the same wages an income tax takes. It is gone. The income tax sets a rate per wage band (negative tops wages up), and its row for the unemployed is an amount per unemployed worker (negative: a benefit), which also raises the wage workers ask for by half the benefit. The consumption tax already taxes final purchases per good, as a value-added tax does. The AI taxes through the income tax on all bands, counting its base from the public gross income; its rates stay those of the personalities, and the probes show treasuries that still pay for infrastructure.
+
+### The AI pays its surplus back
+
+Above twice its reserve, an AI pays the excess out over about a year as a benefit for its unemployed, and stops below the reserve. Its tax keeps the personality's floor: at zero, the reserve and the infrastructure budget, both counted in days of tax income, would vanish.
+
+### Islands linked by air
+
+An island with no grain of its own, fed through a small air link, used to keep eating at any price: bread rose to 9 times its labor value and consumption ignored money. Now its bakers, paying 9 times the labor value for grain, earn nothing, the island cannot afford bread, and it goes hungry and broke. Its grain price gap makes grain worth flying, up to 14% of what goes by sea where it was under 1% before, so the test now holds only stone, coal and timber to the 1% limit.
+
+### A fourth save version
+
+The resolved policies lost the production tax and gained the income tax and the unemployed row, and the config gained four values, so saves of version 3 are refused.
+
 ## Open questions
 
 - **Tick time on large maps.** At 3,000 areas with the large catalog a tick takes about 50 ms in Node and 65 ms in the browser worker. The interface stays smooth because the simulation runs in a worker; only the top speed on large maps is limited. Worth revisiting if players need faster large maps.

@@ -600,6 +600,18 @@ tr.chosen-row td {
   width: 100%;
   accent-color: var(--accent);
 }
+.policy-control {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.policy-control:last-child {
+  border-bottom: none;
+}
+.policy-label {
+  flex: 1 1 7em;
+}
 .dot {
   display: inline-block;
   width: 8px;

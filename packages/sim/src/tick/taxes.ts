@@ -4,6 +4,7 @@ import { armyArea } from "../army";
 import { infrastructureBillPerDay, staffWageShareOf } from "../infrastructure";
 import { EPSILON } from "../math";
 import type { Area, GovernmentAreaState, World } from "../types";
+import { incomeTaxPerDay } from "./labor";
 import { policiesOf, type Scratch, scratchOf } from "./scratch";
 
 export function runTaxes(world: World): void {
@@ -48,15 +49,23 @@ export function runTaxes(world: World): void {
 }
 
 /**
- * Collects an area's taxes: production and consumption taxes accumulated this tick plus the head tax. What savings
- * cannot cover is taken in kind, most valuable goods first, into the depot. Returns the money collected. A negative
- * head tax is an allowance instead, added to what the treasury owes the area.
+ * Collects an area's taxes: the consumption tax accumulated this tick, the income tax on the wage bands of the
+ * consumption phase, the unemployed tax and the head tax. What savings cannot cover is taken in kind, most valuable
+ * goods first, into the depot. Returns the money collected. A negative income tax tops wages up, a negative unemployed
+ * tax is a benefit and a negative head tax an allowance: each is added to what the treasury owes the area instead.
  */
 function collect(world: World, scratch: Scratch, area: Area, state: GovernmentAreaState): number {
   const days = world.config.pace.gameDaysPerTick;
-  const headTax = policiesOf(world, area, scratch).headTaxPerPersonPerDay * area.population * days;
-  if (headTax < 0) scratch.paymentDue[area.id] = (scratch.paymentDue[area.id] as number) - headTax;
-  const due = (scratch.taxDue[area.id] as number) + Math.max(0, headTax);
+  const policies = policiesOf(world, area, scratch);
+  const owe = (amount: number) => {
+    scratch.paymentDue[area.id] = (scratch.paymentDue[area.id] as number) + amount;
+  };
+  const headTax = policies.headTaxPerPersonPerDay * area.population * days;
+  const unemployedTax = policies.unemployedTaxPerDay * area.unemployedWorkers * days;
+  const incomeTax = incomeTaxPerDay(world, area, scratch, policies);
+  owe(Math.max(0, -headTax) + Math.max(0, -unemployedTax) + incomeTax.topUp * days);
+  const due =
+    (scratch.taxDue[area.id] as number) + Math.max(0, headTax) + Math.max(0, unemployedTax) + incomeTax.tax * days;
   if (due <= 0) return 0;
   const paid = Math.min(due, area.savings);
   area.savings -= paid;

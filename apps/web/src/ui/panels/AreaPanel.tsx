@@ -178,7 +178,7 @@ function IncomeStats({ summary, several }: { summary: SelectionSummary; several:
         label="Avg gross income"
         value={`${fmt(summary.grossIncome)} mh/day`}
         testId="gross-income"
-        title={`Value added by private workers before production tax, plus the wages of government jobs.${each}${mean}`}
+        title={`Value added by private workers, plus the wages of government jobs, before income tax.${each}${mean}`}
       />
       <Stat
         label="Avg net income"

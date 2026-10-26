@@ -93,8 +93,8 @@ test("the brush paints areas into the selection, and actions follow it", async (
   const target = (await page.getByTestId("action-target").textContent()) ?? "";
   const owned = Number(/your (\d+) area/.exec(target)?.[1]);
   expect(owned).toBeGreaterThan(0);
-  await page.getByLabel("Policy value").fill("12");
-  await page.getByRole("button", { name: "Set", exact: true }).click();
+  await page.getByLabel("Income tax · all bands value").fill("12");
+  await page.getByRole("button", { name: "Set Income tax · all bands", exact: true }).click();
   await expect(page.getByTestId("policies").locator("th", { hasText: "Only in" })).toHaveCount(owned);
 
   // Workers hired for the selection are a total, split over its areas.
@@ -111,6 +111,6 @@ test("the brush paints areas into the selection, and actions follow it", async (
   await page.getByRole("button", { name: "My realm", exact: true }).click();
   await expect(page.getByTestId("action-target")).toHaveText("Actions: your whole realm");
   await page.getByRole("navigation").getByRole("button", { name: "Policies", exact: true }).click();
-  await expect(page.getByLabel("Policy", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Income tax · all bands value")).toBeVisible();
   await expect(page.getByTestId("no-own-area")).toHaveCount(0);
 });

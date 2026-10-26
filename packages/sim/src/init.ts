@@ -1,5 +1,6 @@
 // Rule 6: start near equilibrium, then warm up (specification §3).
 import { reserveDaysOf } from "./math";
+import { planDemand } from "./tick/consumption";
 import { computeValueAdded, workersFor } from "./tick/labor";
 import { produceArea } from "./tick/production";
 import { scratchOf } from "./tick/scratch";
@@ -41,30 +42,41 @@ export function referenceDemandPerPerson(world: World): Float64Array {
   return demand;
 }
 
+/** Passes of placing workers and planning what consumers buy at the wages that gives, so the two agree. */
+const INITIAL_PASSES = 3;
+
 /**
  * Rule 6, steps 1 to 5: prices at labor value, workers placed to cover local demand where local resources allow,
- * starting stock and savings, and a first average wage, so the first tick starts close to balance.
+ * starting stock and savings, and a first average wage, so the first tick starts close to balance. Demand starts at
+ * the reference, then becomes what the area's consumers buy at the wages and unemployment that placement gives.
  */
 export function initializeWorld(world: World): void {
-  const consumerPerPerson = referenceConsumerDemandPerPerson(world);
   const perPerson = referenceDemandPerPerson(world);
   const scratch = scratchOf(world);
   const days = world.config.pace.gameDaysPerTick;
+  const e = world.config.economy;
+  const consumer = new Float64Array(world.goods.length);
+  const total = new Float64Array(world.goods.length);
   for (const area of world.areas) {
     initializePrices(world, area);
+    for (const good of world.goods) total[good.id] = (perPerson[good.id] as number) * area.population;
+    for (let pass = 0; pass < INITIAL_PASSES; pass++) {
+      // Stock first: placing workers runs a production pass that rations inputs from it.
+      for (const good of world.goods)
+        area.stock[good.id] = good.isService ? 0 : reserveDaysOf(good, world.config) * (total[good.id] as number);
+      placeWorkers(world, area, total);
+      area.averageWage = computeValueAdded(world, area, scratch, scratch.values);
+      const income = Math.max(area.averageWage, 0.1) * e.hoursPerWorkerDay * e.workforceShare;
+      area.savings = e.targetSavingsDays * area.population * income;
+      planDemand(world, area, scratch);
+      for (const good of world.goods) consumer[good.id] = (area.demanded[good.id] as number) / days;
+      withInputs(world, consumer, total);
+    }
     for (const good of world.goods) {
       const g = good.id;
-      const consumerDemand = (consumerPerPerson[g] as number) * area.population;
-      const totalDemand = (perPerson[g] as number) * area.population;
-      area.demanded[g] = consumerDemand * days;
-      area.inputDemanded[g] = (totalDemand - consumerDemand) * days;
-      area.stock[g] = good.isService ? 0 : reserveDaysOf(good, world.config) * totalDemand;
+      area.inputDemanded[g] = ((total[g] as number) - (consumer[g] as number)) * days;
+      area.stock[g] = good.isService ? 0 : reserveDaysOf(good, world.config) * (total[g] as number);
     }
-    placeWorkers(world, area, perPerson);
-    area.averageWage = computeValueAdded(world, area, scratch, scratch.values);
-    const e = world.config.economy;
-    const income = Math.max(area.averageWage, 0.1) * e.hoursPerWorkerDay * e.workforceShare;
-    area.savings = e.targetSavingsDays * area.population * income;
     area.satisfaction = 1;
     area.necessitySatisfaction = 1;
     area.militia = area.population * world.config.military.militiaShare;
@@ -95,13 +107,24 @@ function initializePrices(world: World, area: Area): void {
   }
 }
 
-/** Rule 6, step 2: workers to cover local demand where resources allow; the rest stay unemployed. */
-function placeWorkers(world: World, area: Area, perPerson: Float64Array): void {
+/** Total demand per day for every good: consumer demand, plus the inputs needed to make all of it, into `total`. */
+function withInputs(world: World, consumer: Float64Array, total: Float64Array): void {
+  total.set(consumer);
+  // Outputs come after their inputs, so walking backwards adds each recipe's input demand before the input is read.
+  for (let g = world.goods.length - 1; g >= 0; g--) {
+    const good = world.goods[g] as World["goods"][number];
+    for (const input of good.inputs)
+      total[input.good] = (total[input.good] as number) + (total[g] as number) * input.quantity;
+  }
+}
+
+/** Rule 6, step 2: workers to cover the area's total demand per day where resources allow; the rest stay unemployed. */
+function placeWorkers(world: World, area: Area, demandPerDay: Float64Array): void {
   const scratch = scratchOf(world);
   const workforce = area.population * world.config.economy.workforceShare;
   let total = 0;
   for (const good of world.goods) {
-    const workers = workersFor(world, area, good, (perPerson[good.id] as number) * area.population);
+    const workers = workersFor(world, area, good, demandPerDay[good.id] as number);
     area.privateWorkers[good.id] = workers;
     total += workers;
   }

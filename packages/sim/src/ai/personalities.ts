@@ -2,7 +2,7 @@
 import type { InfrastructureKind, Personality } from "../types";
 
 export interface Traits {
-  baseTax: number; // realm production tax rate at the first decision
+  baseTax: number; // realm income tax rate at the first decision
   minimumTax: number; // the tax never goes below this
   maximumTax: number; // nor above this
   reserveDays: number; // days of tax income the treasury should hold

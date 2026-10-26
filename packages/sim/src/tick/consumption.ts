@@ -1,6 +1,8 @@
 // Phase 3: consumption (specification §4, Consumption).
+import { WAGE_BAND_COUNT } from "../bands";
 import { clamp, EPSILON } from "../math";
-import type { Area, World } from "../types";
+import type { Area, ResolvedPolicies, World } from "../types";
+import { wageBands } from "./labor";
 import { policiesOf, type Scratch, scratchOf } from "./scratch";
 
 /**
@@ -14,34 +16,61 @@ export function savingsFactor(world: World, area: Area): number {
   return clamp(savingsDays / e.targetSavingsDays, e.savingsFactorMin, e.savingsFactorMax) ** e.savingsElasticity;
 }
 
-/** Purchasing power from average wage and savings relative to the target savings. */
-export function purchasingPower(world: World, area: Area): number {
-  return Math.max(area.averageWage, 0.1) * savingsFactor(world, area);
+/**
+ * What an unemployed worker lives on per hour, before head tax: the share of the average wage the employed pass on,
+ * less the unemployed tax, which is a benefit when negative.
+ */
+export function unemployedIncome(world: World, area: Area, policies: ResolvedPolicies): number {
+  const e = world.config.economy;
+  return e.unemployedWageShare * Math.max(area.averageWage, 0) - policies.unemployedTaxPerDay / e.hoursPerWorkerDay;
 }
 
 export function runConsumption(world: World): void {
   const scratch = scratchOf(world);
-  for (const area of world.areas) consumeArea(world, area, scratch);
+  for (const area of world.areas) {
+    planDemand(world, area, scratch);
+    consumeArea(world, area, scratch);
+  }
 }
 
-function consumeArea(world: World, area: Area, scratch: Scratch): void {
+/**
+ * What the area's consumers want and what they buy this tick. Consumers come in groups: the workers of each wage band,
+ * then the unemployed, each with the people who depend on them. A group wants what its purchasing power asks for, and
+ * buys what its income pays for, necessities first. Writes what was bought per good into `area.demanded`, what was
+ * wanted per need into `area.needDemanded`, and each good's share of its need into `scratch.weights`. Purchases inside
+ * an area move no money, as every trade there cancels out: the budget only caps quantities.
+ */
+export function planDemand(world: World, area: Area, scratch: Scratch): void {
   const days = world.config.pace.gameDaysPerTick;
-  const { tierWeights } = world.config.economy;
+  const e = world.config.economy;
   const { goods } = world;
   const policies = policiesOf(world, area, scratch);
   const consumptionTax = policies.consumptionTaxRate;
-  const logPower = Math.log(purchasingPower(world, area));
   const share = scratch.weights;
   const unitPrice = scratch.values;
+  const { groupPeople: people, groupLogPower: logPower, groupBudget: budget } = scratch;
+
+  // Groups: the wage bands, then the unemployed. Every group owes the head tax for its people.
+  wageBands(world, area, scratch);
+  const factor = savingsFactor(world, area);
+  const workforce = area.population * e.workforceShare;
+  const headTaxPerHour = policies.headTaxPerPersonPerDay / e.workforceShare / e.hoursPerWorkerDay;
+  const start = area.id * WAGE_BAND_COUNT;
+  const group = (index: number, workers: number, hourly: number) => {
+    const income = Math.max(0, hourly - headTaxPerHour);
+    people[index] = workforce > EPSILON ? (area.population * workers) / workforce : 0;
+    logPower[index] = Math.log(Math.max(income, 0.01) * factor);
+    budget[index] = income * e.hoursPerWorkerDay * days * workers * factor;
+  };
+  for (let band = 0; band < WAGE_BAND_COUNT; band++) {
+    const workers = scratch.bandWorkers[start + band] as number;
+    const mean = workers > EPSILON ? (scratch.bandWages[start + band] as number) / workers : 0;
+    group(band, workers, mean * (1 - (policies.incomeTaxRate[band] as number)));
+  }
+  group(WAGE_BAND_COUNT, area.unemployedWorkers, unemployedIncome(world, area, policies));
 
   area.demanded.fill(0);
-  area.consumed.fill(0);
-  let weightedDemand = 0;
-  let weightedConsumption = 0;
-  let necessityDemand = 0;
-  let necessityConsumption = 0;
-
-  for (const need of world.needs) {
+  for (const need of scratch.needsByTier) {
     const needGoods = scratch.needGoods[need.id] as number[];
     let weightSum = 0;
     for (const g of needGoods) {
@@ -57,25 +86,54 @@ function consumeArea(world: World, area: Area, scratch: Scratch): void {
       share[g] = (share[g] as number) / weightSum;
       needPrice += (share[g] as number) * (unitPrice[g] as number);
     }
+    const price = Math.max(needPrice, EPSILON);
 
-    const needDemanded =
-      area.population *
-      need.demandPerPersonPerDay *
-      days *
-      // (referenceUnitPrice / needPrice) ** priceElasticity * purchasingPower ** wealthElasticity
-      Math.exp(
-        need.priceElasticity * Math.log(need.referenceUnitPrice / Math.max(needPrice, EPSILON)) +
-          need.wealthElasticity * logPower,
-      );
+    // people × demandPerPersonPerDay × (referenceUnitPrice / needPrice) ** priceElasticity × power ** wealthElasticity
+    const perPerson = need.demandPerPersonPerDay * days;
+    const logPrice = need.priceElasticity * Math.log(need.referenceUnitPrice / price);
+    let wanted = 0;
+    let bought = 0;
+    for (let index = 0; index <= WAGE_BAND_COUNT; index++) {
+      const groupPeople = people[index] as number;
+      if (groupPeople <= 0) continue;
+      const groupWanted =
+        groupPeople * perPerson * Math.exp(logPrice + need.wealthElasticity * (logPower[index] as number));
+      const groupBought = Math.min(groupWanted, (budget[index] as number) / price);
+      budget[index] = Math.max(0, (budget[index] as number) - groupBought * price);
+      wanted += groupWanted;
+      bought += groupBought;
+    }
+    area.needDemanded[need.id] = wanted;
+    for (const g of needGoods) area.demanded[g] = (bought * (share[g] as number)) / (scratch.unitsPerGood[g] as number);
+  }
+}
 
+/**
+ * Consumes what `planDemand` left in `area.demanded` from stock, moving what a good lacks to its substitutes, and
+ * measures satisfaction against what was wanted: what a group wanted but could not pay for counts as unmet.
+ */
+function consumeArea(world: World, area: Area, scratch: Scratch): void {
+  const { tierWeights } = world.config.economy;
+  const { goods } = world;
+  const policies = policiesOf(world, area, scratch);
+  const consumptionTax = policies.consumptionTaxRate;
+  const share = scratch.weights;
+
+  area.consumed.fill(0);
+  let weightedDemand = 0;
+  let weightedConsumption = 0;
+  let necessityDemand = 0;
+  let necessityConsumption = 0;
+
+  for (const need of world.needs) {
+    const needGoods = scratch.needGoods[need.id] as number[];
     // First pass: each good covers its share; unmet need units are counted for the spillover pass.
     let unmet = 0;
     let availableShare = 0;
     for (const g of needGoods) {
       const unitsPerGood = scratch.unitsPerGood[g] as number;
-      const demanded = (needDemanded * (share[g] as number)) / unitsPerGood;
+      const demanded = area.demanded[g] as number;
       const consumed = Math.min(area.stock[g] as number, demanded);
-      area.demanded[g] = demanded;
       area.consumed[g] = consumed;
       unmet += (demanded - consumed) * unitsPerGood;
       if ((area.stock[g] as number) - consumed > EPSILON) availableShare += share[g] as number;
@@ -93,13 +151,12 @@ function consumeArea(world: World, area: Area, scratch: Scratch): void {
       area.stock[g] = Math.max(0, (area.stock[g] as number) - (area.consumed[g] as number));
       needConsumed += (area.consumed[g] as number) * unitsPerGood;
     }
-
-    area.needDemanded[need.id] = needDemanded;
     area.needConsumed[need.id] = needConsumed;
 
     // Need units differ between needs, so satisfaction compares them at their reference value.
-    const demandValue = needDemanded * need.referenceUnitPrice;
-    const consumedValue = Math.min(needConsumed, needDemanded) * need.referenceUnitPrice;
+    const needWanted = area.needDemanded[need.id] as number;
+    const demandValue = needWanted * need.referenceUnitPrice;
+    const consumedValue = Math.min(needConsumed, needWanted) * need.referenceUnitPrice;
     const tierWeight = tierWeights[need.tier];
     weightedDemand += tierWeight * demandValue;
     weightedConsumption += tierWeight * consumedValue;

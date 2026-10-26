@@ -207,6 +207,20 @@ describe("snapshots", () => {
       (snapshot.areas.netIncome[0] as number) + 0.2 / workforceShare,
       3,
     );
+    send(world, { type: "setRealmPolicy", setting: { policy: "headTaxPerPersonPerDay", good: null, value: null } });
+
+    // The income tax takes its share of what the bands earn, and a benefit adds what the unemployed receive.
+    send(world, { type: "setRealmPolicy", setting: { policy: "incomeTaxRate", good: null, value: 0.1 } });
+    const incomeTaxed = buildSnapshot(world, 0).areas;
+    expect(incomeTaxed.grossIncome[0]).toBeCloseTo(snapshot.areas.grossIncome[0] as number, 5);
+    expect(incomeTaxed.netIncome[0]).toBeCloseTo(0.9 * (snapshot.areas.netIncome[0] as number), 3);
+    send(world, { type: "setRealmPolicy", setting: { policy: "incomeTaxRate", good: null, value: null } });
+    send(world, { type: "setRealmPolicy", setting: { policy: "unemployedTaxPerDay", good: null, value: -1 } });
+    const unemployed = (world.areas[0] as (typeof world.areas)[number]).unemployedWorkers;
+    expect(buildSnapshot(world, 0).areas.netIncome[0]).toBeCloseTo(
+      (snapshot.areas.netIncome[0] as number) + unemployed / (area.population * workforceShare),
+      3,
+    );
 
     (world.areas[1] as (typeof world.areas)[number]).population = 0;
     expect(buildSnapshot(world, 0).areas.grossIncome[1]).toBeNaN();

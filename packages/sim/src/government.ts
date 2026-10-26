@@ -1,5 +1,6 @@
 // Governments: founding, ownership, captures and policy resolution (specifications §5 and §6).
 import { disbandArmy } from "./army";
+import { WAGE_BAND_COUNT } from "./bands";
 import { MinHeap } from "./heap";
 import { INFRASTRUCTURE_KINDS, levelOf } from "./infrastructure";
 import { nextRandom } from "./random";
@@ -243,7 +244,8 @@ export function setOwner(world: World, area: Area, owner: GovernmentId | null): 
 
 export function neutralPolicies(goodCount: number): ResolvedPolicies {
   return {
-    productionTaxRate: new Float64Array(goodCount),
+    incomeTaxRate: new Float64Array(WAGE_BAND_COUNT),
+    unemployedTaxPerDay: 0,
     consumptionTaxRate: new Float64Array(goodCount),
     importTariffRate: new Float64Array(goodCount),
     exportTariffRate: new Float64Array(goodCount),
@@ -272,7 +274,8 @@ export function resolveSettings(
   realmPolicies: readonly PolicySetting[],
   overrides: readonly PolicySetting[],
 ): void {
-  resolved.productionTaxRate.fill(0);
+  resolved.incomeTaxRate.fill(0);
+  resolved.unemployedTaxPerDay = 0;
   resolved.consumptionTaxRate.fill(0);
   resolved.importTariffRate.fill(0);
   resolved.exportTariffRate.fill(0);
@@ -280,9 +283,11 @@ export function resolveSettings(
   resolved.staffWageShare = null;
   resolved.priceCeiling.fill(Number.POSITIVE_INFINITY);
   resolved.priceFloor.fill(0);
+  // Within each, a setting for every good or band applies before the settings for one.
+  const broad = (setting: PolicySetting) => setting.good === null && (setting.band ?? null) === null;
   for (const settings of [realmPolicies, overrides]) {
-    for (const setting of settings) if (setting.good === null) applySetting(resolved, setting);
-    for (const setting of settings) if (setting.good !== null) applySetting(resolved, setting);
+    for (const setting of settings) if (broad(setting)) applySetting(resolved, setting);
+    for (const setting of settings) if (!broad(setting)) applySetting(resolved, setting);
   }
 }
 
@@ -297,15 +302,32 @@ function applySetting(resolved: ResolvedPolicies, setting: PolicySetting): void 
     resolved.staffWageShare = value;
     return;
   }
+  if (setting.policy === "unemployedTaxPerDay") {
+    resolved.unemployedTaxPerDay = value ?? 0;
+    return;
+  }
+  if (setting.policy === "incomeTaxRate") {
+    const band = setting.band ?? null;
+    if (band === null) resolved.incomeTaxRate.fill(value ?? 0);
+    else resolved.incomeTaxRate[band] = value ?? 0;
+    return;
+  }
   const neutral = setting.policy === "priceCeiling" ? Number.POSITIVE_INFINITY : 0;
   if (setting.good === null) resolved[setting.policy].fill(value ?? neutral);
   else resolved[setting.policy][setting.good] = value ?? neutral;
 }
 
-/** Replaces the setting of the same policy and good, or appends it. */
+/** Whether two settings are for the same policy, good and wage band, so one replaces the other. */
+export const sameScope = (
+  a: Pick<PolicySetting, "policy" | "good" | "band">,
+  b: Pick<PolicySetting, "policy" | "good" | "band">,
+): boolean => a.policy === b.policy && a.good === b.good && (a.band ?? null) === (b.band ?? null);
+
+/** Replaces the setting of the same policy, good and band, or appends it. */
 export function upsertSetting(settings: PolicySetting[], setting: PolicySetting): void {
-  const index = settings.findIndex((s) => s.policy === setting.policy && s.good === setting.good);
-  const copy = { policy: setting.policy, good: setting.good, value: setting.value };
+  const index = settings.findIndex((s) => sameScope(s, setting));
+  const copy: PolicySetting = { policy: setting.policy, good: setting.good, value: setting.value };
+  if ((setting.band ?? null) !== null) copy.band = setting.band;
   if (index >= 0) settings[index] = copy;
   else settings.push(copy);
 }

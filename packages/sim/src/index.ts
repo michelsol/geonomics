@@ -3,6 +3,7 @@
 export { type AiActivity, lastAiActivity } from "./ai";
 export { TRAITS, type Traits } from "./ai/personalities";
 export * from "./army";
+export * from "./bands";
 export * from "./catalog";
 export * from "./commands";
 export * from "./config";
@@ -18,7 +19,7 @@ export * from "./random";
 export * from "./routes";
 export * from "./save";
 export * from "./snapshot";
-export { purchasingPower } from "./tick/consumption";
+export { unemployedIncome } from "./tick/consumption";
 export {
   placeStartingInfrastructure,
   rebuildAirRoutes,

@@ -187,7 +187,8 @@ export interface JobAssignment {
 }
 
 export type PolicyName =
-  | "productionTaxRate" // per good: share of production value taxed; negative = subsidy
+  | "incomeTaxRate" // per wage band: share of wages taxed; negative tops them up
+  | "unemployedTaxPerDay" // per area: per unemployed worker per game day, in man-hours; negative = a benefit
   | "consumptionTaxRate" // per good: share added to the price consumers pay
   | "importTariffRate" // per good: share of the price charged on goods entering across a border
   | "exportTariffRate" // per good: share of the price charged on goods leaving across a border
@@ -199,11 +200,13 @@ export type PolicyName =
 export interface PolicySetting {
   policy: PolicyName; // which policy this sets
   good: GoodId | null; // the good it applies to; null for area policies, or every good for a per-good policy
+  band?: number | null; // income tax only: the wage band it applies to; null or absent for every band
   value: number | null; // the rate or price; null removes a ceiling or floor
 }
 
 export interface ResolvedPolicies {
-  productionTaxRate: Float64Array; // per good, realm default merged with area overrides
+  incomeTaxRate: Float64Array; // per wage band, realm default merged with area overrides
+  unemployedTaxPerDay: number; // for this area; negative = a benefit
   consumptionTaxRate: Float64Array; // per good
   importTariffRate: Float64Array; // per good
   exportTariffRate: Float64Array; // per good
@@ -330,7 +333,7 @@ export interface PeaceProposal {
 export type Command =
   | { type: "setRealmPolicy"; setting: PolicySetting }
   | { type: "setAreaPolicy"; area: AreaId; setting: PolicySetting }
-  | { type: "clearAreaPolicy"; area: AreaId; policy: PolicyName; good: GoodId | null }
+  | { type: "clearAreaPolicy"; area: AreaId; policy: PolicyName; good: GoodId | null; band?: number | null }
   | { type: "placeMarketOrder"; order: Omit<MarketOrder, "id"> }
   | { type: "cancelMarketOrder"; orderId: number }
   | { type: "setJobTarget"; area: AreaId; job: GovernmentJob; targetWorkers: number }

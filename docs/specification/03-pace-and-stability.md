@@ -56,7 +56,7 @@ Even with damping, a guard rail catches surprises:
 A game starts from a state that is already almost balanced:
 
 1. Prices start at labor value; smoothed prices equal prices.
-2. Workers are allocated to cover local demand where local resources allow. The rest stay unemployed: by the calibration rule that is about a quarter of the workforce, the pool government jobs and armies hire from.
+2. Workers are allocated to cover local demand where local resources allow. The rest stay unemployed: by the calibration rule that is about a quarter of the workforce, the pool government jobs and armies hire from. Demand starts at the reference; workers are then placed again, three times in all, for what consumers buy at the wages and unemployment the last placement gave (section 4, Consumption).
 3. Each area starts with `reserveDaysOf(good)` of total demand in stock.
 4. Each area starts with `targetSavingsDays` of income in savings, so savings neither boost nor dampen demand at first.
 5. Value added and `averageWage` are computed once from these starting prices and workers, so the first tick has valid purchasing power and labor targets.
@@ -112,6 +112,8 @@ interface WorldConfig {
     laborMobilityRatePerDay: number;    // speed at which private workers move toward the target allocation (default 0.07)
     laborAllocationTemperature: number; // softness of the value-added tilt on labor targets, relative to the reservation wage (default 1)
     reservationWage: number;            // value added per hour below which workers prefer unemployment, at target savings, in man-hours (default 1)
+    benefitReservationShare: number;    // share of the benefit for the unemployed, per hour, added to the reservation wage (default 0.5)
+    unemployedWageShare: number;        // share of the average wage an unemployed worker lives on, before any benefit (default 0.5)
     stockRecoveryDays: number;          // labor plans to bring a stock back to its reserve over this many days (default 5)
     maxPriceChangePerTick: number;      // largest relative price change in one tick (default 0.1)
     maxLaborShiftPerTick: number;       // largest share of a workforce changing jobs in one tick (default 0.02)
@@ -139,7 +141,8 @@ interface WorldConfig {
   population: {
     growthRatePerDay: number;           // relative growth per day at full necessity satisfaction (default 0.0001)
     starvationRatePerDay: number;       // relative decline per day when no necessity is met (default 0.003)
-    growthSatisfactionThreshold: number;// necessity satisfaction above which population grows (default 0.9)
+    growthSatisfactionThreshold: number;// necessity satisfaction above which population grows (default 0.98)
+    starvationSatisfactionThreshold: number; // necessity satisfaction below which people starve (default 0.9)
     migrationRatePerDay: number;        // share of the attractiveness gap that migrates per day (default 0.01)
     migrationWageWeight: number;        // weight of average wage versus satisfaction in attractiveness (default 0.5)
   };
