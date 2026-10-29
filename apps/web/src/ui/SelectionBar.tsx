@@ -1,7 +1,7 @@
 // The selection, under the tabs on every panel (specification §9, Selection): what is selected, what the player's
 // actions apply to, and the controls choosing it.
 import { mapControls } from "../map/MapView";
-import { actionTarget } from "../state/selectors";
+import { actionTarget, centerOf } from "../state/selectors";
 import { gameStore, useGame } from "../state/store";
 import { count, Swatch } from "./components";
 import { areaName } from "./panels/common";
@@ -25,13 +25,8 @@ export function SelectionBar() {
     const capital = government?.capital ?? null;
     const targets = selection.length > 0 ? selection : capital !== null ? [capital] : [];
     if (targets.length === 0) return;
-    let x = 0;
-    let y = 0;
-    for (const area of targets) {
-      x += data.areas[area]?.x ?? 0;
-      y += data.areas[area]?.y ?? 0;
-    }
-    mapControls.renderer?.centerOnPoint(x / targets.length, y / targets.length);
+    const points = targets.flatMap((area) => (data.areas[area] ? [data.areas[area]] : []));
+    mapControls.renderer?.centerOnPoint(centerOf(data, points));
   };
 
   return (

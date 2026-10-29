@@ -38,7 +38,7 @@ describe("areas near a point", () => {
     expect(areasNear(data, a, 1e-6)).toEqual([0]);
     expect(areasNear(data, a, 1e9).length).toBe(data.areas.length);
     const b = data.areas[1] as Point;
-    const between = Math.hypot(a.x - b.x, a.y - b.y);
+    const between = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
     expect(areasNear(data, a, between)).toContain(1);
     expect(areasNear(data, a, between * 0.999)).not.toContain(1);
   });

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { realmFlows } from "./selectors";
 
 // Four areas in a row: 0 and 1 belong to realm 0 (capital 0), 2 to realm 1 (no capital), 3 is neutral.
-const data = { areas: [0, 1, 2, 3].map((i) => ({ x: 100 * i, y: 0 })) } as unknown as StaticData;
+const data = { areas: [0, 1, 2, 3].map((i) => ({ x: 100 * i, y: 0, z: 0 })), map: null } as unknown as StaticData;
 const edges = [
   [0, 1], // inside realm 0
   [1, 2],
@@ -33,8 +33,8 @@ describe("flows between realms", () => {
   it("net migration into one arrow toward the group that gains people", () => {
     // Positive: from area A to area B. Realm 0 → realm 1: +5 on edge 1, −2 on edge 2: a net of 3.
     const flows = realmFlows(data, snapshot([9, 5, -2, -4], null), edges, governments, "migration");
-    expect(flows).toContainEqual({ from: { x: 0, y: 0 }, to: { x: 200, y: 0 }, flow: 3 });
-    expect(flows).toContainEqual({ from: { x: 300, y: 0 }, to: { x: 200, y: 0 }, flow: 4 });
+    expect(flows).toContainEqual({ from: { x: 0, y: 0, z: 0 }, to: { x: 200, y: 0, z: 0 }, flow: 3 });
+    expect(flows).toContainEqual({ from: { x: 300, y: 0, z: 0 }, to: { x: 200, y: 0, z: 0 }, flow: 4 });
     expect(flows).toHaveLength(2);
   });
 

@@ -1,6 +1,7 @@
-// Pointer input on the map canvas: pan with a mouse or one finger, zoom with the wheel or a pinch, and tap to pick. While
-// the selection brush is on, one finger or the left button paints instead, and two fingers or another button pan.
-import type { MapRenderer } from "./renderer";
+// Pointer input on the map canvas: turn the globe with a mouse or one finger, zoom with the wheel or a pinch, and tap
+// to pick. While the selection brush is on, one finger or the left button paints instead, and two fingers or another
+// button turn the globe.
+import type { GlobeRenderer } from "./renderer";
 
 const TAP_DISTANCE = 6; // pixels a pointer may move and still count as a tap
 const WHEEL_ZOOM = 0.0015; // zoom factor per wheel pixel
@@ -24,7 +25,7 @@ export interface MapHandlers {
   };
 }
 
-export function attachInput(element: HTMLElement, renderer: MapRenderer, handlers: MapHandlers): () => void {
+export function attachInput(element: HTMLElement, renderer: GlobeRenderer, handlers: MapHandlers): () => void {
   const pointers = new Map<number, { x: number; y: number }>();
   let travelled = 0;
   let pinchDistance = 0;

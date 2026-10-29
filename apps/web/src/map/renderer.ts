@@ -1,7 +1,35 @@
-// Draws the map with PixiJS (specification §9, Map). Every layer is cached geometry, redrawn only when what it
-// shows changes, and the scene is rendered on demand, so an idle map costs nothing per frame.
-import { EDGE_ACTIVE, EDGE_BLOCKED, type Snapshot, type StaticData, shores } from "@geonomics/sim";
-import { type Application, Container, FillPattern, Graphics, Matrix, Text, Texture } from "pixi.js";
+// Draws the map as a globe with three.js (specification §9, Map). Every layer is cached geometry, redrawn only when what
+// it shows changes, and the scene is rendered on demand, so an idle map costs nothing per frame. Rotating and zooming
+// move the globe and the camera only; lines and marks sized in pixels are rebuilt when the zoom has moved enough.
+import { EDGE_ACTIVE, EDGE_BLOCKED, type Point3, type Snapshot, type StaticData, shores } from "@geonomics/sim";
+import {
+  BufferAttribute,
+  BufferGeometry,
+  Color,
+  DoubleSide,
+  Float32BufferAttribute,
+  Group,
+  LineBasicMaterial,
+  LineDashedMaterial,
+  LineSegments,
+  type Material,
+  Matrix4,
+  Mesh,
+  MeshBasicMaterial,
+  type Object3D,
+  PerspectiveCamera,
+  Quaternion,
+  Raycaster,
+  Scene,
+  ShaderMaterial,
+  Vector2,
+  Vector3,
+  WebGLRenderer,
+} from "three";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import {
   type GroupFlow,
   largestPopulation,
@@ -17,7 +45,7 @@ import {
   waterCapacityMaximum,
 } from "../state/selectors";
 import type { GameState } from "../state/store";
-import { ARROW_MIN_SHARE, arrowPolygon, arrowWidth, MAX_ARROWS, realmArrowWidth } from "./arrows";
+import { ARROW_MIN_SHARE, arrowWidth, MAX_ARROWS, realmArrowWidth } from "./arrows";
 import {
   AIR_ROUTE,
   ARROW_OUTLINE,
@@ -34,11 +62,9 @@ import {
   PICKED,
   parseColor,
   populationColor,
-  RESOURCE_LEVELS,
   resourceLevel,
   SEA_ROUTE,
   SELECTION,
-  STRIPE_COLOR,
   STRIPE_TILE,
   STRIPE_WIDTHS,
   satisfactionColor,
@@ -47,17 +73,25 @@ import {
   TRANSPORT_ARROW,
   waterColor,
 } from "./colors";
-import type { MapGeometry } from "./geometry";
-import { realmLabels } from "./labels";
-import { dashedPath, waterPath } from "./seaPaths";
+import { buildGlobe, type GlobeGeometry } from "./globe";
+import { cellSpacing, realmLabels } from "./labels";
+import { waterPath } from "./seaPaths";
+import { arc, arrowTriangles, lift, placeShape } from "./surface";
 
-const MIN_ZOOM_FACTOR = 0.5; // of the zoom that fits the whole map
-const MAX_ZOOM_FACTOR = 40;
-const LINE_REDRAW_RATIO = 1.25; // lines keep their screen width within this zoom ratio before being redrawn
-/** Realm names are made at this font size, then scaled; on screen they stay within these heights, or hide below. */
-const LABEL_FONT_SIZE = 48;
+const FIELD_OF_VIEW = 30; // degrees, vertical
+const LINE_REDRAW_RATIO = 1.25; // marks keep their screen size within this zoom ratio before being redrawn
+/** Closest and farthest camera, as altitude over the radius. */
+const MIN_ALTITUDE = 0.04;
+const MAX_ALTITUDE = 6;
+/** The map opens on the player's capital with a cell about this many pixels wide. */
+const OPENING_CELL_PX = 40;
+/** Realm names stay within these heights on screen, and hide below. */
 const LABEL_MIN_PX = 10;
 const LABEL_MAX_PX = 34;
+/** Stripes of the resources layer: one every this many screen pixels, widths as in the 2D stripe tile. */
+const STRIPE_PERIOD_PX = 14;
+/** Heights of the overlays over the cells, as a share of the radius: lines, routes, arrows, marks, names. */
+const LIFT = { fill: 1.0006, lines: 1.0015, routes: 1.002, arrows: 1.003, marks: 1.004, labels: 1.01 };
 
 interface Drawn {
   cells: unknown[];
@@ -72,52 +106,101 @@ interface Drawn {
 const changed = (previous: unknown[] | undefined, next: unknown[]) =>
   !previous || previous.length !== next.length || previous.some((value, i) => value !== next[i]);
 
-export class MapRenderer {
-  private readonly root = new Container();
-  private readonly cells = new Graphics();
-  private readonly stripes = new Graphics(); // the resources layer's stripes, over the terrain cells
-  private stripePatterns: FillPattern[] | null = null;
-  private readonly lines = new Graphics();
-  private readonly routes = new Graphics();
-  private readonly flows = new Graphics();
-  private readonly markers = new Graphics();
-  private readonly labels = new Container(); // realm names, one Text per government
-  private readonly selection = new Graphics();
-  private readonly brush = new Graphics();
+/** A brush stroke being painted: its areas, and a ring of the brush's reach, in km, around the pointer. */
+export interface Stroke {
+  areas: Iterable<number>;
+  erase: boolean;
+  at: Point3;
+  radius: number;
+}
+
+export class GlobeRenderer {
+  readonly canvas: HTMLCanvasElement;
+  private readonly renderer: WebGLRenderer;
+  private readonly labelRenderer = new CSS2DRenderer();
+  private readonly scene = new Scene();
+  private readonly camera = new PerspectiveCamera(FIELD_OF_VIEW, 1, 1, 10);
+  private readonly globe = new Group(); // everything on the sphere, rotated as one
+  private readonly geometry: GlobeGeometry;
+  private readonly radius: number;
+  private readonly positions: BufferAttribute;
+  private readonly cellColors: Float32Array;
+  private readonly cells: Mesh;
+  private readonly stripes: Mesh;
+  private readonly stripeLevels: Float32Array;
+  private readonly layers = {
+    lines: new Group(),
+    routes: new Group(),
+    flows: new Group(),
+    markers: new Group(),
+    labels: new Group(),
+    selection: new Group(),
+    brush: new Group(),
+  };
+  private readonly lineMaterials = new Set<LineMaterial>();
+  /** Materials by style, kept across redraws: a freed material frees its shader, which would be compiled again. */
+  private readonly materials = new Map<string, Material>();
+  private altitude: number; // camera height over the surface, in km
   private drawn: Partial<Drawn> = {};
-  private lineScale = 0;
-  private fitScale = 1;
+  private px = 0; // one screen pixel in km, as the overlays were last drawn for
   private frame = 0;
   private state: GameState | null = null;
+  private width = 1;
+  private height = 1;
   /** Screen pixels at the bottom of the map that the panels' bottom sheet covers on phones. */
   coveredBottom: () => number = () => 0;
   private ownerKey = "";
-  private portKey = ""; // port levels, which set the water cells each area reaches
+  private portKey = "";
   private largestPopulation = 0;
-  private scale: Spread | null = null; // the prices or income layer's lowest, median and highest value
-  private incomes: Float32Array | null = null; // the income layer's real net income per area
-  private shore: number[][] | null = null; // per area, its shore water cells, for the sea routes' paths
-  private readonly seaPaths = new Map<number, number[] | null>(); // per sea edge: its path over water, computed once
+  private scale: Spread | null = null;
+  private incomes: Float32Array | null = null;
+  private shore: number[][] | null = null;
+  private readonly routePaths = new Map<number, Point3[]>();
+  private readonly bestCapacities = new Map<number, number>();
+  private labelObjects: CSS2DObject[] = [];
 
   constructor(
-    private readonly app: Application,
+    private readonly host: HTMLElement,
     private readonly data: StaticData,
-    private readonly geometry: MapGeometry,
   ) {
-    this.root.addChild(
-      this.cells,
-      this.stripes,
-      this.lines,
-      this.routes,
-      this.flows,
-      this.markers,
-      this.labels,
-      this.selection,
-      this.brush,
-    );
-    app.stage.addChild(this.root);
-    app.renderer.background.color = OUTSIDE;
-    this.fit();
+    this.geometry = buildGlobe(data);
+    this.radius = this.geometry.radius;
+    // Smoothing edges costs little on a graphics card but halves the frame rate where WebGL runs in software.
+    this.renderer = new WebGLRenderer({ antialias: !softwareRendering() });
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.renderer.setClearColor(OUTSIDE);
+    this.canvas = this.renderer.domElement;
+    this.canvas.style.touchAction = "none";
+    this.canvas.style.display = "block";
+    this.canvas.dataset.testid = "map-canvas";
+    host.appendChild(this.canvas);
+    const labels = this.labelRenderer.domElement;
+    labels.style.position = "absolute";
+    labels.style.inset = "0";
+    labels.style.pointerEvents = "none";
+    host.appendChild(labels);
+
+    // The cells: one mesh of triangle fans, colored per vertex.
+    const shape = new BufferGeometry();
+    this.positions = new BufferAttribute(this.geometry.positions, 3);
+    shape.setAttribute("position", this.positions);
+    this.cellColors = new Float32Array(this.geometry.positions.length);
+    shape.setAttribute("color", new BufferAttribute(this.cellColors, 3));
+    shape.setIndex(new BufferAttribute(this.geometry.triangles, 1));
+    this.cells = new Mesh(shape, new MeshBasicMaterial({ vertexColors: true, side: DoubleSide }));
+    // The resources layer's stripes, over the same triangles.
+    const stripes = new BufferGeometry();
+    stripes.setAttribute("position", this.positions);
+    this.stripeLevels = new Float32Array(this.geometry.positions.length / 3).fill(-1);
+    stripes.setAttribute("level", new BufferAttribute(this.stripeLevels, 1));
+    stripes.setIndex(new BufferAttribute(this.geometry.triangles, 1));
+    this.stripes = new Mesh(stripes, stripeMaterial());
+    this.stripes.scale.setScalar(LIFT.fill);
+    this.stripes.renderOrder = 1;
+    this.globe.add(this.cells, this.stripes, ...Object.values(this.layers));
+    this.scene.add(this.globe);
+    this.altitude = this.wholeGlobeAltitude();
+    this.resize();
   }
 
   /** Redraws whatever the new state changes, then renders once. */
@@ -154,18 +237,15 @@ export class MapRenderer {
   }
 
   private drawOverlays(state: GameState): void {
-    const scale = this.root.scale.x;
-    const zoomed =
-      this.lineScale === 0 || scale / this.lineScale > LINE_REDRAW_RATIO || this.lineScale / scale > LINE_REDRAW_RATIO;
-    if (zoomed) this.lineScale = scale;
-    const px = 1 / this.lineScale; // one screen pixel in map units, at the scale lines were drawn for
-
-    const lineInputs = [this.ownerKey, this.lineScale];
+    const now = this.kmPerPixel();
+    if (this.px === 0 || now / this.px > LINE_REDRAW_RATIO || this.px / now > LINE_REDRAW_RATIO) this.px = now;
+    const px = this.px;
+    const lineInputs = [this.ownerKey, px];
     if (changed(this.drawn.lines, lineInputs)) {
-      this.drawLines(state.snapshot, px);
+      this.drawLines(state.snapshot);
       this.drawn.lines = lineInputs;
     }
-    const routeInputs = [state.snapshot?.edges.flags, state.edges.length, this.lineScale];
+    const routeInputs = [this.routeKey(state), state.edges.length, px];
     if (changed(this.drawn.routes, routeInputs)) {
       this.drawRoutes(state, px);
       this.drawn.routes = routeInputs;
@@ -176,28 +256,30 @@ export class MapRenderer {
       state.selectedGood,
       state.flowsBetweenRealms,
       state.governments,
-      this.lineScale,
+      px,
     ];
     if (changed(this.drawn.flows, flowInputs)) {
       this.drawFlows(state, px);
       this.drawn.flows = flowInputs;
     }
-    const markerInputs = [state.snapshot, state.selectedArmy, this.lineScale];
+    const markerInputs = [state.snapshot, state.selectedArmy, px];
     if (changed(this.drawn.markers, markerInputs)) {
       this.drawMarkers(state, px);
       this.drawn.markers = markerInputs;
     }
-    const labelInputs = [this.ownerKey, state.governments, this.lineScale];
+    const labelInputs = [this.ownerKey, state.governments];
     if (changed(this.drawn.labels, labelInputs)) {
-      this.drawLabels(state, px);
+      this.drawLabels(state);
       this.drawn.labels = labelInputs;
     }
-    const selectionInputs = [state.selection, state.peaceAreas, state.mode, this.portKey, this.lineScale];
+    const selectionInputs = [state.selection, state.peaceAreas, state.mode, this.portKey, px];
     if (changed(this.drawn.selection, selectionInputs)) {
-      this.drawSelection(state, px);
+      this.drawSelection(state);
       this.drawn.selection = selectionInputs;
     }
   }
+
+  // Cells
 
   private cellColor(state: GameState, area: number): number {
     const { snapshot, data } = { snapshot: state.snapshot, data: this.data };
@@ -226,8 +308,6 @@ export class MapRenderer {
     return color ? parseColor(color) : NEUTRAL;
   }
 
-  private bestCapacities = new Map<number, number>();
-
   /** The largest natural capacity of a good in one cell across the map, land or water, cached per good. */
   bestCapacity(good: number): number {
     let best = this.bestCapacities.get(good);
@@ -247,8 +327,7 @@ export class MapRenderer {
    * Water cells by depth; on the realms layer, the cells a realm's ports reach take a tint of its color, and cells
    * shared between realms a pale one.
    */
-  private drawWaters(state: GameState): void {
-    const g = this.cells;
+  private waterColors(state: GameState): number[] {
     const reach = state.layer === "realms" ? reachOf(this.data, state.snapshot) : null;
     const owner = state.snapshot?.areas.owner;
     // Per water cell: the realm reaching it, -1 for none, -2 for several.
@@ -260,21 +339,19 @@ export class MapRenderer {
         for (const { water } of cells) realm[water] = realm[water] === -1 || realm[water] === by ? by : -2;
       }
     }
-    for (const [water, polygon] of this.geometry.waterCells.entries()) {
-      if (polygon.length < 6) continue;
-      let color = waterColor(this.data.waters[water]?.depth ?? 0);
-      const by = realm[water] as number;
+    return this.data.waters.map((water, id) => {
+      let color = waterColor(water.depth);
+      const by = realm[id] as number;
       if (by === -2) color = mix(color, NEUTRAL, 0.45);
       else if (by >= 0) {
         const realmColor = state.governments[by]?.color;
         if (realmColor) color = mix(color, parseColor(realmColor), 0.35);
       }
-      g.poly(polygon).fill({ color });
-    }
+      return color;
+    });
   }
 
   private drawCells(state: GameState): void {
-    const g = this.cells.clear();
     if (state.layer === "population" && state.snapshot) this.largestPopulation = largestPopulation(state.snapshot);
     // Prices and real net incomes are colored against the map's own lowest, median and highest values.
     this.incomes =
@@ -285,93 +362,65 @@ export class MapRenderer {
         : this.incomes
           ? spreadOf(this.incomes)
           : null;
-    this.drawWaters(state);
-    for (let area = 0; area < this.geometry.cells.length; area++) {
-      const polygon = this.geometry.cells[area] as number[];
-      if (polygon.length < 6) continue;
-      g.poly(polygon).fill({ color: this.cellColor(state, area) });
+    const { areaCount, cellCount, firstVertex, vertexCount } = this.geometry;
+    const waters = this.waterColors(state);
+    const color = new Color();
+    for (let cell = 0; cell < cellCount; cell++) {
+      color.setHex(cell < areaCount ? this.cellColor(state, cell) : (waters[cell - areaCount] as number));
+      const first = firstVertex[cell] as number;
+      for (let v = first; v < first + (vertexCount[cell] as number); v++)
+        this.cellColors.set([color.r, color.g, color.b], 3 * v);
     }
+    (this.cells.geometry.getAttribute("color") as BufferAttribute).needsUpdate = true;
     this.drawStripes(state);
   }
 
   /** The resources layer: stripes over each area or water cell that has the chosen good, thicker for more. */
   private drawStripes(state: GameState): void {
-    const g = this.stripes.clear();
-    if (state.layer !== "resources") return;
-    const patterns = this.patterns();
+    this.stripes.visible = state.layer === "resources";
+    if (!this.stripes.visible) return;
     const good = state.selectedResource;
     const goods = this.data.goods.length;
     const best = this.bestCapacity(good);
-    for (let area = 0; area < this.geometry.cells.length; area++) {
-      const polygon = this.geometry.cells[area] as number[];
-      const level = resourceLevel(this.data.naturalCapacityMaximum[area * goods + good] as number, best);
-      if (level < 0 || polygon.length < 6) continue;
-      g.poly(polygon).fill(patterns[level] as FillPattern);
+    const { areaCount, cellCount, firstVertex, vertexCount } = this.geometry;
+    for (let cell = 0; cell < cellCount; cell++) {
+      const capacity =
+        cell < areaCount
+          ? (this.data.naturalCapacityMaximum[cell * goods + good] as number)
+          : waterCapacityMaximum(this.data, cell - areaCount, good);
+      const first = firstVertex[cell] as number;
+      this.stripeLevels.fill(resourceLevel(capacity, best), first, first + (vertexCount[cell] as number));
     }
-    for (const [water, polygon] of this.geometry.waterCells.entries()) {
-      const level = resourceLevel(waterCapacityMaximum(this.data, water, good), best);
-      if (level < 0 || polygon.length < 6) continue;
-      g.poly(polygon).fill(patterns[level] as FillPattern);
-    }
+    (this.stripes.geometry.getAttribute("level") as BufferAttribute).needsUpdate = true;
   }
 
-  /** One stripe pattern per level, tiled across the map so that neighbors' stripes line up. */
-  private patterns(): FillPattern[] {
-    if (this.stripePatterns) return this.stripePatterns;
-    // About two and a half stripes across a typical cell, whatever the map's size.
-    const cell = Math.sqrt((this.geometry.width * this.geometry.height) / Math.max(this.data.areas.length, 1));
-    const transform = new Matrix().scale(cell / 2.5 / STRIPE_TILE, cell / 2.5 / STRIPE_TILE);
-    this.stripePatterns = Array.from({ length: RESOURCE_LEVELS }, (_, level) => {
-      const canvas = document.createElement("canvas");
-      canvas.width = STRIPE_TILE;
-      canvas.height = STRIPE_TILE;
-      const context = canvas.getContext("2d") as CanvasRenderingContext2D;
-      context.strokeStyle = STRIPE_COLOR;
-      context.lineWidth = STRIPE_WIDTHS[level] as number;
-      // A diagonal through the tile, and its neighbors' ends in the corners, so tiles join seamlessly.
-      for (const offset of [-STRIPE_TILE, 0, STRIPE_TILE]) {
-        context.beginPath();
-        context.moveTo(offset - 1, STRIPE_TILE + 1);
-        context.lineTo(offset + STRIPE_TILE + 1, -1);
-        context.stroke();
-      }
-      const pattern = new FillPattern(Texture.from(canvas), "repeat");
-      pattern.setTransform(transform);
-      return pattern;
-    });
-    return this.stripePatterns;
-  }
+  // Overlays
 
-  private drawLines(snapshot: Snapshot | null, px: number): void {
-    const g = this.lines.clear();
-    // Thin lines between all cells, then coasts, then realm borders on top.
-    for (const border of this.geometry.borders) {
-      if (border.b < 0) continue;
-      g.moveTo(border.x1, border.y1).lineTo(border.x2, border.y2);
+  /** Thin lines between all cells, then coasts, then realm borders on top. */
+  private drawLines(snapshot: Snapshot | null): void {
+    const group = this.clear(this.layers.lines);
+    const inner: number[] = [];
+    const coasts: number[] = [];
+    const realms: number[] = [];
+    const owner = snapshot?.areas.owner;
+    for (const { a, b, p, q } of this.geometry.borders) {
+      (b < 0 ? coasts : inner).push(p.x, p.y, p.z, q.x, q.y, q.z);
+      if (!owner) continue;
+      const oa = owner[a] as number;
+      const ob = b < 0 ? -1 : (owner[b] as number);
+      if (oa === ob || (oa < 0 && ob < 0) || (b < 0 && oa < 0)) continue;
+      realms.push(p.x, p.y, p.z, q.x, q.y, q.z);
     }
-    g.stroke({ width: 0.75 * px, color: CELL_LINE, alpha: 0.35 });
-    for (const border of this.geometry.borders) {
-      if (border.b >= 0) continue;
-      g.moveTo(border.x1, border.y1).lineTo(border.x2, border.y2);
-    }
-    g.stroke({ width: 1.5 * px, color: CELL_LINE, alpha: 0.8 });
-    // The map's edge.
-    g.rect(0, 0, this.geometry.width, this.geometry.height).stroke({ width: 1.5 * px, color: BORDER, alpha: 0.25 });
-    if (!snapshot) return;
-    const owner = snapshot.areas.owner;
-    for (const border of this.geometry.borders) {
-      const a = owner[border.a] as number;
-      const b = border.b < 0 ? -1 : (owner[border.b] as number);
-      if (a === b || (a < 0 && b < 0) || (border.b < 0 && a < 0)) continue;
-      g.moveTo(border.x1, border.y1).lineTo(border.x2, border.y2);
-    }
-    g.stroke({ width: 2 * px, color: BORDER, alpha: 0.85 });
+    // Thousands of thin lines between cells: plain one-pixel lines, far cheaper to draw than wide ones.
+    if (inner.length > 0) group.add(this.thinLines(inner, CELL_LINE, 0.3));
+    if (coasts.length > 0) group.add(this.lines(coasts, { width: 1.5, color: CELL_LINE, opacity: 0.8 }));
+    if (realms.length > 0) group.add(this.lines(realms, { width: 2, color: BORDER, opacity: 0.85 }));
+    group.scale.setScalar(LIFT.lines);
   }
 
   private drawRoutes(state: GameState, px: number): void {
-    const g = this.routes.clear();
+    const group = this.clear(this.layers.routes);
     const flags = state.snapshot?.edges.flags;
-    const position = (area: number) => this.data.areas[area] as StaticData["areas"][number];
     const capacity = state.snapshot?.edges.capacityPerDay;
     // Sea and air routes show only while they run: a port or airport at each end, with staff.
     const open = (id: number) =>
@@ -380,99 +429,112 @@ export class MapRenderer {
         : flags
           ? (flags[id] ?? EDGE_ACTIVE)
           : EDGE_ACTIVE;
-    // One pass per style, so each style is a single stroke.
     const styles = [
-      { mode: "sea", dash: 8, gap: 8, width: 1, color: SEA_ROUTE },
-      { mode: "air", dash: 2, gap: 8, width: 1, color: AIR_ROUTE },
+      { mode: "sea", dash: 8, gap: 8, color: SEA_ROUTE },
+      { mode: "air", dash: 2, gap: 8, color: AIR_ROUTE },
     ] as const;
     for (const style of styles) {
-      let any = false;
+      const segments: number[] = [];
       for (const [id, edge] of state.edges.entries()) {
         const flag = open(id);
         if (edge.mode !== style.mode || !(flag & EDGE_ACTIVE) || flag & EDGE_BLOCKED) continue;
-        dashedPath(g, this.routePath(id), style.dash * px, style.gap * px);
-        any = true;
+        pushPath(segments, this.routePath(id));
       }
-      if (any) g.stroke({ width: style.width * px, color: style.color, alpha: 0.4 });
+      if (segments.length > 0) group.add(this.dashedLines(segments, style.color, 0.6, style.dash * px, style.gap * px));
     }
-    let blocked = false;
-    for (const [id, edge] of state.edges.entries()) {
+    const blocked: number[] = [];
+    for (const [id] of state.edges.entries()) {
       const flag = open(id);
-      if (!(flag & EDGE_ACTIVE) || !(flag & EDGE_BLOCKED)) continue;
-      const path = edge.mode === "sea" ? this.routePath(id) : null;
-      const a = position(edge.areaA);
-      const b = position(edge.areaB);
-      if (path) {
-        g.moveTo(path[0] as number, path[1] as number);
-        for (let i = 2; i < path.length; i += 2) g.lineTo(path[i] as number, path[i + 1] as number);
-      } else g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-      blocked = true;
+      if (flag & EDGE_ACTIVE && flag & EDGE_BLOCKED) pushPath(blocked, this.routePath(id));
     }
-    if (blocked) g.stroke({ width: 2.5 * px, color: BLOCKED, alpha: 0.9 });
+    if (blocked.length > 0) group.add(this.lines(blocked, { width: 2.5, color: BLOCKED, opacity: 0.9 }));
+    group.scale.setScalar(LIFT.routes);
   }
 
   /**
-   * The line a route is drawn along, as flat x, y points: for a sea route the shortest way over water, computed the
-   * first time it shows (edge ids are stable); otherwise, or with no water path, straight between the area centers.
+   * What the routes layer shows, as a string: each edge's flags and whether it carries anything. Snapshots bring new
+   * arrays every tick, but routes open, close or get blocked rarely.
    */
-  private routePath(id: number): number[] {
+  private routeKey(state: GameState): string {
+    const flags = state.snapshot?.edges.flags;
+    const capacity = state.snapshot?.edges.capacityPerDay;
+    if (!flags) return "";
+    let key = "";
+    for (let id = 0; id < flags.length; id++)
+      key += String.fromCharCode(65 + (flags[id] as number) * 2 + ((capacity?.[id] ?? 0) > 0 ? 1 : 0));
+    return key;
+  }
+
+  /**
+   * The line a route is drawn along, on the sphere: for a sea route the shortest way over water, computed the first
+   * time it shows (edge ids are stable); otherwise, or with no water path, the great circle between the area centers.
+   */
+  private routePath(id: number): Point3[] {
+    const cached = this.routePaths.get(id);
+    if (cached) return cached;
     const edge = this.state?.edges[id] ?? this.data.edges[id];
     if (!edge) return [];
     const a = this.data.areas[edge.areaA] as StaticData["areas"][number];
     const b = this.data.areas[edge.areaB] as StaticData["areas"][number];
-    const straight = [a.x, a.y, b.x, b.y];
-    if (edge.mode !== "sea") return straight;
-    if (!this.seaPaths.has(id)) {
+    const step = cellSpacing(this.data) / 4;
+    let path: Point3[] | null = null;
+    if (edge.mode === "sea") {
       this.shore ??= shores(this.data.waters, this.data.areas.length);
-      this.seaPaths.set(id, waterPath(this.data, this.shore, edge.areaA, edge.areaB));
+      const flat = waterPath(this.data, this.shore, edge.areaA, edge.areaB);
+      if (flat) {
+        path = [];
+        for (let i = 0; i + 5 < flat.length; i += 3) {
+          const p = { x: flat[i] as number, y: flat[i + 1] as number, z: flat[i + 2] as number };
+          const q = { x: flat[i + 3] as number, y: flat[i + 4] as number, z: flat[i + 5] as number };
+          const leg = arc(p, q, this.radius, step);
+          path.push(...(path.length > 0 ? leg.slice(1) : leg));
+        }
+      }
     }
-    return this.seaPaths.get(id) ?? straight;
+    path ??= arc(a, b, this.radius, step);
+    this.routePaths.set(id, path);
+    return path;
   }
 
-  /**
-   * Realm names, in capitals at each realm's center, sized by the realm; on screen they stay readable when zoomed in
-   * and hide when too small to read.
-   */
-  private drawLabels(state: GameState, px: number): void {
-    const snapshot = state.snapshot;
-    for (const child of this.labels.children) child.visible = false;
-    if (!snapshot) return;
-    for (const label of realmLabels(this.data, snapshot, state.governments)) {
-      const screen = label.size / px; // text height in screen pixels at this zoom
-      if (screen < LABEL_MIN_PX) continue;
-      let text = this.labels.children[label.government] as Text | undefined;
-      while (!text) {
-        this.labels.addChild(
-          new Text({
-            text: "",
-            style: {
-              fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
-              fontSize: LABEL_FONT_SIZE,
-              fontWeight: "700",
-              letterSpacing: 4,
-              fill: 0xffffff,
-              stroke: { color: ARROW_OUTLINE, width: 6, join: "round" },
-            },
-            anchor: 0.5,
-            alpha: 0.85,
-            visible: false,
-          }),
-        );
-        text = this.labels.children[label.government] as Text | undefined;
-      }
-      text.text = label.text;
-      text.position.set(label.x, label.y);
-      text.scale.set((Math.min(screen, LABEL_MAX_PX) * px) / LABEL_FONT_SIZE);
-      text.visible = true;
+  /** Realm names as HTML labels over the globe; their size and side are set at each render (renderLabels). */
+  private drawLabels(state: GameState): void {
+    const group = this.clear(this.layers.labels);
+    this.labelObjects = [];
+    if (!state.snapshot) return;
+    for (const label of realmLabels(this.data, state.snapshot, state.governments)) {
+      const element = document.createElement("div");
+      element.className = "realm-label";
+      element.textContent = label.text;
+      const object = new CSS2DObject(element);
+      const at = lift(label.at, this.radius * LIFT.labels);
+      object.position.set(at.x, at.y, at.z);
+      object.userData.size = label.size;
+      group.add(object);
+      this.labelObjects.push(object);
+    }
+  }
+
+  /** Shows each name at its size for the current zoom, and hides those too small or on the far side of the globe. */
+  private renderLabels(): void {
+    const px = this.kmPerPixel();
+    const world = new Vector3();
+    const toCamera = new Vector3();
+    for (const object of this.labelObjects) {
+      const screen = (object.userData.size as number) / px;
+      object.getWorldPosition(world);
+      toCamera.copy(this.camera.position).sub(world).normalize();
+      const facing = world.normalize().dot(toCamera);
+      object.visible = screen >= LABEL_MIN_PX && facing > 0.15;
+      object.element.style.fontSize = `${Math.min(screen, LABEL_MAX_PX).toFixed(1)}px`;
     }
   }
 
   /**
    * Flow arrows over the area layer: net migrants per edge, or the goods carried in each direction; or, between realms
-   * only, the same summed across each border, capital to capital.
+   * only, the same summed across each border, capital to capital. They follow the great circles between areas.
    */
   private drawFlows(state: GameState, px: number): void {
-    const g = this.flows.clear();
+    const group = this.clear(this.layers.flows);
     const snapshot = state.snapshot;
     const edges = snapshot?.edges;
     if (!snapshot || !edges || state.flows === "none") return;
@@ -505,95 +567,115 @@ export class MapRenderer {
     if (shown.length > MAX_ARROWS) shown.sort((a, b) => b.flow - a.flow).length = MAX_ARROWS;
     const sideways = state.flows === "transport"; // both directions of trade can share an edge
     const widthOf = state.flowsBetweenRealms ? realmArrowWidth : arrowWidth;
-    const polygons: number[][] = [];
-    const outlines: number[][] = [];
-    for (const { from: a, to: b, flow } of shown) {
+    const radius = this.radius * LIFT.arrows;
+    const fills: number[] = [];
+    const outlines: number[] = [];
+    for (const { from, to, flow } of shown) {
       const width = widthOf(flow, maximum) * px;
       const offset = sideways ? width / 2 + px : 0;
-      const polygon = arrowPolygon(a.x, a.y, b.x, b.y, width, offset, px);
-      if (!polygon) continue;
-      polygons.push(polygon);
-      outlines.push(arrowPolygon(a.x, a.y, b.x, b.y, width, offset, px, px) as number[]);
+      const arrow = arrowTriangles(from, to, width, offset, px, radius);
+      if (!arrow) continue;
+      fills.push(...arrow);
+      outlines.push(...(arrowTriangles(from, to, width, offset, px, radius, px) as number[]));
     }
-    if (polygons.length === 0) return;
-    // The outline is a slightly larger dark arrow underneath: fills tessellate far faster than strokes, which matters
-    // with thousands of arrows redrawn with every snapshot.
-    for (const outline of outlines) g.poly(outline);
-    g.fill({ color: ARROW_OUTLINE, alpha: 0.8 });
-    for (const polygon of polygons) g.poly(polygon);
-    g.fill({ color: state.flows === "migration" ? MIGRATION_ARROW : TRANSPORT_ARROW });
+    if (fills.length === 0) return;
+    // The outline is a slightly larger dark arrow underneath: fills draw far faster than wide lines.
+    group.add(
+      this.triangles(outlines, ARROW_OUTLINE, 0.8, 2),
+      this.triangles(fills, state.flows === "migration" ? MIGRATION_ARROW : TRANSPORT_ARROW, 1, 3),
+    );
   }
 
   private drawMarkers(state: GameState, px: number): void {
-    const g = this.markers.clear();
+    const group = this.clear(this.layers.markers);
     const snapshot = state.snapshot;
+    const radius = this.radius * LIFT.marks;
     const position = (area: number) => this.data.areas[area] as StaticData["areas"][number];
+    const fills: { points: number[]; colors: number[] } = { points: [], colors: [] };
+    const outlines: number[] = [];
+    const color = new Color();
+    const fill = (triangles: Point3[], hex: number) => {
+      color.setHex(hex);
+      for (const p of triangles) {
+        fills.points.push(p.x, p.y, p.z);
+        fills.colors.push(color.r, color.g, color.b);
+      }
+    };
+    const outline = (triangles: Point3[]) => {
+      for (const p of triangles) outlines.push(p.x, p.y, p.z);
+    };
+    const shape = (at: Point3, flat: number[]) =>
+      fan(placeShape(at, flat, px, radius), placeShape(at, [0, 0], px, radius)[0] as Point3);
     // Sieges: a ring filling up with progress.
     if (snapshot) {
       for (let area = 0; area < snapshot.areas.siegeProgress.length; area++) {
         const progress = snapshot.areas.siegeProgress[area] as number;
         if (progress <= 0) continue;
-        const { x, y } = position(area);
-        g.circle(x, y, 14 * px).stroke({ width: 3 * px, color: 0x000000, alpha: 0.5 });
-        g.moveTo(x, y - 14 * px)
-          .arc(x, y, 14 * px, -Math.PI / 2, -Math.PI / 2 + 2 * Math.PI * Math.min(1, progress))
-          .stroke({ width: 3 * px, color: BLOCKED });
+        const at = position(area);
+        fill(strip(placeShape(at, ring(14, 3, 1), px, radius)), 0x333333);
+        fill(strip(placeShape(at, ring(14, 3, Math.min(1, progress)), px, radius)), BLOCKED);
       }
     }
     for (const government of state.governments) {
       if (government.capital === null || government.isEliminated) continue;
-      const { x, y } = position(government.capital);
-      g.star(x, y, 5, 9 * px, 4 * px)
-        .fill({ color: parseColor(government.color) })
-        .stroke({ width: 1.5 * px, color: 0x000000 });
+      const at = position(government.capital);
+      outline(shape(at, star(10.5, 5)));
+      fill(shape(at, star(9, 4)), parseColor(government.color));
     }
+    const paths: number[] = [];
+    const pathColors: number[] = [];
     for (const army of snapshot?.armies ?? []) {
-      const at = army.location.kind === "area" ? army.location.area : army.location.from;
-      const { x, y } = position(at);
-      const color = parseColor(state.governments[army.owner]?.color ?? "#ffffff");
-      if (army.path.length > 0) {
-        g.moveTo(x, y);
-        for (const step of army.path) g.lineTo(position(step).x, position(step).y);
-        g.stroke({ width: 2 * px, color, alpha: 0.9 });
+      const from = army.location.kind === "area" ? army.location.area : army.location.from;
+      const at = position(from);
+      const hex = parseColor(state.governments[army.owner]?.color ?? "#ffffff");
+      color.setHex(hex);
+      let previous: Point3 = at;
+      for (const step of army.path) {
+        const leg = arc(previous, position(step), radius, cellSpacing(this.data) / 4);
+        for (let i = 0; i + 1 < leg.length; i++) {
+          const p = leg[i] as Point3;
+          const q = leg[i + 1] as Point3;
+          paths.push(p.x, p.y, p.z, q.x, q.y, q.z);
+          pathColors.push(color.r, color.g, color.b, color.r, color.g, color.b);
+        }
+        previous = position(step);
       }
-      const size = (army.id === state.selectedArmy ? 11 : 8) * px;
-      g.poly([x, y - size, x + size, y + 0.8 * size, x - size, y + 0.8 * size])
-        .fill({ color })
-        .stroke({ width: 1.5 * px, color: army.id === state.selectedArmy ? SELECTION : 0x000000 });
+      const size = army.id === state.selectedArmy ? 11 : 8;
+      const triangle = [0, -size, size, 0.8 * size, -size, 0.8 * size];
+      const grown = [0, -size - 2.5, size + 2.2, 0.8 * size + 1.5, -size - 2.2, 0.8 * size + 1.5];
+      if (army.id === state.selectedArmy) fill(placeShape(at, grown, px, radius), SELECTION);
+      else outline(placeShape(at, grown, px, radius));
+      fill(placeShape(at, triangle, px, radius), hex);
     }
+    if (paths.length > 0) group.add(this.lines(paths, { width: 2, color: 0xffffff, opacity: 0.9, colors: pathColors }));
+    if (outlines.length > 0) group.add(this.triangles(outlines, 0x000000, 1, 4));
+    if (fills.points.length > 0) group.add(this.triangles(fills.points, 0xffffff, 1, 5, fills.colors));
   }
 
-  private drawSelection(state: GameState, px: number): void {
-    const g = this.selection.clear();
+  private drawSelection(state: GameState): void {
+    const group = this.clear(this.layers.selection);
     // Several areas are lightly filled; any selection is outlined along its frontier only.
-    if (state.selection.length > 1) {
-      for (const area of state.selection) {
-        const polygon = this.geometry.cells[area];
-        if (polygon && polygon.length >= 6) g.poly(polygon).fill({ color: SELECTION, alpha: 0.18 });
-      }
-    }
+    if (state.selection.length > 1) group.add(this.cellFill(state.selection, SELECTION, 0.18));
     // The water cells the selected areas' ports reach.
     const reach = reachOf(this.data, state.snapshot);
     if (reach) {
       const waters = new Set(state.selection.flatMap((area) => (reach[area] ?? []).map((cell) => cell.water)));
-      for (const water of waters) {
-        const polygon = this.geometry.waterCells[water];
-        if (polygon && polygon.length >= 6) g.poly(polygon).fill({ color: SELECTION, alpha: 0.14 });
-      }
+      if (waters.size > 0)
+        group.add(
+          this.cellFill(
+            [...waters].map((water) => this.geometry.areaCount + water),
+            SELECTION,
+            0.14,
+          ),
+        );
     }
     const frontier = this.geometry.outline(state.selection);
-    for (let i = 0; i + 3 < frontier.length; i += 4)
-      g.moveTo(frontier[i] as number, frontier[i + 1] as number).lineTo(
-        frontier[i + 2] as number,
-        frontier[i + 3] as number,
-      );
-    if (frontier.length > 0) g.stroke({ width: 3 * px, color: SELECTION, cap: "round", join: "round" });
-    for (const area of state.mode.kind === "pickPeaceAreas" || state.peaceAreas.length > 0 ? state.peaceAreas : []) {
-      const polygon = this.geometry.cells[area];
-      if (polygon && polygon.length >= 6)
-        g.poly(polygon)
-          .fill({ color: PICKED, alpha: 0.35 })
-          .stroke({ width: 2 * px, color: PICKED });
+    if (frontier.length > 0)
+      group.add(this.lines(frontier, { width: 3, color: SELECTION, opacity: 1, lift: LIFT.lines }));
+    const peace = state.mode.kind === "pickPeaceAreas" || state.peaceAreas.length > 0 ? state.peaceAreas : [];
+    if (peace.length > 0) {
+      group.add(this.cellFill(peace, PICKED, 0.35));
+      group.add(this.lines(this.geometry.outline(peace), { width: 2, color: PICKED, opacity: 1, lift: LIFT.lines }));
     }
   }
 
@@ -601,90 +683,277 @@ export class MapRenderer {
    * The brush stroke being painted, before it reaches the selection: its areas filled, white when adding and red when
    * erasing, and a ring of the brush's reach at the pointer. Null clears it.
    */
-  setStroke(stroke: { areas: Iterable<number>; erase: boolean; at: { x: number; y: number }; radius: number } | null) {
-    const g = this.brush.clear();
+  setStroke(stroke: Stroke | null): void {
+    const group = this.clear(this.layers.brush);
     if (stroke) {
-      const px = 1 / this.root.scale.x;
       const color = stroke.erase ? ERASE : SELECTION;
-      for (const area of stroke.areas) {
-        const polygon = this.geometry.cells[area];
-        if (polygon && polygon.length >= 6) g.poly(polygon).fill({ color, alpha: 0.4 });
+      group.add(this.cellFill(stroke.areas, color, 0.4));
+      const px = this.kmPerPixel();
+      const reach = Math.max(stroke.radius, 6 * px) / px; // in pixels, for placeShape
+      const circle = placeShape(stroke.at, loop(reach), px, this.radius * LIFT.marks);
+      const segments: number[] = [];
+      for (let i = 0; i < circle.length; i++) {
+        const p = circle[i] as Point3;
+        const q = circle[(i + 1) % circle.length] as Point3;
+        segments.push(p.x, p.y, p.z, q.x, q.y, q.z);
       }
-      g.circle(stroke.at.x, stroke.at.y, Math.max(stroke.radius, 6 * px)).stroke({ width: 2 * px, color });
+      group.add(this.lines(segments, { width: 2, color, opacity: 1 }));
     }
     this.requestRender();
   }
 
+  // Building blocks
+
+  /** Removes what a layer held and frees its geometry; materials stay for the next drawing. */
+  private clear(group: Group): Group {
+    for (const child of [...group.children]) {
+      group.remove(child);
+      disposeGeometry(child);
+    }
+    group.scale.setScalar(1);
+    return group;
+  }
+
+  /** The material of a style, made the first time it is asked for. */
+  private material<T extends Material>(key: string, make: () => T): T {
+    let material = this.materials.get(key) as T | undefined;
+    if (!material) {
+      material = make();
+      this.materials.set(key, material);
+      if (material instanceof LineMaterial) {
+        material.resolution.set(this.width, this.height);
+        this.lineMaterials.add(material);
+      }
+    }
+    return material;
+  }
+
+  private lines(
+    segments: number[],
+    style: {
+      width: number;
+      color: number;
+      opacity: number;
+      dash?: number;
+      gap?: number;
+      colors?: number[];
+      lift?: number;
+    },
+  ): LineSegments2 {
+    const geometry = new LineSegmentsGeometry();
+    geometry.setPositions(segments);
+    if (style.colors) geometry.setColors(style.colors);
+    const key = `wide ${style.width} ${style.color} ${style.opacity} ${Boolean(style.colors)} ${style.dash !== undefined}`;
+    const material = this.material(
+      key,
+      () =>
+        new LineMaterial({
+          color: style.colors ? 0xffffff : style.color,
+          linewidth: style.width,
+          transparent: true,
+          opacity: style.opacity,
+          depthWrite: false,
+          vertexColors: Boolean(style.colors),
+          dashed: style.dash !== undefined,
+        }),
+    );
+    material.dashSize = style.dash ?? 1;
+    material.gapSize = style.gap ?? 1;
+    const line = new LineSegments2(geometry, material);
+    if (style.dash !== undefined) line.computeLineDistances();
+    if (style.lift) line.scale.setScalar(style.lift);
+    line.renderOrder = 2;
+    return line;
+  }
+
+  private triangles(points: number[], color: number, opacity: number, order: number, colors?: number[]): Mesh {
+    const geometry = new BufferGeometry();
+    geometry.setAttribute("position", new Float32BufferAttribute(points, 3));
+    if (colors) geometry.setAttribute("color", new Float32BufferAttribute(colors, 3));
+    const material = this.material(
+      `triangles ${color} ${opacity} ${Boolean(colors)}`,
+      () =>
+        new MeshBasicMaterial({
+          color,
+          vertexColors: Boolean(colors),
+          transparent: true, // drawn with the other overlays, in their render order
+          opacity,
+          side: DoubleSide,
+          depthWrite: false,
+        }),
+    );
+    const mesh = new Mesh(geometry, material);
+    mesh.renderOrder = order;
+    return mesh;
+  }
+
+  /** One-pixel lines between pairs of points (x1, y1, z1, x2, y2, z2 each): far cheaper to draw than wide ones. */
+  private thinLines(segments: number[], color: number, opacity: number): LineSegments {
+    const geometry = new BufferGeometry();
+    geometry.setAttribute("position", new Float32BufferAttribute(segments, 3));
+    const material = this.material(
+      `thin ${color} ${opacity}`,
+      () => new LineBasicMaterial({ color, transparent: true, opacity, depthWrite: false }),
+    );
+    const lines = new LineSegments(geometry, material);
+    lines.renderOrder = 2;
+    return lines;
+  }
+
+  /** One-pixel dashed lines between pairs of points, dashes and gaps in km: routes are thin, and many. */
+  private dashedLines(segments: number[], color: number, opacity: number, dash: number, gap: number): LineSegments {
+    const geometry = new BufferGeometry();
+    geometry.setAttribute("position", new Float32BufferAttribute(segments, 3));
+    const material = this.material(
+      `dashed ${color} ${opacity}`,
+      () => new LineDashedMaterial({ color, transparent: true, opacity, depthWrite: false }),
+    );
+    material.dashSize = dash;
+    material.gapSize = gap;
+    const lines = new LineSegments(geometry, material);
+    lines.computeLineDistances();
+    lines.renderOrder = 2;
+    return lines;
+  }
+
+  /** A fill over some cells (areas, or areaCount + water for water cells), just above the cells. */
+  private cellFill(cells: Iterable<number>, color: number, opacity: number): Mesh {
+    const indices = this.geometry.trianglesOf(cells);
+    const points = new Float32Array(3 * indices.length);
+    for (const [k, vertex] of indices.entries())
+      points.set(this.geometry.positions.subarray(3 * vertex, 3 * vertex + 3), 3 * k);
+    const geometry = new BufferGeometry();
+    geometry.setAttribute("position", new BufferAttribute(points, 3));
+    const material = this.material(
+      `fill ${color} ${opacity}`,
+      () => new MeshBasicMaterial({ color, transparent: true, opacity, side: DoubleSide, depthWrite: false }),
+    );
+    const mesh = new Mesh(geometry, material);
+    mesh.scale.setScalar(LIFT.fill);
+    mesh.renderOrder = 1;
+    return mesh;
+  }
+
   // Camera
 
-  /** Map units under a screen point. */
-  toMap(sx: number, sy: number): { x: number; y: number } {
-    const scale = this.root.scale.x;
-    return { x: (sx - this.root.position.x) / scale, y: (sy - this.root.position.y) / scale };
+  /** One screen pixel in km at the point of the globe facing the camera. */
+  private kmPerPixel(): number {
+    const covered = this.covered();
+    return (2 * this.altitude * Math.tan((FIELD_OF_VIEW * Math.PI) / 360)) / (this.height + covered);
   }
 
-  /** The screen point of a map position. */
-  toScreen(x: number, y: number): { x: number; y: number } {
-    const scale = this.root.scale.x;
-    return { x: this.root.position.x + x * scale, y: this.root.position.y + y * scale };
+  private covered(): number {
+    return Math.min(this.coveredBottom(), 0.8 * this.height);
   }
 
-  /** Centers the visible part of the view on a map position without changing the zoom. */
-  centerOnPoint(x: number, y: number): void {
-    const scale = this.root.scale.x;
-    const center = this.viewCenter();
-    this.root.position.set(center.x - x * scale, center.y - y * scale);
-    this.afterCameraMove();
+  /** The camera's altitude at which the whole globe fits in the view. */
+  private wholeGlobeAltitude(): number {
+    const distance = this.radius / Math.sin(0.45 * ((FIELD_OF_VIEW * Math.PI) / 180));
+    return Math.min(MAX_ALTITUDE * this.radius, distance - this.radius);
   }
 
-  /** Fits the whole map in the view. */
-  fit(): void {
-    const { width, height } = this.app.screen;
-    this.fitScale = Math.min(width / this.geometry.width, height / this.geometry.height) * 0.95;
-    this.root.scale.set(this.fitScale);
-    this.root.position.set(
-      (width - this.geometry.width * this.fitScale) / 2,
-      (height - this.geometry.height * this.fitScale) / 2,
-    );
+  private placeCamera(): void {
+    const covered = this.covered();
+    this.camera.aspect = this.width / (this.height + covered);
+    // The globe's center sits in the middle of the part of the view the bottom sheet leaves free.
+    this.camera.setViewOffset(this.width, this.height + covered, 0, covered, this.width, this.height);
+    const distance = this.radius + this.altitude;
+    this.camera.position.set(0, 0, distance);
+    this.camera.near = Math.max(1e-3, this.altitude * 0.5);
+    this.camera.far = distance + 2 * this.radius;
+    this.camera.updateProjectionMatrix();
+    this.camera.lookAt(0, 0, 0);
+  }
+
+  /** The point of the globe under a screen point, in the globe's own coordinates, or null off the globe. */
+  toMap(sx: number, sy: number): Point3 | null {
+    this.placeCamera();
+    const ray = new Raycaster();
+    ray.setFromCamera(new Vector2((sx / this.width) * 2 - 1, -(sy / this.height) * 2 + 1), this.camera);
+    const { origin, direction } = ray.ray;
+    const b = origin.dot(direction);
+    const c = origin.lengthSq() - this.radius * this.radius;
+    const disc = b * b - c;
+    if (disc < 0) return null;
+    const t = -b - Math.sqrt(disc);
+    if (t < 0) return null;
+    const hit = origin.clone().addScaledVector(direction, t);
+    hit.applyQuaternion(this.globe.quaternion.clone().invert());
+    return { x: hit.x, y: hit.y, z: hit.z };
+  }
+
+  /** Turns the globe so a point of it faces the camera, north up, without changing the zoom. */
+  centerOnPoint(p: Point3): void {
+    const forward = new Vector3(p.x, p.y, p.z).normalize();
+    let east = new Vector3(0, 0, 1).cross(forward);
+    if (east.lengthSq() < 1e-9) east = new Vector3(0, 1, 0).cross(forward);
+    east.normalize();
+    const north = forward.clone().cross(east);
+    const basis = new Matrix4().makeBasis(east, north, forward).invert();
+    this.globe.quaternion.setFromRotationMatrix(basis);
     this.afterCameraMove();
   }
 
   /** The middle of the part of the map not covered by the bottom sheet, in screen pixels. */
   viewCenter(): { x: number; y: number } {
-    const { width, height } = this.app.screen;
-    return { x: width / 2, y: (height - Math.min(this.coveredBottom(), 0.8 * height)) / 2 };
+    return { x: this.width / 2, y: (this.height - this.covered()) / 2 };
   }
 
-  /** Centers the visible part of the view on an area without changing the zoom. */
+  /** Turns the globe to an area without changing the zoom. */
   centerOn(area: number): void {
-    const { x, y } = this.data.areas[area] as StaticData["areas"][number];
-    this.centerOnPoint(x, y);
+    const at = this.data.areas[area];
+    if (at) this.centerOnPoint(at);
   }
 
+  /** Turns the globe to an area and zooms in so that a cell spans about 40 pixels. */
+  focus(area: number): void {
+    const target = cellSpacing(this.data) / OPENING_CELL_PX; // km per pixel
+    this.altitude = this.clampAltitude(
+      (target * (this.height + this.covered())) / (2 * Math.tan((FIELD_OF_VIEW * Math.PI) / 360)),
+    );
+    this.centerOn(area);
+  }
+
+  /** Rotates the globe as if dragged by (dx, dy) screen pixels at its front: about the axis across the drag. */
   panBy(dx: number, dy: number): void {
-    this.root.position.set(this.root.position.x + dx, this.root.position.y + dy);
+    const distance = Math.hypot(dx, dy);
+    if (distance === 0) return;
+    const angle = (distance * this.kmPerPixel()) / this.radius;
+    const turn = new Quaternion().setFromAxisAngle(new Vector3(dy / distance, dx / distance, 0), angle);
+    this.globe.quaternion.premultiply(turn);
     this.afterCameraMove();
   }
 
-  /** Zooms by `factor` keeping the map point under the screen point (sx, sy) in place. */
+  /** Zooms by `factor`, keeping the point of the globe under the screen point (sx, sy) in place when it is on it. */
   zoomAt(sx: number, sy: number, factor: number): void {
-    const old = this.root.scale.x;
-    const scale = Math.min(this.fitScale * MAX_ZOOM_FACTOR, Math.max(this.fitScale * MIN_ZOOM_FACTOR, old * factor));
-    const mx = (sx - this.root.position.x) / old;
-    const my = (sy - this.root.position.y) / old;
-    this.root.scale.set(scale);
-    this.root.position.set(sx - mx * scale, sy - my * scale);
+    const before = this.toMap(sx, sy);
+    this.altitude = this.clampAltitude(this.altitude / factor);
+    const after = this.toMap(sx, sy);
+    if (before && after) {
+      const from = new Vector3(before.x, before.y, before.z).applyQuaternion(this.globe.quaternion).normalize();
+      const to = new Vector3(after.x, after.y, after.z).applyQuaternion(this.globe.quaternion).normalize();
+      this.globe.quaternion.premultiply(new Quaternion().setFromUnitVectors(from, to));
+    }
     this.afterCameraMove();
+  }
+
+  private clampAltitude(altitude: number): number {
+    return Math.min(MAX_ALTITUDE * this.radius, Math.max(MIN_ALTITUDE * this.radius, altitude));
   }
 
   /** The area under a screen point, or null. */
   pick(sx: number, sy: number): number | null {
-    const scale = this.root.scale.x;
-    return this.geometry.pick((sx - this.root.position.x) / scale, (sy - this.root.position.y) / scale);
+    const point = this.toMap(sx, sy);
+    return point ? this.geometry.pick(point) : null;
   }
 
   resize(): void {
-    this.requestRender();
+    this.width = Math.max(1, this.host.clientWidth);
+    this.height = Math.max(1, this.host.clientHeight);
+    this.renderer.setSize(this.width, this.height);
+    this.labelRenderer.setSize(this.width, this.height);
+    for (const material of this.lineMaterials) material.resolution.set(this.width, this.height);
+    this.afterCameraMove();
   }
 
   private afterCameraMove(): void {
@@ -696,13 +965,147 @@ export class MapRenderer {
     if (this.frame) return;
     this.frame = requestAnimationFrame(() => {
       this.frame = 0;
-      this.app.render();
+      this.placeCamera();
+      this.renderLabels();
+      ((this.stripes.material as ShaderMaterial).uniforms.pixelRatio as { value: number }).value =
+        this.renderer.getPixelRatio();
+      this.renderer.render(this.scene, this.camera);
+      this.labelRenderer.render(this.scene, this.camera);
     });
   }
 
   destroy(): void {
     if (this.frame) cancelAnimationFrame(this.frame);
-    this.root.destroy({ children: true });
-    for (const pattern of this.stripePatterns ?? []) pattern.destroy();
+    for (const group of Object.values(this.layers)) this.clear(group);
+    for (const material of this.materials.values()) material.dispose();
+    for (const mesh of [this.cells, this.stripes]) {
+      mesh.geometry.dispose();
+      (mesh.material as Material).dispose();
+    }
+    this.renderer.dispose();
+    this.canvas.remove();
+    this.labelRenderer.domElement.remove();
   }
+}
+
+/** Whether WebGL draws in software here (no graphics card, as in some virtual machines and test browsers). */
+function softwareRendering(): boolean {
+  try {
+    const gl = document.createElement("canvas").getContext("webgl2");
+    const info = gl?.getExtension("WEBGL_debug_renderer_info");
+    const name = info && gl ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : "";
+    gl?.getExtension("WEBGL_lose_context")?.loseContext();
+    return /swiftshader|llvmpipe|software/i.test(name);
+  } catch {
+    return false;
+  }
+}
+
+/** The stripes of the resources layer: diagonal in screen space, their width set by each cell's level. */
+function stripeMaterial(): ShaderMaterial {
+  return new ShaderMaterial({
+    uniforms: {
+      color: { value: new Color(0x0b111a) },
+      period: { value: STRIPE_PERIOD_PX },
+      widths: { value: STRIPE_WIDTHS.map((width) => (width / STRIPE_TILE) * STRIPE_PERIOD_PX) },
+      pixelRatio: { value: 1 },
+    },
+    vertexShader: `
+      attribute float level;
+      varying float vLevel;
+      void main() {
+        vLevel = level;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      uniform vec3 color;
+      uniform float period;
+      uniform float widths[4];
+      uniform float pixelRatio;
+      varying float vLevel;
+      void main() {
+        if (vLevel < -0.5) discard;
+        float width = vLevel < 0.5 ? widths[0] : vLevel < 1.5 ? widths[1] : vLevel < 2.5 ? widths[2] : widths[3];
+        float along = mod((gl_FragCoord.x + gl_FragCoord.y) / pixelRatio, period);
+        if (along > width) discard;
+        gl_FragColor = vec4(color, 0.7);
+      }`,
+    transparent: true,
+    depthWrite: false,
+    side: DoubleSide,
+  });
+}
+
+/** Frees an object's geometry, and its children's. */
+function disposeGeometry(object: Object3D): void {
+  if (object instanceof Mesh || object instanceof LineSegments) object.geometry.dispose();
+  for (const child of object.children) disposeGeometry(child);
+}
+
+/** Appends a path's segments, as x1, y1, z1, x2, y2, z2 each. */
+function pushPath(segments: number[], path: readonly Point3[]): void {
+  for (let i = 0; i + 1 < path.length; i++) {
+    const p = path[i] as Point3;
+    const q = path[i + 1] as Point3;
+    segments.push(p.x, p.y, p.z, q.x, q.y, q.z);
+  }
+}
+
+/** Triangles fanning from a center to a closed loop of points. */
+function fan(loop: Point3[], center: Point3): Point3[] {
+  const triangles: Point3[] = [];
+  for (let i = 0; i < loop.length; i++)
+    triangles.push(center, loop[i] as Point3, loop[(i + 1) % loop.length] as Point3);
+  return triangles;
+}
+
+/** Triangles of a strip given as alternating outer and inner points. */
+function strip(points: Point3[]): Point3[] {
+  const triangles: Point3[] = [];
+  for (let i = 0; i + 3 < points.length; i += 2) {
+    const [a, b, c, d] = [points[i], points[i + 1], points[i + 2], points[i + 3]] as Point3[];
+    triangles.push(a as Point3, b as Point3, c as Point3, b as Point3, d as Point3, c as Point3);
+  }
+  return triangles;
+}
+
+/** A five-pointed star's outline in pixels, point up, as x, y pairs (y down). */
+function star(outer: number, inner: number): number[] {
+  const points: number[] = [];
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? outer : inner;
+    const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+    points.push(r * Math.cos(angle), r * Math.sin(angle));
+  }
+  return points;
+}
+
+/** A circle of `radius` pixels as x, y pairs, without repeating its first point. */
+function loop(radius: number, steps = 64): number[] {
+  const points: number[] = [];
+  for (let i = 0; i < steps; i++) {
+    const angle = (2 * Math.PI * i) / steps;
+    points.push(radius * Math.cos(angle), radius * Math.sin(angle));
+  }
+  return points;
+}
+
+/**
+ * A ring's share `fill` from the top, clockwise, as alternating outer and inner points in pixels (y down): `radius` to
+ * its middle line, `width` across.
+ */
+function ring(radius: number, width: number, fill: number): number[] {
+  const steps = Math.max(2, Math.ceil(64 * fill));
+  const points: number[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const angle = -Math.PI / 2 + (2 * Math.PI * fill * i) / steps;
+    const [cos, sin] = [Math.cos(angle), Math.sin(angle)];
+    points.push(
+      (radius + width / 2) * cos,
+      (radius + width / 2) * sin,
+      (radius - width / 2) * cos,
+      (radius - width / 2) * sin,
+    );
+  }
+  return points;
 }

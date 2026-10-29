@@ -1,13 +1,13 @@
-// Realm names on the map (specification §9, Map): where each name goes and how tall it is, in map units. Layout
-// only, so it is testable without a renderer.
-import type { GovernmentSummary, Snapshot, StaticData } from "@geonomics/sim";
+// Realm names on the map (specification §9, Map): where each name goes and how tall it is, in km. Layout only, so it
+// is testable without a renderer.
+import type { GovernmentSummary, Point3, Snapshot, StaticData } from "@geonomics/sim";
+import { centerOf } from "../state/selectors";
 
 export interface RealmLabel {
   government: number;
   text: string;
-  x: number;
-  y: number;
-  size: number; // text height in map units
+  at: Point3;
+  size: number; // text height in km
 }
 
 /** A name may run this much wider than its realm, about the square root of its area count in cells. */
@@ -16,6 +16,12 @@ const WIDTH_OVER_REALM = 1.2;
 const LETTER_WIDTH = 0.7;
 /** Tallest name, in mean cell spacings. */
 const MAXIMUM_SIZE = 5;
+
+/** The mean spacing between cell centers, in km: the cells share the sphere's surface. */
+export function cellSpacing(data: Pick<StaticData, "areas" | "waters" | "map">): number {
+  const cells = data.areas.length + data.waters.length;
+  return data.map && cells > 0 ? Math.sqrt((4 * Math.PI * data.map.radius ** 2) / cells) : 1;
+}
 
 /**
  * One label per realm that holds land: its name in capitals, on the owned area nearest the population-weighted center
@@ -29,29 +35,28 @@ export function realmLabels(
 ): RealmLabel[] {
   const owner = snapshot.areas.owner;
   const population = snapshot.areas.population;
-  const cells = data.areas.length + data.waters.length;
-  const cell = data.map && cells > 0 ? Math.sqrt((data.map.width * data.map.height) / cells) : 1;
-  const sums = governments.map(() => ({ x: 0, y: 0, people: 0, areas: 0 }));
-  for (const [id, area] of data.areas.entries()) {
-    const sum = sums[owner[id] ?? -1];
-    if (!sum) continue;
-    const people = Math.max(population[id] as number, 1e-9);
-    sum.x += people * area.x;
-    sum.y += people * area.y;
-    sum.people += people;
-    sum.areas++;
+  const cell = cellSpacing(data);
+  const members = governments.map(() => ({ ids: [] as number[], people: [] as number[] }));
+  for (const [id] of data.areas.entries()) {
+    const entry = members[owner[id] ?? -1];
+    if (!entry) continue;
+    entry.ids.push(id);
+    entry.people.push(Math.max(population[id] as number, 1e-9));
   }
   const labels: RealmLabel[] = [];
   for (const [g, government] of governments.entries()) {
-    const sum = sums[g] as (typeof sums)[number];
-    if (government.isEliminated || sum.areas === 0) continue;
-    const cx = sum.x / sum.people;
-    const cy = sum.y / sum.people;
-    let nearest = -1;
+    const { ids, people } = members[g] as (typeof members)[number];
+    if (government.isEliminated || ids.length === 0) continue;
+    const center = centerOf(
+      data,
+      ids.map((id) => data.areas[id] as StaticData["areas"][number]),
+      people,
+    );
+    let nearest = ids[0] as number;
     let best = Number.POSITIVE_INFINITY;
-    for (const [id, area] of data.areas.entries()) {
-      if (owner[id] !== g) continue;
-      const d = (area.x - cx) ** 2 + (area.y - cy) ** 2;
+    for (const id of ids) {
+      const area = data.areas[id] as StaticData["areas"][number];
+      const d = (area.x - center.x) ** 2 + (area.y - center.y) ** 2 + (area.z - center.z) ** 2;
       if (d < best) {
         best = d;
         nearest = id;
@@ -59,8 +64,8 @@ export function realmLabels(
     }
     const at = data.areas[nearest] as StaticData["areas"][number];
     const text = government.name.toUpperCase();
-    const fit = (WIDTH_OVER_REALM * Math.sqrt(sum.areas)) / (LETTER_WIDTH * Math.max(4, text.length));
-    labels.push({ government: g, text, x: at.x, y: at.y, size: cell * Math.min(MAXIMUM_SIZE, fit) });
+    const fit = (WIDTH_OVER_REALM * Math.sqrt(ids.length)) / (LETTER_WIDTH * Math.max(4, text.length));
+    labels.push({ government: g, text, at: { x: at.x, y: at.y, z: at.z }, size: cell * Math.min(MAXIMUM_SIZE, fit) });
   }
   return labels;
 }

@@ -18,7 +18,7 @@ test("the map stays smooth on a 3,000-area map", async ({ page }, testInfo) => {
   await page.getByLabel("Show transport flows").check();
   await page.waitForTimeout(2000);
 
-  // Count frames for five seconds while dragging the map back and forth.
+  // Count frames for five seconds while turning the globe back and forth.
   const box = await page.getByTestId("map-canvas").boundingBox();
   if (!box) throw new Error("map canvas has no size");
   const counting = page.evaluate(

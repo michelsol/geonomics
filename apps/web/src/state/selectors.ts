@@ -7,6 +7,7 @@ import {
   type GovernmentView,
   neutralPolicies,
   type Personality,
+  type Point3,
   type Reach,
   type ResolvedPolicies,
   resolveSettings,
@@ -15,6 +16,7 @@ import {
   type StaticData,
   type StaticEdge,
   shores,
+  sphericalMean,
   waterReach,
   withinHops,
 } from "@geonomics/sim";
@@ -365,21 +367,20 @@ export function realmFlows(
   if (totals.size === 0) return [];
 
   // Anchors: capitals, else population-weighted centers.
-  const centers = new Map<number, { x: number; y: number; people: number }>();
+  const members = new Map<number, { points: Point[]; people: number[] }>();
   for (const [id, area] of data.areas.entries()) {
     const group = groupOf(id);
-    const people = Math.max(snapshot.areas.population[id] as number, 1e-9);
-    const center = centers.get(group) ?? { x: 0, y: 0, people: 0 };
-    center.x += people * area.x;
-    center.y += people * area.y;
-    center.people += people;
-    centers.set(group, center);
+    const entry = members.get(group) ?? { points: [], people: [] };
+    entry.points.push(area);
+    entry.people.push(Math.max(snapshot.areas.population[id] as number, 1e-9));
+    members.set(group, entry);
   }
   const anchor = (group: number): Point => {
     const capital = group === NEUTRAL ? null : (governments[group]?.capital ?? null);
-    if (capital !== null && data.areas[capital]) return { x: data.areas[capital].x, y: data.areas[capital].y };
-    const center = centers.get(group);
-    return center && center.people > 0 ? { x: center.x / center.people, y: center.y / center.people } : { x: 0, y: 0 };
+    const at = capital === null ? undefined : data.areas[capital];
+    if (at) return { x: at.x, y: at.y, z: at.z };
+    const entry = members.get(group);
+    return entry ? centerOf(data, entry.points, entry.people) : { x: 0, y: 0, z: 0 };
   };
 
   const result: GroupFlow[] = [];
@@ -401,18 +402,35 @@ export function policiesInForce(government: GovernmentView, area: number, goodCo
   return resolved;
 }
 
-export interface Point {
-  x: number;
-  y: number;
-}
+export type Point = Point3;
 
-/** Areas whose center lies within `radius` of a point, in map units. */
+/** Areas whose center lies within `radius` km of a point, in a straight line. */
 export function areasNear(data: StaticData, point: Point, radius: number): number[] {
   const near: number[] = [];
   for (const [id, area] of data.areas.entries()) {
-    if ((area.x - point.x) ** 2 + (area.y - point.y) ** 2 <= radius * radius) near.push(id);
+    if ((area.x - point.x) ** 2 + (area.y - point.y) ** 2 + (area.z - point.z) ** 2 <= radius * radius) near.push(id);
   }
   return near;
+}
+
+/**
+ * The center of some points, weighted: on a spherical map, the point of the sphere in their mean direction; on a
+ * hand-built one, their mean.
+ */
+export function centerOf(data: Pick<StaticData, "map">, points: readonly Point[], weights?: readonly number[]): Point {
+  if (data.map) return sphericalMean(points, data.map.radius, weights);
+  let x = 0;
+  let y = 0;
+  let z = 0;
+  let total = 0;
+  for (const [i, p] of points.entries()) {
+    const w = weights?.[i] ?? 1;
+    x += w * p.x;
+    y += w * p.y;
+    z += w * p.z;
+    total += w;
+  }
+  return total > 0 ? { x: x / total, y: y / total, z: z / total } : { x: 0, y: 0, z: 0 };
 }
 
 /** What the player's actions apply to (specification §9, Selection). */

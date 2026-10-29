@@ -75,6 +75,8 @@ export function fibonacciSphere(count: number, radius: number, jitter: number, r
 export interface SphericalVoronoi {
   neighbors: number[][]; // per point, its neighboring cells, sorted
   polygons: Point3[][]; // per point, its cell's corners in order around it, on the sphere
+  corners: Point3[]; // every cell corner once, on the sphere: neighboring cells share theirs
+  cornerIds: number[][]; // per point, its cell's corners as indices into `corners`, in the order of `polygons`
   /** The point whose cell holds a position, starting the walk from `start` (a nearby point id is fastest). */
   find(p: Point3, start?: number): number;
 }
@@ -83,9 +85,12 @@ export interface SphericalVoronoi {
 export function sphericalVoronoi(points: readonly Point3[], radius: number): SphericalVoronoi {
   const delaunay = geoDelaunay(points.map(toLonLat));
   const corners = delaunay.centers.map(([longitude, latitude]) => fromLonLat(longitude, latitude, radius));
+  const cornerIds = points.map((_, i) => delaunay.polygons[i] ?? []);
   return {
     neighbors: points.map((_, i) => [...new Set(delaunay.neighbors[i] ?? [])].sort((a, b) => a - b)),
-    polygons: points.map((_, i) => (delaunay.polygons[i] ?? []).map((corner) => corners[corner] as Point3)),
+    polygons: cornerIds.map((ids) => ids.map((corner) => corners[corner] as Point3)),
+    corners,
+    cornerIds,
     find(p, start) {
       const [longitude, latitude] = toLonLat(p);
       return delaunay.find(longitude, latitude, start);

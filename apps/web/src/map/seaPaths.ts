@@ -1,11 +1,11 @@
 // Sea routes drawn along the water (specification §9, Map): the shortest path over water cells between two ports,
-// smoothed, as flat x, y points. Geometry only, so it is testable without a renderer.
+// smoothed, as flat x, y, z points. Geometry only, so it is testable without a renderer.
 import { MinHeap, type StaticData } from "@geonomics/sim";
 
 /**
  * The shortest way by water from area `a`'s center to area `b`'s, through the centers of the water cells between
- * them, as flat x, y pairs. `shore` lists each area's shore cells. Null without water cells, or with no water path,
- * so the caller draws a straight line.
+ * them, as flat x, y, z triples. `shore` lists each area's shore cells. Null without water cells, or with no water
+ * path, so the caller draws a direct line.
  */
 export function waterPath(
   data: Pick<StaticData, "areas" | "waters">,
@@ -24,7 +24,7 @@ export function waterPath(
   const heap = new MinHeap();
   for (const cell of starts) {
     const water = waters[cell] as StaticData["waters"][number];
-    const d = Math.hypot(water.x - from.x, water.y - from.y);
+    const d = Math.hypot(water.x - from.x, water.y - from.y, water.z - from.z);
     if (d < (distance[cell] as number)) {
       distance[cell] = d;
       heap.push(d, cell);
@@ -38,7 +38,7 @@ export function waterPath(
     if (d > (distance[cell] as number) || d >= best) continue;
     const water = waters[cell] as StaticData["waters"][number];
     if (ends.has(cell)) {
-      const total = d + Math.hypot(to.x - water.x, to.y - water.y);
+      const total = d + Math.hypot(to.x - water.x, to.y - water.y, to.z - water.z);
       if (total < best) {
         best = total;
         last = cell;
@@ -46,7 +46,7 @@ export function waterPath(
     }
     for (const next of water.neighbors) {
       const other = waters[next] as StaticData["waters"][number];
-      const nd = d + Math.hypot(other.x - water.x, other.y - water.y);
+      const nd = d + Math.hypot(other.x - water.x, other.y - water.y, other.z - water.z);
       if (nd < (distance[next] as number)) {
         distance[next] = nd;
         via[next] = cell;
@@ -58,67 +58,33 @@ export function waterPath(
   const cells: number[] = [];
   for (let cell = last; cell >= 0; cell = via[cell] as number) cells.push(cell);
   cells.reverse();
-  const points = [from.x, from.y];
+  const points = [from.x, from.y, from.z];
   for (const cell of cells) {
     const water = waters[cell] as StaticData["waters"][number];
-    points.push(water.x, water.y);
+    points.push(water.x, water.y, water.z);
   }
-  points.push(to.x, to.y);
+  points.push(to.x, to.y, to.z);
   return smooth(points);
 }
 
 /**
- * Two passes of Chaikin's corner cutting: each corner is replaced by points a quarter and three quarters along its
- * segments, so the path stops zigzagging between cell centers. Both ends stay where they are.
+ * Two passes of Chaikin's corner cutting over x, y, z triples: each corner is replaced by points a quarter and three
+ * quarters along its segments, so the path stops zigzagging between cell centers. Both ends stay where they are.
  */
 export function smooth(points: readonly number[], passes = 2): number[] {
   let current = [...points];
   for (let pass = 0; pass < passes; pass++) {
-    const count = current.length / 2;
+    const count = current.length / 3;
     if (count < 3) return current;
-    const next = [current[0] as number, current[1] as number];
+    const next = current.slice(0, 3);
     for (let i = 0; i < count - 1; i++) {
-      const x1 = current[2 * i] as number;
-      const y1 = current[2 * i + 1] as number;
-      const x2 = current[2 * i + 2] as number;
-      const y2 = current[2 * i + 3] as number;
-      if (i > 0) next.push(0.75 * x1 + 0.25 * x2, 0.75 * y1 + 0.25 * y2);
-      if (i < count - 2) next.push(0.25 * x1 + 0.75 * x2, 0.25 * y1 + 0.75 * y2);
+      const p = current.slice(3 * i, 3 * i + 3) as [number, number, number];
+      const q = current.slice(3 * i + 3, 3 * i + 6) as [number, number, number];
+      if (i > 0) next.push(...p.map((v, k) => 0.75 * v + 0.25 * (q[k] as number)));
+      if (i < count - 2) next.push(...p.map((v, k) => 0.25 * v + 0.75 * (q[k] as number)));
     }
-    next.push(current[current.length - 2] as number, current[current.length - 1] as number);
+    next.push(...current.slice(current.length - 3));
     current = next;
   }
   return current;
-}
-
-/** Something to draw dashes on: a PixiJS Graphics, or a recorder in tests. */
-export interface PathSink {
-  moveTo(x: number, y: number): PathSink;
-  lineTo(x: number, y: number): unknown;
-}
-
-/** Dashes along a polyline of flat x, y points, the dash pattern carried across its corners. */
-export function dashedPath(g: PathSink, points: readonly number[], dash: number, gap: number): void {
-  const period = dash + gap;
-  let phase = 0; // distance into the current dash-and-gap period
-  for (let i = 0; i + 3 < points.length; i += 2) {
-    const x1 = points[i] as number;
-    const y1 = points[i + 1] as number;
-    const x2 = points[i + 2] as number;
-    const y2 = points[i + 3] as number;
-    const length = Math.hypot(x2 - x1, y2 - y1);
-    if (length === 0) continue;
-    const ux = (x2 - x1) / length;
-    const uy = (y2 - y1) / length;
-    let d = 0;
-    while (d < length) {
-      const drawing = phase < dash;
-      const left = (drawing ? dash : period) - phase; // what remains of the current dash or gap
-      const end = Math.min(length, d + left);
-      if (drawing && end > d) g.moveTo(x1 + ux * d, y1 + uy * d).lineTo(x1 + ux * end, y1 + uy * end);
-      if (end === length) phase += end - d;
-      else phase = drawing ? dash : 0; // the dash or gap is done: set it exactly, as rounding could stall here
-      d = end;
-    }
-  }
 }
