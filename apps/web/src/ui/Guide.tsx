@@ -11,23 +11,24 @@ export function Guide() {
         <section>
           <h2>The idea</h2>
           <p>
-            Geonomics is a sandbox. The map is split into areas, each with its own people, resources, workers and
-            market. You run one realm on top of that living economy: you tax, trade, build and fight, and watch what it
-            does to prices, incomes and people. There is no score and no victory: play for as long as you like.
+            Geonomics is a sandbox. The world is a globe split into areas, each with its own people, resources, workers
+            and market. You run one realm on top of that living economy: you tax, trade, build and fight, and watch what
+            it does to prices, incomes and people. There is no score and no victory: play for as long as you like.
           </p>
         </section>
 
         <section>
           <h2>The map</h2>
           <p>
-            Tap or click an area to see it in the Area panel. Drag to pan, and pinch or scroll to zoom. To work on a
-            whole region, turn on the Brush in the bar above the panels and paint over its areas; Erase takes some out,
-            and two fingers or a right-button drag move the map meanwhile. Shift-click adds or removes one area. Taxes,
-            jobs, recruits and standing orders apply to your areas in the selection, shown in the bar, or to your whole
-            realm when it holds none of them. Each panel colors the map with what it is about: realms for Area, Armies,
-            Diplomacy and Game; the price of a good for Goods; population; necessities met for Needs; terrain striped
-            where a resource is found for Resources; real net incomes for Policies; employment for Jobs. Goods and
-            Population can also draw goods and people on the move. Dashed lines are sea routes, dotted lines air routes.
+            Tap or click an area to see it in the Area panel. Drag to turn the globe, and pinch or scroll to zoom. To
+            work on a whole region, turn on the Brush in the bar above the panels and paint over its areas; Erase takes
+            some out, and two fingers or a right-button drag turn the globe meanwhile. Shift-click adds or removes one
+            area. Taxes, jobs, recruits and standing orders apply to your areas in the selection, shown in the bar, or
+            to your whole realm when it holds none of them. Each panel colors the map with what it is about: realms for
+            Area, Armies, Diplomacy and Game; the price of a good for Goods; population; necessities met for Needs;
+            terrain striped where a resource is found for Resources; real net incomes for Policies; employment for Jobs.
+            Goods and Population can also draw goods and people on the move. Dashed lines are sea routes, dotted lines
+            air routes.
           </p>
         </section>
 

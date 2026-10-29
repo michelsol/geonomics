@@ -536,8 +536,25 @@ The resolved policies lost the production tax and gained the income tax and the 
 
 The Policies tab gave every policy one line: a slider with its level on the thumb, applied when released, and arrows for fine steps, with one good picked for all the goods policies. A price ceiling or floor in man-hours could not have one slider for "all goods", whose prices differ by orders of magnitude, so price controls became multiples of each good's labor value, the unit the price bounds already used. Saved settings would have been read in the wrong unit, so saves of version 4 are refused.
 
+## A round world
+
+### Generated on a sphere
+
+The map was a 3:2 rectangle with its rim forced to ocean, so it had edges a player could never cross. It is now a sphere. Cells start on a Fibonacci spiral, the most even spread of points on a sphere, nudged at random and relaxed twice; their Voronoi cells come from d3-geo-voronoi, which builds a planar Delaunay triangulation from a stereographic projection, so the cells on both sides of every seam match. Relief, moisture and resources come from 3D noise sampled on the sphere, with no seam. Without the rectangle's falloff to the edges, a broad continent field gathers land into a few continents; the world ocean is the largest body of water, and any other one becomes land. The radius keeps the cells about `cellSpacing` apart: about 730 km for 300 areas, 2,300 km for 3,000.
+
+Distances are arcs over the surface. Hand-built worlds (tests and scenarios) keep z = 0 and straight lines, so their numbers did not move. Rankings by distance (the nearest airports, the nearest capital, the nearest helper army) use the straight chord, which ranks points as the arc does.
+
+The economy is unchanged: on 300 areas over 40 years, population levels off near 6.9 million (7.1 million on the rectangle) with necessities met at 0.87. Two headless checks moved with the new maps: the worst price volatility on the 1,000-area map, a local service, reached 0.032 on seed 1 (0.021 to 0.025 on seeds 2 to 4), and trade in the 600-day AI game ended 6% to 17% below its level at the end of warm-up in four seeds of five. Trade dips by up to two thirds in the month after warm-up, on the old maps too, as the AI realms start taxing; that dip is left as an open question. Saves of version 5 are refused, as positions and the map layout changed shape.
+
+### A globe drawn with three.js
+
+The map is a globe the player turns, so nothing is stretched and nothing has an edge. PixiJS draws in 2D, so the renderer moved to three.js: one mesh holds every cell as a fan of triangles colored per vertex, and a layer change rewrites only the colors. Lines, routes, arrows and marks sit just above the surface, and the globe hides those on its far side. Arrows and air routes follow great circles, and marks lie flat in the tangent plane at their area, sized in screen pixels. Realm names are HTML labels, so they stay sharp. The renderer keeps the 2D map's interface and its caching, so panels, input and tests were left as they were.
+
+Speed came from three changes, measured on the 3,000-area globe with every trade arrow shown, in headless Chromium, which draws WebGL in software. Thousands of thin cell lines and route dashes drawn as wide lines took most of each frame, so they are plain one-pixel lines. Materials are kept across redraws, since a freed material frees its shader, which was compiled again with every snapshot. Antialiasing is off where WebGL runs in software, where it halves the frame rate. Turning the globe went from 6 to about 35 frames per second. three.js adds about 39 KB gzipped to the map's code (180 KB against 141 KB with PixiJS).
+
 ## Open questions
 
 - **Tick time on large maps.** At 3,000 areas with the large catalog a tick takes about 50 ms in Node and 65 ms in the browser worker. The interface stays smooth because the simulation runs in a worker; only the top speed on large maps is limited. Worth revisiting if players need faster large maps.
 - **Naval combat and blockades** on sea routes.
+- **The dip in trade after warm-up.** When warm-up ends and the AI realms start taxing, trade falls by up to two thirds for about a month before it recovers, on every map tried. A player sees it as the game opens.
 - **Research**, if it returns with its effect on the economy fixed (it left people hungrier past a few levels; see AI governments), and with it gating the modern recipes of the large catalog.

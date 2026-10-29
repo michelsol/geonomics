@@ -14,13 +14,13 @@ export interface MapPoint {
 export interface MapHandlers {
   /** A tap; `additive` when Shift, Ctrl or Cmd was held. */
   tap(area: number | null, point: MapPoint, additive: boolean): void;
-  /** Whether a pointer going down now starts a brush stroke rather than a pan. */
+  /** Whether a pointer going down now starts a brush stroke rather than turning the globe. */
   brushing(): boolean;
   stroke: {
     start(point: MapPoint): void;
     move(point: MapPoint): void;
     end(): void;
-    /** A second finger came down: the stroke is dropped, and the fingers pan and pinch. */
+    /** A second finger came down: the stroke is dropped, and the fingers turn the globe and pinch. */
     cancel(): void;
   };
 }

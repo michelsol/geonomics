@@ -1,4 +1,4 @@
-// Color scales of the map layers (specification §9, Map). Colors are 0xRRGGBB numbers, as PixiJS takes them.
+// Color scales of the map layers (specification §9, Map). Colors are 0xRRGGBB numbers, as three.js takes them.
 import type { Terrain } from "@geonomics/sim";
 
 export const WATER = 0x1d2b3f; // deep sea, beyond any port's reach

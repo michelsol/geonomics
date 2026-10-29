@@ -16,7 +16,7 @@ Only the host simulates. The signaling broker is used only to set up connections
 | Build | Vite, pnpm workspaces | Fast development server, static output |
 | Interface | React | Panels, lobby, policy and order editors |
 | Interface state | Zustand | Store fed by snapshots, read by React and the map |
-| Map | PixiJS (WebGL 2D) | Driven imperatively from one React component |
+| Map | three.js (WebGL), a globe | Driven imperatively from one React component |
 | Charts | uPlot | Fast long time series for prices and populations |
 | Networking | PeerJS | WebRTC data channels in reliable mode |
 | Serialization | @msgpack/msgpack | Binary messages and save files; typed arrays sent as Float32 |
@@ -30,7 +30,7 @@ Only the host simulates. The signaling broker is used only to set up connections
 
 - `packages/sim`: data model, config, tick, commands, AI, map generation, save format. No browser or network dependency.
 - `packages/net`: PeerJS host and client wrappers, message types, snapshot encoding.
-- `apps/web`: React application, PixiJS map, panels, and the simulation worker entry point.
+- `apps/web`: React application, the globe map, panels, and the simulation worker entry point.
 - `tools/headless`: Node runner, diagnostics and convergence scenarios.
 
 ### Host loop

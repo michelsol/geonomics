@@ -36,16 +36,23 @@ interface World {
 }
 
 interface MapLayout {
-  width: number;                        // map size in map units (km): the rectangle the cells tile
-  height: number;
+  radius: number;                       // km: the sphere the map covers, centered at the origin
 }
-// Cells for rendering are the Voronoi cells of the area positions followed by the water cells' positions.
+// Cells for rendering are the spherical Voronoi cells of the area positions followed by the water cells' positions.
+
+// A position in km: on the sphere of a generated map; in the plane z = 0 of a hand-built world, whose distances are
+// then straight lines.
+interface Point3 {
+  x: number;
+  y: number;
+  z: number;
+}
 
 // A cell of sea (section 4, Map generation): no people, owner or market, but natural capacity that the ports
 // reaching it extract (section 5, Infrastructure).
 interface WaterCell {
   id: WaterId;                          // index of this cell in World.waters
-  position: { x: number; y: number };   // map coordinates of the cell's center
+  position: Point3;                     // the cell's center
   depth: number;                        // hops over water from the nearest land; 1 for a cell touching a coast
   neighbors: WaterId[];                 // neighboring water cells
   coasts: AreaId[];                     // neighboring land areas, all coastal
@@ -115,7 +122,7 @@ interface Good {
 interface Area {
   id: AreaId;                           // index of this area in World.areas
   name: string;                         // display name
-  position: { x: number; y: number };   // map coordinates, used only for rendering
+  position: Point3;                     // the area's center: for rendering, air routes and straight-line fallbacks
   owner: GovernmentId | null;           // ruling government, or null for a neutral area
   edges: EdgeId[];                      // connections to neighboring areas
 

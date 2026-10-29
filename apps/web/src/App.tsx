@@ -4,7 +4,7 @@ import { useGame } from "./state/store";
 import { Guide } from "./ui/Guide";
 import { ChooseRealm, EndOfSession, Join, NewGame } from "./ui/screens";
 
-// The game screen brings PixiJS and uPlot; loading it lazily keeps the first screen light on phones.
+// The game screen brings three.js and uPlot; loading it lazily keeps the first screen light on phones.
 const Game = lazy(() => import("./ui/Game").then((module) => ({ default: module.Game })));
 
 export function App() {
