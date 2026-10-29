@@ -3,12 +3,17 @@ import type { Catalog } from "./catalog";
 import type { WorldConfig } from "./config";
 import { seedFrom } from "./random";
 import { edgeBaseTransportCost, edgeCapacityPerDay, edgeTravelDays } from "./routes";
-import type { Area, AreaId, Edge, EdgeMode, Terrain, WaterCell, WaterId, World } from "./types";
+import { surfaceDistance } from "./sphere";
+import type { Area, AreaId, Edge, EdgeMode, Point3, Terrain, WaterCell, WaterId, World } from "./types";
+
+/** A position as specs give it: z defaults to 0, a hand-built world's plane. */
+export type PositionSpec = { x: number; y: number; z?: number };
+const point = (p: PositionSpec): Point3 => ({ x: p.x, y: p.y, z: p.z ?? 0 });
 
 export interface AreaInit {
   id: AreaId;
   name: string;
-  position: { x: number; y: number };
+  position: PositionSpec;
   population?: number;
   productivity?: number;
   terrain?: Terrain;
@@ -23,7 +28,7 @@ export function createArea(init: AreaInit, goodCount: number, needCount: number)
   return {
     id: init.id,
     name: init.name,
-    position: { ...init.position },
+    position: point(init.position),
     owner: null,
     edges: [],
     population: init.population ?? 0,
@@ -92,7 +97,7 @@ export interface EdgeSpec {
   a: AreaId;
   b: AreaId;
   mode: EdgeMode;
-  distance?: number; // defaults to the straight-line distance between the two positions
+  distance?: number; // defaults to the distance over the surface between the two positions
   terrainFactor?: number; // land only: multiplies landCostPerDistance (default 1)
   baseTransportCost?: number; // overrides the cost derived from mode and distance
   travelDays?: number; // overrides the default derived from mode and distance
@@ -100,7 +105,7 @@ export interface EdgeSpec {
 }
 
 export interface WaterSpec {
-  position: { x: number; y: number };
+  position: PositionSpec;
   coasts: AreaId[]; // neighboring land areas
   neighbors: number[]; // neighboring water cells, by index in WorldSpec.waters (listed on both sides)
   naturalCapacity?: Record<string, number>; // primary good key -> maximum extraction per day
@@ -116,14 +121,14 @@ export interface WorldSpec {
 /** Creates a water cell with its per-good arrays; depth is set later by setWaterDepths. */
 export function createWaterCell(
   id: WaterId,
-  position: { x: number; y: number },
+  position: PositionSpec,
   coasts: AreaId[],
   neighbors: WaterId[],
   goodCount: number,
 ): WaterCell {
   return {
     id,
-    position: { ...position },
+    position: point(position),
     depth: 0,
     neighbors,
     coasts,
@@ -195,7 +200,7 @@ export function addEdge(world: World, spec: EdgeSpec): Edge {
   const a = world.areas[spec.a];
   const b = world.areas[spec.b];
   if (!a || !b || a === b) throw new Error(`Invalid edge between areas ${spec.a} and ${spec.b}`);
-  const distance = spec.distance ?? Math.hypot(a.position.x - b.position.x, a.position.y - b.position.y);
+  const distance = spec.distance ?? surfaceDistance(world, a.position, b.position);
   const baseTransportCost =
     spec.baseTransportCost ?? edgeBaseTransportCost(world.config, spec.mode, distance, spec.terrainFactor ?? 1);
   const edge: Edge = {

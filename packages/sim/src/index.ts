@@ -20,6 +20,7 @@ export * from "./random";
 export * from "./routes";
 export * from "./save";
 export * from "./snapshot";
+export * from "./sphere";
 export { unemployedIncome } from "./tick/consumption";
 export {
   placeStartingInfrastructure,

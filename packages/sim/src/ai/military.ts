@@ -1,6 +1,7 @@
 // An AI's wars (specification §10): defense for every personality; conquest, armies and weapons for the conqueror;
 // peace when a war has run its course.
 import { runningLevel } from "../snapshot";
+import { chord } from "../sphere";
 import type { AiMemory, AiWar, AreaId, Army, Command, GovernmentId } from "../types";
 import type { Traits } from "./personalities";
 import { armyArea, armyPower, canReach, defenseOf, ownerOf, type Realm, recruitable } from "./realm";
@@ -195,7 +196,7 @@ function defend(view: AiView, realm: Realm, memory: AiMemory, commands: Command[
 function distance(view: AiView, a: AreaId, b: AreaId): number {
   const p = view.data.areas[a];
   const q = view.data.areas[b];
-  return p && q ? Math.hypot(p.x - q.x, p.y - q.y) : Number.POSITIVE_INFINITY;
+  return p && q ? chord(p, q) : Number.POSITIVE_INFINITY;
 }
 
 /**

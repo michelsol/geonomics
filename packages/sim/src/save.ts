@@ -6,8 +6,9 @@ import type { World } from "./types";
 const MAGIC = "geonomics-save";
 // 2: leveled infrastructure with staff (specification §5, Infrastructure); 3: water cells (specification §4);
 // 4: the income tax by wage band replacing the production tax, and consumers buying by group (specification §4, §5);
-// 5: price ceilings and floors as multiples of labor value (specification §5)
-export const SAVE_FORMAT_VERSION = 5;
+// 5: price ceilings and floors as multiples of labor value (specification §5); 6: maps on a sphere, with 3D
+// positions and a radius (specification §4, Map generation)
+export const SAVE_FORMAT_VERSION = 6;
 
 /** What a save says about itself, readable without decoding the world. */
 export interface SaveInfo {

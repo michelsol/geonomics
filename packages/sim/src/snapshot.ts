@@ -42,6 +42,7 @@ export interface StaticEdge {
 export interface StaticWater {
   x: number;
   y: number;
+  z: number;
   depth: number; // hops over water from the nearest land
   neighbors: WaterId[];
   coasts: AreaId[];
@@ -51,7 +52,7 @@ export interface StaticData {
   config: WorldConfig;
   needs: Need[];
   goods: Good[];
-  areas: { name: string; x: number; y: number; terrain: Terrain; isCoastal: boolean }[];
+  areas: { name: string; x: number; y: number; z: number; terrain: Terrain; isCoastal: boolean }[];
   waters: StaticWater[]; // empty for hand-built worlds
   edges: StaticEdge[];
   map: MapLayout | null;
@@ -198,18 +199,20 @@ export function buildStaticData(world: World): StaticData {
       name: area.name,
       x: area.position.x,
       y: area.position.y,
+      z: area.position.z,
       terrain: area.terrain,
       isCoastal: area.isCoastal,
     })),
     waters: world.waters.map((water) => ({
       x: water.position.x,
       y: water.position.y,
+      z: water.position.z,
       depth: water.depth,
       neighbors: [...water.neighbors],
       coasts: [...water.coasts],
     })),
     edges: world.edges.map((_, id) => staticEdge(world, id)),
-    map: world.map ? { width: world.map.width, height: world.map.height } : null,
+    map: world.map ? { radius: world.map.radius } : null,
     naturalCapacityMaximum: capacityTable(world.areas, world.goods.length),
     waterCapacityMaximum: capacityTable(world.waters, world.goods.length),
   };

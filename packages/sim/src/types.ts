@@ -30,10 +30,19 @@ export interface World {
   map: MapLayout | null; // geometry of a generated map; null for hand-built worlds
 }
 
-/** The rectangle a generated map tiles: Voronoi cells are rebuilt from area positions then water cell positions. */
+/**
+ * The sphere a generated map covers, centered at the origin: Voronoi cells on it are rebuilt from area positions then
+ * water cell positions.
+ */
 export interface MapLayout {
-  width: number; // map units (km)
-  height: number;
+  radius: number; // km
+}
+
+/** A position in km: on the sphere of a generated map, or in the plane z = 0 of a hand-built world. */
+export interface Point3 {
+  x: number;
+  y: number;
+  z: number;
 }
 
 /**
@@ -42,7 +51,7 @@ export interface MapLayout {
  */
 export interface WaterCell {
   id: WaterId; // index of this cell in World.waters
-  position: { x: number; y: number }; // map coordinates of the cell's center
+  position: Point3; // the cell's center
   depth: number; // hops over water from the nearest land; 1 for a cell touching a coast
   neighbors: WaterId[]; // neighboring water cells
   coasts: AreaId[]; // neighboring land areas, all coastal
@@ -110,7 +119,7 @@ export interface Good {
 export interface Area {
   id: AreaId; // index of this area in World.areas
   name: string; // display name
-  position: { x: number; y: number }; // map coordinates, used only for rendering
+  position: Point3; // the area's center: for rendering, air routes and straight-line fallbacks
   owner: GovernmentId | null; // ruling government, or null for a neutral area
   edges: EdgeId[]; // connections to neighboring areas
 

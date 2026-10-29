@@ -98,24 +98,24 @@ describe("generateMap", () => {
     }
     const mean = world.areas.reduce((sum, area) => sum + area.population, 0) / world.areas.length;
     expect(mean).toBeCloseTo(world.config.map.meanAreaPopulation, 0);
+    const radius = world.map?.radius as number;
     for (const area of world.areas) {
-      expect(area.position.x).toBeGreaterThan(0);
-      expect(area.position.x).toBeLessThan(world.map?.width as number);
+      expect(Math.hypot(area.position.x, area.position.y, area.position.z)).toBeCloseTo(radius, 6); // on the sphere
       expect(area.owner).toBeNull();
     }
     expect(world.waters.length).toBeGreaterThan(world.areas.length);
   });
 
-  it("fills the rest of the rectangle with water cells, each with its depth and neighbors", () => {
-    const { width, height } = world.map as { width: number; height: number };
+  it("covers the rest of the sphere with water cells, each with its depth and neighbors", () => {
+    const radius = world.map?.radius as number;
     const spacing = world.config.map.cellSpacing;
-    // Land and water together tile the map, at about one cell per spacing squared.
-    expect((world.areas.length + world.waters.length) * spacing * spacing).toBeCloseTo(width * height, -5);
+    // Land and water together cover the sphere, at about one cell per spacing squared.
+    const cells = world.areas.length + world.waters.length;
+    expect((cells * spacing * spacing) / (4 * Math.PI * radius * radius)).toBeCloseTo(1, 6);
     const touching = new Set<number>();
     for (const [id, water] of world.waters.entries()) {
       expect(water.id).toBe(id);
-      expect(water.position.x).toBeGreaterThanOrEqual(0);
-      expect(water.position.x).toBeLessThanOrEqual(width);
+      expect(Math.hypot(water.position.x, water.position.y, water.position.z)).toBeCloseTo(radius, 6);
       for (const other of water.neighbors) expect(world.waters[other]?.neighbors).toContain(id);
       for (const area of water.coasts) expect(world.areas[area]?.isCoastal).toBe(true);
       if (water.coasts.length > 0) touching.add(id);

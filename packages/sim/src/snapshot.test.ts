@@ -73,7 +73,7 @@ describe("snapshots", () => {
     world.waters.push(cell);
     setWaterDepths(world.waters);
     const data = buildStaticData(world);
-    expect(data.waters).toEqual([{ x: -100, y: 0, depth: 1, neighbors: [], coasts: [0] }]);
+    expect(data.waters).toEqual([{ x: -100, y: 0, z: 0, depth: 1, neighbors: [], coasts: [0] }]);
     expect(data.waterCapacityMaximum[fish]).toBe(500);
     // The staffed port's area adds the cell's current capacity to its own.
     const detail = buildSnapshot(world, 0).detail.find((d) => d.area === 0);

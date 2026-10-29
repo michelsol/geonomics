@@ -1,14 +1,14 @@
-// Map generation (specification §4, Map generation): Voronoi cells, elevation and moisture from noise, terrain,
-// coasts, water cells, population, resources on land and at sea, land edges, sea lanes and capital positions.
-import { Delaunay } from "d3-delaunay";
-import { createNoise2D, type NoiseFunction2D } from "simplex-noise";
+// Map generation (specification §4, Map generation): Voronoi cells on a sphere, elevation and moisture from noise,
+// terrain, coasts, water cells, population, resources on land and at sea, land edges, sea lanes and capital positions.
+import { createNoise3D, type NoiseFunction3D } from "simplex-noise";
 import type { Catalog } from "./catalog";
 import type { WorldConfig } from "./config";
 import { MinHeap } from "./heap";
 import { referenceDemandPerPerson } from "./init";
 import { nextRandom, seedFrom } from "./random";
 import { LAND_DISTANCE_PER_TRAVEL_DAY } from "./routes";
-import type { AreaId, Terrain, World } from "./types";
+import { arcDistance, fibonacciSphere, sphericalMean, sphericalVoronoi } from "./sphere";
+import type { AreaId, Point3, Terrain, World } from "./types";
 import { type AreaSpec, addEdge, createEmptyWorld, createWaterCell, createWorld, setWaterDepths } from "./world";
 
 /** Productivity and land transport cost multiplier of each terrain. */
@@ -20,8 +20,9 @@ export const TERRAIN_EFFECTS: Record<Terrain, { productivity: number; landCost: 
   desert: { productivity: 0.8, landCost: 1.5, density: 0.35 },
 };
 
-const ASPECT = 1.5; // map width over height
 const LLOYD_ITERATIONS = 2;
+const JITTER = 0.5; // of the mean cell spacing, before relaxation
+const CONTINENT_WEIGHT = 0.8; // weight of the low-frequency noise that gathers land into a few continents
 const COASTAL_DENSITY_BONUS = 1.3;
 const SYLLABLES = ["ka", "lo", "mi", "ra", "ten", "sor", "vel", "an", "dor", "is", "ul", "ber", "to", "na", "vi"];
 const SYLLABLES_END = ["gar", "el", "mon", "ia", "ost", "una", "ard", "en", "ix", "or", "eth", "ana", "us", "ir"];
@@ -36,61 +37,48 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
   const m = config.map;
   const rng = { randomSeed: seedFrom(seed) };
   const random = () => nextRandom(rng);
-  const noise = (): NoiseFunction2D => createNoise2D(random);
+  const noise = (): NoiseFunction3D => createNoise3D(random);
 
-  // 1. Cells: a jittered grid relaxed toward even spacing.
-  const totalCells = Math.round(m.landAreaCount / m.landShare);
-  const rows = Math.max(3, Math.round(Math.sqrt(totalCells / ASPECT)));
-  const columns = Math.max(3, Math.round(totalCells / rows));
+  // 1. Cells: points spread over a sphere whose surface holds every cell at about cellSpacing apart, jittered, then
+  // relaxed toward even spacing.
+  const count = Math.max(12, Math.round(m.landAreaCount / m.landShare));
   const s = m.cellSpacing;
-  const width = columns * s;
-  const height = rows * s;
-  const count = rows * columns;
-  const points = new Float64Array(2 * count);
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < columns; c++) {
-      const i = r * columns + c;
-      points[2 * i] = (c + 0.5 + 0.8 * (random() - 0.5)) * s;
-      points[2 * i + 1] = (r + 0.5 + 0.8 * (random() - 0.5)) * s;
-    }
-  }
-  const bounds: [number, number, number, number] = [0, 0, width, height];
+  const radius = s * Math.sqrt(count / (4 * Math.PI));
+  let points: Point3[] = fibonacciSphere(count, radius, JITTER, random);
   for (let iteration = 0; iteration < LLOYD_ITERATIONS; iteration++) {
-    const voronoi = new Delaunay(points).voronoi(bounds);
-    for (let i = 0; i < count; i++) {
-      const polygon = voronoi.cellPolygon(i);
-      if (polygon) [points[2 * i], points[2 * i + 1]] = centroid(polygon);
-    }
+    const cells = sphericalVoronoi(points, radius);
+    points = points.map((p, i) => {
+      const polygon = cells.polygons[i] as Point3[];
+      return polygon.length >= 3 ? sphericalMean(polygon, radius) : p;
+    });
   }
-  const voronoi = new Delaunay(points).voronoi(bounds);
-  const neighbors: number[][] = Array.from({ length: count }, (_, i) =>
-    [...voronoi.neighbors(i)].sort((a, b) => a - b),
-  );
-  const x = (i: number) => points[2 * i] as number;
-  const y = (i: number) => points[2 * i + 1] as number;
-  const distance = (i: number, j: number) => Math.hypot(x(i) - x(j), y(i) - y(j));
+  const neighbors = sphericalVoronoi(points, radius).neighbors;
+  const at = (i: number) => points[i] as Point3;
+  const distance = (i: number, j: number) => arcDistance(radius, at(i), at(j));
+  /** Fractal noise at a point of the sphere, `scale` km per noise unit. */
+  const sample = (field: NoiseFunction3D, i: number | Point3, scale: number, octaves = 1, offset = 0) => {
+    const p = typeof i === "number" ? at(i) : i;
+    return fractal(field, p.x / scale + offset, p.y / scale + offset, p.z / scale + offset, octaves);
+  };
 
-  // 2. Elevation: fractal noise minus a falloff toward the edges; sea level gives the land share.
-  const featureScale = Math.sqrt(width * height) / 4;
+  // 2. Elevation: fractal noise plus a broad continent field; sea level gives the land share.
+  const featureScale = Math.sqrt(4 * Math.PI * radius * radius) / 4;
   const elevationNoise = noise();
+  const continentNoise = noise();
   const elevation = new Float64Array(count);
-  const relief = new Float64Array(count); // the noise alone, without the falloff: ranks hills and mountains
+  const relief = new Float64Array(count); // the fractal noise alone: ranks hills and mountains
   for (let i = 0; i < count; i++) {
-    const dx = (x(i) / width - 0.5) * 2;
-    const dy = (y(i) / height - 0.5) * 2;
-    relief[i] = fractal(elevationNoise, x(i) / featureScale, y(i) / featureScale, m.elevationOctaves);
-    elevation[i] = (relief[i] as number) - 0.6 * (dx * dx + dy * dy);
+    relief[i] = sample(elevationNoise, i, featureScale, m.elevationOctaves);
+    elevation[i] = (relief[i] as number) + CONTINENT_WEIGHT * sample(continentNoise, i, 2 * featureScale, 2);
   }
-  const nearBorder = (i: number) =>
-    x(i) < 1.5 * s || y(i) < 1.5 * s || x(i) > width - 1.5 * s || y(i) > height - 1.5 * s;
   const land = new Uint8Array(count);
   const classify = (share: number): number => {
     const seaLevel = quantile(elevation, 1 - share);
-    for (let i = 0; i < count; i++) land[i] = !nearBorder(i) && (elevation[i] as number) > seaLevel ? 1 : 0;
-    // No lakes: water that cannot reach the open sea becomes land. Islands too small to matter sink.
-    for (const component of components(count, neighbors, (i) => !land[i])) {
-      if (!component.some(nearBorder)) for (const i of component) land[i] = 1;
-    }
+    for (let i = 0; i < count; i++) land[i] = (elevation[i] as number) > seaLevel ? 1 : 0;
+    // No lakes: water apart from the world ocean, the largest body of water, becomes land. Islands too small to matter
+    // sink.
+    const waters = components(count, neighbors, (i) => !land[i]).sort((a, b) => b.length - a.length);
+    for (const component of waters.slice(1)) for (const i of component) land[i] = 1;
     for (const component of components(count, neighbors, (i) => land[i] === 1)) {
       if (component.length < m.minimumIslandAreas) for (const i of component) land[i] = 0;
     }
@@ -116,7 +104,7 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
     const rank = elevationRank[i] as number;
     if (rank >= 0.85) return "mountains";
     if (rank >= 0.65) return "hills";
-    const moisture = fractal(moistureNoise, x(i) / featureScale, y(i) / featureScale, 3);
+    const moisture = sample(moistureNoise, i, featureScale, 3);
     if (moisture < -0.3) return "desert";
     if (moisture > 0.2) return "forest";
     return "plains";
@@ -129,16 +117,16 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
   const terrains = landCells.map(terrainOf);
   const coastal = landCells.map((cell) => (neighbors[cell] as number[]).some((n) => !land[n]));
   const densities = landCells.map((cell, id) => {
-    const local = 0.6 + 0.8 * (0.5 + 0.5 * variation(x(cell) / (2 * s), y(cell) / (2 * s)));
+    const local = 0.6 + 0.8 * (0.5 + 0.5 * sample(variation, cell, 2 * s));
     return TERRAIN_EFFECTS[terrains[id] as Terrain].density * (coastal[id] ? COASTAL_DENSITY_BONUS : 1) * local;
   });
   const meanDensity = densities.reduce((a, b) => a + b, 0) / Math.max(densities.length, 1);
   const areas: AreaSpec[] = landCells.map((cell, id) => {
     const terrain = terrains[id] as Terrain;
-    const local = 0.5 + 0.5 * variation((x(cell) + width) / (3 * s), y(cell) / (3 * s));
+    const local = 0.5 + 0.5 * sample(variation, cell, 3 * s, 1, 100); // offset from the density sample
     return {
       name: areaName(random),
-      position: { x: x(cell), y: y(cell) },
+      position: at(cell),
       population: (m.meanAreaPopulation * (densities[id] as number)) / meanDensity,
       productivity: TERRAIN_EFFECTS[terrain].productivity * (0.9 + 0.2 * local),
       terrain,
@@ -147,7 +135,7 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
   });
 
   const world = createWorld(catalog, config, { areas, edges: [], seed: rng.randomSeed });
-  world.map = { width, height };
+  world.map = { radius };
 
   // Water cells: every cell that is not land, in cell order, with their water and land neighbors.
   const waterOf = new Int32Array(count).fill(-1);
@@ -159,7 +147,7 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
     world.waters.push(
       createWaterCell(
         id,
-        { x: x(cell), y: y(cell) },
+        at(cell),
         around.filter((n) => land[n]).map((n) => areaOf[n] as number),
         around.filter((n) => !land[n]).map((n) => waterOf[n] as number),
         catalog.goods.length,
@@ -240,7 +228,7 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
   };
   const scores = primaries.map(() => {
     const field = noise();
-    return sites.map((site) => field(site.position.x / featureScale, site.position.y / featureScale));
+    return sites.map((site) => sample(field, site.position, featureScale));
   });
   const weights = primaries.map(() => new Float64Array(sites.length));
   for (const [k, good] of primaries.entries()) {
@@ -426,13 +414,13 @@ function updateHops(world: World, from: AreaId, hops: Float64Array): void {
   for (let i = 0; i < hops.length; i++) hops[i] = Math.min(hops[i] as number, distance[i] as number);
 }
 
-function fractal(noise: NoiseFunction2D, x: number, y: number, octaves: number): number {
+function fractal(noise: NoiseFunction3D, x: number, y: number, z: number, octaves: number): number {
   let value = 0;
   let amplitude = 1;
   let frequency = 1;
   let total = 0;
   for (let octave = 0; octave < octaves; octave++) {
-    value += amplitude * noise(x * frequency, y * frequency);
+    value += amplitude * noise(x * frequency, y * frequency, z * frequency);
     total += amplitude;
     amplitude *= 0.5;
     frequency *= 2;
@@ -443,21 +431,6 @@ function fractal(noise: NoiseFunction2D, x: number, y: number, octaves: number):
 function quantile(values: Float64Array, share: number): number {
   const sorted = Float64Array.from(values).sort();
   return sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(share * sorted.length)))] as number;
-}
-
-function centroid(polygon: [number, number][]): [number, number] {
-  let area = 0;
-  let cx = 0;
-  let cy = 0;
-  for (let i = 0; i < polygon.length - 1; i++) {
-    const [x0, y0] = polygon[i] as [number, number];
-    const [x1, y1] = polygon[i + 1] as [number, number];
-    const cross = x0 * y1 - x1 * y0;
-    area += cross;
-    cx += (x0 + x1) * cross;
-    cy += (y0 + y1) * cross;
-  }
-  return area === 0 ? (polygon[0] as [number, number]) : [cx / (3 * area), cy / (3 * area)];
 }
 
 function components(count: number, neighbors: number[][], inside: (i: number) => boolean): number[][] {

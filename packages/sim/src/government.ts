@@ -4,6 +4,7 @@ import { WAGE_BAND_COUNT } from "./bands";
 import { MinHeap } from "./heap";
 import { INFRASTRUCTURE_KINDS, levelOf } from "./infrastructure";
 import { nextRandom } from "./random";
+import { chord } from "./sphere";
 import { placeStartingInfrastructure, updateRouteCapacities } from "./tick/infrastructure";
 import type {
   AiMix,
@@ -150,7 +151,7 @@ function nearestCapitals(world: World, capitals: readonly AreaId[]): Int32Array 
     let bestDistance = Number.POSITIVE_INFINITY;
     capitals.forEach((capital, i) => {
       const c = world.areas[capital] as Area;
-      const d = Math.hypot(c.position.x - area.position.x, c.position.y - area.position.y);
+      const d = chord(c.position, area.position);
       if (d < bestDistance) {
         best = i;
         bestDistance = d;

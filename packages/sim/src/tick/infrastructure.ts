@@ -13,6 +13,7 @@ import {
 } from "../infrastructure";
 import { nextRandom } from "../random";
 import { edgeCapacityPerDay, edgeTransportCost } from "../routes";
+import { chord } from "../sphere";
 import type { Area, AreaId, Edge, GovernmentAreaState, InfrastructureKind, World } from "../types";
 import { addEdge } from "../world";
 import { takeWorkers } from "./population";
@@ -245,7 +246,7 @@ export function rebuildAirRoutes(world: World): void {
       .filter((other) => other !== airport)
       .map((other) => ({
         id: other.id,
-        distance: Math.hypot(other.position.x - airport.position.x, other.position.y - airport.position.y),
+        distance: chord(other.position, airport.position),
       }))
       .sort((x, y) => x.distance - y.distance || x.id - y.id)
       .slice(0, t.airRoutesPerAirport);
