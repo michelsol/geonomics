@@ -1,7 +1,7 @@
 // Draws the map with PixiJS (specification §9, Map). Every layer is cached geometry, redrawn only when what it
 // shows changes, and the scene is rendered on demand, so an idle map costs nothing per frame.
-import { EDGE_ACTIVE, EDGE_BLOCKED, type Snapshot, type StaticData } from "@geonomics/sim";
-import { type Application, Container, FillPattern, Graphics, Matrix, Texture } from "pixi.js";
+import { EDGE_ACTIVE, EDGE_BLOCKED, type Snapshot, type StaticData, shores } from "@geonomics/sim";
+import { type Application, Container, FillPattern, Graphics, Matrix, Text, Texture } from "pixi.js";
 import {
   type GroupFlow,
   largestPopulation,
@@ -48,10 +48,16 @@ import {
   waterColor,
 } from "./colors";
 import type { MapGeometry } from "./geometry";
+import { realmLabels } from "./labels";
+import { dashedPath, waterPath } from "./seaPaths";
 
 const MIN_ZOOM_FACTOR = 0.5; // of the zoom that fits the whole map
 const MAX_ZOOM_FACTOR = 40;
 const LINE_REDRAW_RATIO = 1.25; // lines keep their screen width within this zoom ratio before being redrawn
+/** Realm names are made at this font size, then scaled; on screen they stay within these heights, or hide below. */
+const LABEL_FONT_SIZE = 48;
+const LABEL_MIN_PX = 10;
+const LABEL_MAX_PX = 34;
 
 interface Drawn {
   cells: unknown[];
@@ -59,6 +65,7 @@ interface Drawn {
   routes: unknown[];
   flows: unknown[];
   markers: unknown[];
+  labels: unknown[];
   selection: unknown[];
 }
 
@@ -74,6 +81,7 @@ export class MapRenderer {
   private readonly routes = new Graphics();
   private readonly flows = new Graphics();
   private readonly markers = new Graphics();
+  private readonly labels = new Container(); // realm names, one Text per government
   private readonly selection = new Graphics();
   private readonly brush = new Graphics();
   private drawn: Partial<Drawn> = {};
@@ -88,6 +96,8 @@ export class MapRenderer {
   private largestPopulation = 0;
   private scale: Spread | null = null; // the prices or income layer's lowest, median and highest value
   private incomes: Float32Array | null = null; // the income layer's real net income per area
+  private shore: number[][] | null = null; // per area, its shore water cells, for the sea routes' paths
+  private readonly seaPaths = new Map<number, number[] | null>(); // per sea edge: its path over water, computed once
 
   constructor(
     private readonly app: Application,
@@ -101,6 +111,7 @@ export class MapRenderer {
       this.routes,
       this.flows,
       this.markers,
+      this.labels,
       this.selection,
       this.brush,
     );
@@ -175,6 +186,11 @@ export class MapRenderer {
     if (changed(this.drawn.markers, markerInputs)) {
       this.drawMarkers(state, px);
       this.drawn.markers = markerInputs;
+    }
+    const labelInputs = [this.ownerKey, state.governments, this.lineScale];
+    if (changed(this.drawn.labels, labelInputs)) {
+      this.drawLabels(state, px);
+      this.drawn.labels = labelInputs;
     }
     const selectionInputs = [state.selection, state.peaceAreas, state.mode, this.portKey, this.lineScale];
     if (changed(this.drawn.selection, selectionInputs)) {
@@ -374,9 +390,7 @@ export class MapRenderer {
       for (const [id, edge] of state.edges.entries()) {
         const flag = open(id);
         if (edge.mode !== style.mode || !(flag & EDGE_ACTIVE) || flag & EDGE_BLOCKED) continue;
-        const a = position(edge.areaA);
-        const b = position(edge.areaB);
-        dashed(g, a.x, a.y, b.x, b.y, style.dash * px, style.gap * px);
+        dashedPath(g, this.routePath(id), style.dash * px, style.gap * px);
         any = true;
       }
       if (any) g.stroke({ width: style.width * px, color: style.color, alpha: 0.4 });
@@ -385,12 +399,72 @@ export class MapRenderer {
     for (const [id, edge] of state.edges.entries()) {
       const flag = open(id);
       if (!(flag & EDGE_ACTIVE) || !(flag & EDGE_BLOCKED)) continue;
+      const path = edge.mode === "sea" ? this.routePath(id) : null;
       const a = position(edge.areaA);
       const b = position(edge.areaB);
-      g.moveTo(a.x, a.y).lineTo(b.x, b.y);
+      if (path) {
+        g.moveTo(path[0] as number, path[1] as number);
+        for (let i = 2; i < path.length; i += 2) g.lineTo(path[i] as number, path[i + 1] as number);
+      } else g.moveTo(a.x, a.y).lineTo(b.x, b.y);
       blocked = true;
     }
     if (blocked) g.stroke({ width: 2.5 * px, color: BLOCKED, alpha: 0.9 });
+  }
+
+  /**
+   * The line a route is drawn along, as flat x, y points: for a sea route the shortest way over water, computed the
+   * first time it shows (edge ids are stable); otherwise, or with no water path, straight between the area centers.
+   */
+  private routePath(id: number): number[] {
+    const edge = this.state?.edges[id] ?? this.data.edges[id];
+    if (!edge) return [];
+    const a = this.data.areas[edge.areaA] as StaticData["areas"][number];
+    const b = this.data.areas[edge.areaB] as StaticData["areas"][number];
+    const straight = [a.x, a.y, b.x, b.y];
+    if (edge.mode !== "sea") return straight;
+    if (!this.seaPaths.has(id)) {
+      this.shore ??= shores(this.data.waters, this.data.areas.length);
+      this.seaPaths.set(id, waterPath(this.data, this.shore, edge.areaA, edge.areaB));
+    }
+    return this.seaPaths.get(id) ?? straight;
+  }
+
+  /**
+   * Realm names, in capitals at each realm's center, sized by the realm; on screen they stay readable when zoomed in
+   * and hide when too small to read.
+   */
+  private drawLabels(state: GameState, px: number): void {
+    const snapshot = state.snapshot;
+    for (const child of this.labels.children) child.visible = false;
+    if (!snapshot) return;
+    for (const label of realmLabels(this.data, snapshot, state.governments)) {
+      const screen = label.size / px; // text height in screen pixels at this zoom
+      if (screen < LABEL_MIN_PX) continue;
+      let text = this.labels.children[label.government] as Text | undefined;
+      while (!text) {
+        this.labels.addChild(
+          new Text({
+            text: "",
+            style: {
+              fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
+              fontSize: LABEL_FONT_SIZE,
+              fontWeight: "700",
+              letterSpacing: 4,
+              fill: 0xffffff,
+              stroke: { color: ARROW_OUTLINE, width: 6, join: "round" },
+            },
+            anchor: 0.5,
+            alpha: 0.85,
+            visible: false,
+          }),
+        );
+        text = this.labels.children[label.government] as Text | undefined;
+      }
+      text.text = label.text;
+      text.position.set(label.x, label.y);
+      text.scale.set((Math.min(screen, LABEL_MAX_PX) * px) / LABEL_FONT_SIZE);
+      text.visible = true;
+    }
   }
 
   /**
@@ -630,17 +704,5 @@ export class MapRenderer {
     if (this.frame) cancelAnimationFrame(this.frame);
     this.root.destroy({ children: true });
     for (const pattern of this.stripePatterns ?? []) pattern.destroy();
-  }
-}
-
-/** Adds a dashed line to the current path of a Graphics. */
-function dashed(g: Graphics, x1: number, y1: number, x2: number, y2: number, dash: number, gap: number): void {
-  const length = Math.hypot(x2 - x1, y2 - y1);
-  if (length === 0) return;
-  const ux = (x2 - x1) / length;
-  const uy = (y2 - y1) / length;
-  for (let d = 0; d < length; d += dash + gap) {
-    const end = Math.min(length, d + dash);
-    g.moveTo(x1 + ux * d, y1 + uy * d).lineTo(x1 + ux * end, y1 + uy * end);
   }
 }

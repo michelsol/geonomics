@@ -48,8 +48,9 @@ Areas are the Voronoi cells of their positions, with the water cells around them
 
 The layer and the flows each have their own legend, stacked bottom left. Every layer also shows:
 
-- **Routes:** sea routes dashed, air routes dotted, while they run (ports or airports with staff at both ends); blocked edges red. Sea lanes are not drawn.
+- **Routes:** sea routes dashed, along the shortest way over water between their two areas (through the water cells' centers, smoothed; straight on a map without water cells), air routes dotted and straight, while they run (ports or airports with staff at both ends); blocked edges red, sea routes along the same way. Sea lanes are not drawn.
 - **Capitals:** a star.
+- **Realm names:** each realm holding land has its name in capitals, white with a dark outline, on its area nearest the population-weighted center of its areas. Its height spans about the realm's width (the square root of its area count, in cells, over the name's length), at most 5 cells; on screen it stays at most 34 px tall when zooming in, and hides below 10 px.
 - **Armies:** a marker in their government's color, with their remaining path.
 - **Sieges:** a ring showing their progress.
 - **Selection:** the selected area is outlined.

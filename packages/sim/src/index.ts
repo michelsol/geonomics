@@ -11,6 +11,7 @@ export * from "./government";
 export { neutralPolicies, resolveSettings } from "./government";
 export * from "./graph";
 export * from "./hash";
+export { MinHeap } from "./heap";
 export * from "./infrastructure";
 export * from "./init";
 export * from "./mapgen";
