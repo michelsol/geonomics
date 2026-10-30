@@ -402,6 +402,9 @@ input[type="range"] {
   gap: 4px;
   flex-shrink: 0;
 }
+.selection-bar select {
+  max-width: 9em;
+}
 .selection-bar button.icon {
   font-size: 18px;
   line-height: 1;

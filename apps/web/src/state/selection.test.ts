@@ -13,6 +13,7 @@ import {
   capacityMaximum,
   type Point,
   portLevelGain,
+  realmAreas,
   selectionSummary,
   splitByPopulation,
 } from "./selectors";
@@ -30,6 +31,15 @@ function setup() {
   state().chooseRealm(0);
   return { world, data, state };
 }
+
+describe("a realm's areas", () => {
+  it("takes the areas a realm owns, or every area", () => {
+    const { world } = setup();
+    const snapshot = buildSnapshot(world, null);
+    expect(realmAreas(snapshot, 1)).toEqual(world.areas.filter((area) => area.owner === 1).map((area) => area.id));
+    expect(realmAreas(snapshot, "all")).toHaveLength(world.areas.length);
+  });
+});
 
 describe("areas near a point", () => {
   it("takes the areas whose center lies within the radius", () => {

@@ -449,6 +449,14 @@ export function actionTarget(government: GovernmentView, selection: readonly num
   return { realm, areas: realm ? [...government.ownedAreas] : own };
 }
 
+/** Every area a realm owns now, or every area of the map for "all". */
+export function realmAreas(snapshot: Pick<Snapshot, "areas">, realm: number | "all"): number[] {
+  const owners = snapshot.areas.owner;
+  const areas: number[] = [];
+  for (let area = 0; area < owners.length; area++) if (realm === "all" || owners[area] === realm) areas.push(area);
+  return areas;
+}
+
 /**
  * Splits a whole number over areas in proportion to their population, by largest remainder, so the parts sum to the
  * total exactly. Areas without people get a share only when nobody lives in any of them (then evenly).

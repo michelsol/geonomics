@@ -37,6 +37,25 @@ export function GoodsPanel() {
           {info.isService ? "Service" : info.isPrimary ? "Primary good" : "Crafted good"} · labor value{" "}
           {fmt(info.laborValue)} mh per {info.unit}
         </div>
+        {info.inputs.length > 0 && (
+          <div className="muted" data-testid="good-inputs">
+            Made from{" "}
+            {info.inputs.map((input, i) => {
+              const source = data.goods[input.good];
+              return (
+                <span key={input.good}>
+                  {i > 0 ? ", " : ""}
+                  {fmt(input.quantity)} {/^\d/.test(source?.unit ?? "") ? "× " : ""}
+                  {source?.unit} of{" "}
+                  <button type="button" className="link" onClick={() => selectGood(input.good)}>
+                    {source?.name ?? `#${input.good}`}
+                  </button>
+                </span>
+              );
+            })}{" "}
+            and {fmt(info.laborHoursPerUnit)} h of labor, per {info.unit}
+          </div>
+        )}
         <Checkbox
           label="Show transport flows"
           title="Arrows on the map for this good carried between areas"

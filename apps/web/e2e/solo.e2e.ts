@@ -268,6 +268,12 @@ test("a good in the market table opens it in the Goods panel", async ({ page }) 
       .locator("tbody tr")
       .first(),
   ).toHaveClass(/chosen-row/);
+  // A crafted good lists its inputs, and each opens in the panel.
+  await page.getByLabel("Good", { exact: true }).selectOption({ label: "Bread" });
+  await expect(page.getByTestId("good-inputs")).toContainText("of Grain");
+  await page.getByTestId("good-inputs").getByRole("button", { name: "Grain" }).click();
+  await expect(page.getByLabel("Good", { exact: true }).locator("option:checked")).toHaveText("Grain");
+  await expect(page.getByTestId("good-inputs")).toHaveCount(0);
 });
 
 test("a selection with none of your areas has no action target", async ({ page }) => {

@@ -106,8 +106,13 @@ test("the brush paints areas into the selection, and actions follow it", async (
   if (owned > 1) await expect(job).toContainText(`${owned} areas`);
   await expect(job).toContainText("/ 1,000 workers");
 
-  // My realm makes the actions realm-wide.
-  await page.getByRole("button", { name: "My realm", exact: true }).click();
+  // My realm makes the actions realm-wide, and so does the whole map, which holds the realm.
+  await page.getByLabel("Select a realm").selectOption({ label: "Whole map" });
+  await expect(page.getByTestId("action-target")).toHaveText("Actions: your whole realm");
+  // Another realm alone holds none of the player's areas.
+  await page.getByLabel("Select a realm").selectOption({ index: 3 });
+  await expect(page.getByTestId("action-target")).toHaveText("Actions: none of your areas");
+  await page.getByLabel("Select a realm").selectOption({ label: "My realm" });
   await expect(page.getByTestId("action-target")).toHaveText("Actions: your whole realm");
   await page.getByRole("navigation").getByRole("button", { name: "Policies", exact: true }).click();
   await expect(page.getByLabel("Income tax · all bands level")).toBeVisible();

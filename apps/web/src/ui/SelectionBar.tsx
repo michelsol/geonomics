@@ -1,7 +1,7 @@
 // The selection, under the tabs on every panel (specification §9, Selection): what is selected, what the player's
 // actions apply to, and the controls choosing it.
 import { mapControls } from "../map/MapView";
-import { actionTarget, centerOf } from "../state/selectors";
+import { actionTarget, centerOf, realmAreas } from "../state/selectors";
 import { gameStore, useGame } from "../state/store";
 import { count, Swatch } from "./components";
 import { areaName } from "./panels/common";
@@ -18,15 +18,23 @@ export function SelectionBar() {
   const owner = single === null ? undefined : snapshot.governments[snapshot.areas.owner[single] as number];
   const target = government ? actionTarget(government, selection) : null;
   const yours = government ? selection.filter((area) => government.ownedAreas.includes(area)).length : 0;
-  // Exactly the realm is selected: My realm has nothing to add, and its room goes to the action line.
-  const wholeRealm = government !== null && yours === government.ownedAreas.length && selection.length === yours;
+  // Whole realms or the whole map at once; "" is the menu's resting entry.
+  const realms = snapshot.governments.filter((g) => !g.isEliminated && g.id !== government?.id);
+  const pick = (value: string) => {
+    if (value === "") return;
+    const areas = realmAreas(snapshot, value === "all" ? "all" : Number(value));
+    selectAreas(areas);
+    if (value !== "all") centerOn(areas); // the whole map has no center worth turning to
+  };
 
-  const center = () => {
-    const capital = government?.capital ?? null;
-    const targets = selection.length > 0 ? selection : capital !== null ? [capital] : [];
+  const centerOn = (targets: readonly number[]) => {
     if (targets.length === 0) return;
     const points = targets.flatMap((area) => (data.areas[area] ? [data.areas[area]] : []));
     mapControls.renderer?.centerOnPoint(centerOf(data, points));
+  };
+  const center = () => {
+    const capital = government?.capital ?? null;
+    centerOn(selection.length > 0 ? selection : capital !== null ? [capital] : []);
   };
 
   return (
@@ -60,11 +68,21 @@ export function SelectionBar() {
         )}
       </div>
       <div className="group">
-        {government && government.ownedAreas.length > 1 && !wholeRealm && (
-          <button type="button" onClick={() => selectAreas(government.ownedAreas)}>
-            My realm
-          </button>
-        )}
+        <select
+          aria-label="Select a realm"
+          title="Select every area of a realm, or the whole map"
+          value=""
+          onChange={(event) => pick(event.target.value)}
+        >
+          <option value="">Select…</option>
+          {government && <option value={government.id}>My realm</option>}
+          <option value="all">Whole map</option>
+          {realms.map((realm) => (
+            <option key={realm.id} value={realm.id}>
+              {`${realm.name}${realm.ai ? " (AI)" : ""}`}
+            </option>
+          ))}
+        </select>
         <button
           type="button"
           className={brushing ? "active" : ""}
