@@ -18,11 +18,15 @@ export const TERRAIN_EFFECTS: Record<Terrain, { productivity: number; landCost: 
   hills: { productivity: 0.9, landCost: 2, density: 0.7 },
   mountains: { productivity: 0.7, landCost: 4, density: 0.3 },
   desert: { productivity: 0.8, landCost: 1.5, density: 0.35 },
+  coldDesert: { productivity: 0.7, landCost: 2, density: 0.15 },
 };
 
 const LLOYD_ITERATIONS = 2;
 const JITTER = 0.5; // of the mean cell spacing, before relaxation
 const CONTINENT_WEIGHT = 0.8; // weight of the low-frequency noise that gathers land into a few continents
+const COLD_LATITUDE = 0.87; // |z| / radius beyond which low land is cold desert: about 60 degrees of latitude
+const COLD_WOBBLE = 0.08; // weight of the noise that makes the cold line ragged
+const COLD_STREAM = 0x9e3779b9; // mixed into the seed for the cold noise, so it leaves the other fields as they were
 const COASTAL_DENSITY_BONUS = 1.3;
 const SYLLABLES = ["ka", "lo", "mi", "ra", "ten", "sor", "vel", "an", "dor", "is", "ul", "ber", "to", "na", "vi"];
 const SYLLABLES_END = ["gar", "el", "mon", "ia", "ost", "una", "ard", "en", "ix", "or", "eth", "ana", "us", "ir"];
@@ -100,10 +104,14 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
   const elevationRank = new Float64Array(count);
   for (const [rank, i] of byElevation.entries()) elevationRank[i] = rank / Math.max(byElevation.length - 1, 1);
   const moistureNoise = noise();
+  const coldRng = { randomSeed: seedFrom(seed ^ COLD_STREAM) };
+  const coldNoise = createNoise3D(() => nextRandom(coldRng));
   const terrainOf = (i: number): Terrain => {
     const rank = elevationRank[i] as number;
     if (rank >= 0.85) return "mountains";
     if (rank >= 0.65) return "hills";
+    const cold = Math.abs(at(i).z) / radius + COLD_WOBBLE * sample(coldNoise, i, featureScale, 2);
+    if (cold > COLD_LATITUDE) return "coldDesert";
     const moisture = sample(moistureNoise, i, featureScale, 3);
     if (moisture < -0.3) return "desert";
     if (moisture > 0.2) return "forest";

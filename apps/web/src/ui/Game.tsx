@@ -1,4 +1,5 @@
 // The game screen: top bar, map and panels, as a sidebar on desktop or a bottom sheet on phones.
+import type { Terrain } from "@geonomics/sim";
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { arrowWidth, realmArrowWidth } from "../map/arrows";
 import {
@@ -13,6 +14,7 @@ import {
   STRIPE_TILE,
   STRIPE_WIDTHS,
   TERRAIN_COLORS,
+  TERRAIN_NAMES,
   TRANSPORT_ARROW,
 } from "../map/colors";
 import { MapView } from "../map/MapView";
@@ -474,10 +476,10 @@ function AreaLegend() {
             <span>most on the map</span>
           </div>
           <div className="terrains">
-            {Object.entries(TERRAIN_COLORS).map(([name, color]) => (
-              <span key={name}>
+            {(Object.entries(TERRAIN_COLORS) as [Terrain, number][]).map(([terrain, color]) => (
+              <span key={terrain}>
                 <span className="swatch" style={{ background: cssColor(color) }} />
-                {name}
+                {TERRAIN_NAMES[terrain]}
               </span>
             ))}
           </div>

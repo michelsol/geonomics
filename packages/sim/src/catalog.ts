@@ -32,6 +32,7 @@ const TERRAINS: readonly TerrainAffinity[] = [
   "hills",
   "mountains",
   "desert",
+  "coldDesert",
   "coast",
   "sea",
   "offshore",

@@ -11,6 +11,7 @@ const TERRAIN_COLORS: Record<Terrain, string> = {
   hills: "#c8b27a",
   mountains: "#9a8f86",
   desert: "#e6d29a",
+  coldDesert: "#e8eef2",
 };
 
 const WATER_COLORS = ["#6f9bcc", "#5f8cc0", "#5483b8"]; // depth 1 to 3; deeper is #4f7fb5

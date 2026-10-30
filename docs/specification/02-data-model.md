@@ -60,7 +60,7 @@ interface WaterCell {
   naturalCapacityMaximum: Float64Array; // per good: capacity the cell recovers toward
 }
 
-type Terrain = "plains" | "forest" | "hills" | "mountains" | "desert";
+type Terrain = "plains" | "forest" | "hills" | "mountains" | "desert" | "coldDesert";
 
 type Relation = "peace" | "war";
 ```

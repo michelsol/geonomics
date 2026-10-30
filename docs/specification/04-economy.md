@@ -291,7 +291,7 @@ The world is a sphere: every position is a point on it, in km from its center, a
 
 1. **Cells.** `landAreaCount / landShare` points spread evenly over a sphere along a Fibonacci spiral, each nudged by up to half the mean spacing, then relaxed twice toward the center of their Voronoi cells on the sphere (Lloyd). The radius is chosen so the cells share the surface at about `cellSpacing` apart: `R = cellSpacing × √(cells / 4π)`.
 2. **Elevation.** Fractal simplex noise in three dimensions (`elevationOctaves`), sampled at each cell's point of the sphere so it has no seam, plus a broader noise field (two octaves, twice the scale, weight 0.8) that gathers land into a few continents. The sea level is set so the land share gives `landAreaCount` land cells, after every body of water other than the world ocean, the largest, becomes land (no lakes) and land masses smaller than `minimumIslandAreas` sink; it is corrected up to four times.
-3. **Terrain.** Land cells are ranked by the fractal elevation noise alone: the top 15% are mountains, the next 20% hills. The rest are desert where a moisture noise is low, forest where it is high, and plains otherwise.
+3. **Terrain.** Land cells are ranked by the fractal elevation noise alone: the top 15% are mountains, the next 20% hills. The rest are cold desert toward the poles, where `|z| / R + 0.08 × noise` (two octaves) exceeds 0.87, about 60 degrees of latitude with a ragged edge; then desert where a moisture noise is low, forest where it is high, and plains otherwise. The cold noise has its own seeded stream, so it leaves the other fields as they would be without it.
 
 | Terrain | Productivity | Land cost factor | Population density |
 | --- | --- | --- | --- |
@@ -300,6 +300,7 @@ The world is a sphere: every position is a point on it, in km from its center, a
 | Hills | 0.9 | 2 | 0.7 |
 | Mountains | 0.7 | 4 | 0.3 |
 | Desert | 0.8 | 1.5 | 0.35 |
+| Cold desert | 0.7 | 2 | 0.15 |
 
 4. **Areas and water cells.** Each land cell is an area, and every other cell of the sphere a water cell, so land and sea cover the whole world. An area is coastal when it borders a water cell. A water cell's depth is its number of hops over water from the nearest land: 1 where it touches a coast. Productivity is the terrain value times 0.9 to 1.1 from noise. Population is the terrain density, ×1.3 on coasts, times 0.6 to 1.4 from noise, scaled to a mean of `meanAreaPopulation`.
 5. **Land edges** join neighboring land cells. Distance is the arc between cell centers; `terrainFactor` is the mean land cost factor of the two areas; `travelDays` is `distance / 25 × terrainFactor`.

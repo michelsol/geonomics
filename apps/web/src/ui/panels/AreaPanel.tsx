@@ -2,6 +2,7 @@
 // sortable market table and the depot. Explanations show on hover.
 import { INFRASTRUCTURE_KINDS, snapshotLevel } from "@geonomics/sim";
 import { useState } from "react";
+import { TERRAIN_NAMES } from "../../map/colors";
 import {
   type ConquestEstimate,
   conquestEstimate,
@@ -66,7 +67,7 @@ function SelectionView({ areas, onOpen }: { areas: number[] } & PanelProps) {
               ) : (
                 "Neutral"
               )}{" "}
-              · {static_.terrain}
+              · {TERRAIN_NAMES[static_.terrain]}
               {static_.isCoastal ? " · coast" : ""}
             </div>
           </>

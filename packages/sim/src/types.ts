@@ -59,7 +59,7 @@ export interface WaterCell {
   naturalCapacityMaximum: Float64Array; // per good: capacity the cell recovers toward
 }
 
-export type Terrain = "plains" | "forest" | "hills" | "mountains" | "desert";
+export type Terrain = "plains" | "forest" | "hills" | "mountains" | "desert" | "coldDesert";
 
 export type Relation = "peace" | "war";
 

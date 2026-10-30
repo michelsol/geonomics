@@ -48,6 +48,20 @@ describe("generateMap", () => {
     }
   });
 
+  it("lays cold desert around the poles", () => {
+    const generated = generate("medium", 1, 1000).world;
+    const radius = generated.map?.radius as number;
+    const latitude = (area: World["areas"][number]) => (Math.asin(Math.abs(area.position.z) / radius) * 180) / Math.PI;
+    const cold = generated.areas.filter((area) => area.terrain === "coldDesert");
+    const low = generated.areas.filter(
+      (area) => area.terrain !== "coldDesert" && area.terrain !== "mountains" && area.terrain !== "hills",
+    );
+    expect(cold.length).toBeGreaterThan(0);
+    expect(Math.min(...cold.map(latitude))).toBeGreaterThan(45);
+    // Low land beyond 70 degrees, past the ragged edge, is all cold desert.
+    expect(low.filter((area) => latitude(area) > 70)).toHaveLength(0);
+  });
+
   it("lets every area reach every other one", () => {
     for (const seed of [1, 2, 3, 4]) {
       const generated = generate("small", seed).world;

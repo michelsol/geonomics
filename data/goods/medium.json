@@ -30,12 +30,12 @@
       "satisfies": null
     },
     {
-      "key": "coal", "name": "Coal", "unit": "100 kg", "kind": "primary", "laborHoursPerUnit": 1.5, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional", "terrains": ["hills", "mountains", "plains", "forest"],
+      "key": "coal", "name": "Coal", "unit": "100 kg", "kind": "primary", "laborHoursPerUnit": 1.5, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional", "terrains": ["hills", "mountains", "plains", "forest", "coldDesert"],
       "inputs": [],
       "satisfies": {"need": "energy", "unitsPerGood": 80, "preference": 0.3}
     },
     {
-      "key": "iron_ore", "name": "Iron ore", "unit": "100 kg", "kind": "primary", "laborHoursPerUnit": 0.4, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional", "terrains": ["hills", "mountains"],
+      "key": "iron_ore", "name": "Iron ore", "unit": "100 kg", "kind": "primary", "laborHoursPerUnit": 0.4, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional", "terrains": ["hills", "mountains", "coldDesert"],
       "inputs": [],
       "satisfies": null
     },

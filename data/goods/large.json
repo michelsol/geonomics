@@ -25,7 +25,7 @@
       "satisfies": {"need": "food", "unitsPerGood": 2, "preference": 2}
     },
     {
-      "key": "livestock", "name": "Livestock", "unit": "100 kg live weight", "kind": "primary", "laborHoursPerUnit": 6, "transportWeight": 0.15, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": "common", "terrains": ["plains", "hills", "desert"],
+      "key": "livestock", "name": "Livestock", "unit": "100 kg live weight", "kind": "primary", "laborHoursPerUnit": 6, "transportWeight": 0.15, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": "common", "terrains": ["plains", "hills", "desert", "coldDesert"],
       "inputs": [],
       "satisfies": null
     },
@@ -60,12 +60,12 @@
       "satisfies": {"need": "energy", "unitsPerGood": 80, "preference": 0.2}
     },
     {
-      "key": "crude_oil", "name": "Crude oil", "unit": "barrel", "kind": "primary", "laborHoursPerUnit": 3, "transportWeight": 0.14, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional", "terrains": ["desert", "plains", "offshore"],
+      "key": "crude_oil", "name": "Crude oil", "unit": "barrel", "kind": "primary", "laborHoursPerUnit": 3, "transportWeight": 0.14, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional", "terrains": ["desert", "coldDesert", "plains", "offshore"],
       "inputs": [],
       "satisfies": null
     },
     {
-      "key": "natural_gas", "name": "Natural gas", "unit": "100 m³", "kind": "primary", "laborHoursPerUnit": 2, "transportWeight": 0.08, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional", "terrains": ["desert", "plains", "offshore"],
+      "key": "natural_gas", "name": "Natural gas", "unit": "100 m³", "kind": "primary", "laborHoursPerUnit": 2, "transportWeight": 0.08, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0.00002, "regenerationRatePerDay": 0, "abundance": "regional", "terrains": ["desert", "coldDesert", "plains", "offshore"],
       "inputs": [],
       "satisfies": {"need": "energy", "unitsPerGood": 100, "preference": 1}
     },
@@ -85,7 +85,7 @@
       "satisfies": null
     },
     {
-      "key": "stone_sand", "name": "Stone and sand", "unit": "100 kg", "kind": "primary", "laborHoursPerUnit": 0.05, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": "common", "terrains": ["hills", "mountains", "desert"],
+      "key": "stone_sand", "name": "Stone and sand", "unit": "100 kg", "kind": "primary", "laborHoursPerUnit": 0.05, "transportWeight": 0.1, "spoilageRatePerDay": 0, "depletionPerUnitExtracted": 0, "regenerationRatePerDay": 0, "abundance": "common", "terrains": ["hills", "mountains", "desert", "coldDesert"],
       "inputs": [],
       "satisfies": null
     },

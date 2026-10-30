@@ -22,6 +22,17 @@ export const TERRAIN_COLORS: Record<Terrain, number> = {
   hills: 0xb39a62,
   mountains: 0x8c847c,
   desert: 0xd9c38a,
+  coldDesert: 0xdde4e8,
+};
+
+/** Terrains in words. */
+export const TERRAIN_NAMES: Record<Terrain, string> = {
+  plains: "plains",
+  forest: "forest",
+  hills: "hills",
+  mountains: "mountains",
+  desert: "desert",
+  coldDesert: "cold desert",
 };
 
 type Rgb = [number, number, number];
