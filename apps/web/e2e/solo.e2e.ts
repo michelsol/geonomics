@@ -307,6 +307,47 @@ test("a selection with none of your areas has no action target", async ({ page }
   await expect(page.getByTestId("employment-bar")).toBeVisible();
 });
 
+test("a share of the selection's soldiers moves to an area picked on the map", async ({ page }) => {
+  await startGame(page);
+  await openTab(page, "Armies");
+  await page.getByLabel("Recruits").fill("200");
+  await page.getByRole("button", { name: "Recruit", exact: true }).click();
+  await expect(page.getByTestId("army")).toHaveCount(1);
+  // More recruits in the same area join the army there.
+  await page.getByRole("button", { name: "Recruit", exact: true }).click();
+  await expect(page.getByTestId("selection-soldiers")).toHaveText("400");
+  await expect(page.getByTestId("army")).toHaveCount(1);
+  // With nothing selected, the panel acts on every soldier, wherever the march takes them.
+  await page.getByRole("button", { name: "Clear", exact: true }).click();
+  await page.getByLabel("Share of soldiers").fill("25");
+  const canvas = page.getByTestId("map-canvas");
+  const box = await canvas.boundingBox();
+  const sheet = await page.getByRole("complementary", { name: "Panels" }).boundingBox();
+  if (!box || !sheet) throw new Error("map canvas has no size");
+  // The capital is in the middle of the map's uncovered part (above the phone's sheet): pick points around it until
+  // one is an area the soldiers can reach.
+  const cx = box.width / 2;
+  const cy = (sheet.y > box.y + 100 ? sheet.y - box.y : box.height) / 2;
+  const banner = page.locator(".mode-banner");
+  for (let step = 0; step < 16 && (await page.getByTestId("army").count()) < 2; step++) {
+    await page.getByRole("button", { name: "Move 100" }).click();
+    await expect(banner).toContainText("Click where to send 100 soldiers (25%)");
+    const angle = (step * Math.PI) / 4;
+    const radius = 40 + 30 * Math.floor(step / 8);
+    await canvas.click({ position: { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) } });
+    if (await banner.isVisible())
+      await page.keyboard.press("Escape"); // water: nothing picked
+    // A pick of the capital itself sends nobody; any other waits for the next snapshot.
+    else
+      await expect(page.getByTestId("army"))
+        .toHaveCount(2, { timeout: 3000 })
+        .catch(() => {});
+  }
+  await expect(page.getByTestId("army")).toHaveCount(2);
+  await expect(page.getByTestId("army").first()).toContainText("300 in");
+  await expect(page.getByTestId("army").nth(1)).toContainText(/^100 (marching from|in)/);
+});
+
 test("rejected commands are explained", async ({ page }) => {
   await startGame(page);
   await openTab(page, "Armies");

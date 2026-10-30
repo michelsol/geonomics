@@ -47,12 +47,42 @@ describe("marching", () => {
     const world = realmWorld();
     send(world, { type: "declareWar", target: 0 }, AI_PLAYER, 1);
     const army = raise(world, 3, 100, 1);
-    send(world, { type: "setArmyStance", army: army.id, stance: "attack" }, AI_PLAYER, 1);
     send(world, { type: "moveArmy", army: army.id, destination: 0 }, AI_PLAYER, 1);
     world.config.pace.militaryResponsiveness = 20; // the whole march would fit in one tick
     runMilitary(world);
     expect(army.location).toEqual({ kind: "area", area: 1 });
     expect(army.path).toEqual([0]);
+  });
+});
+
+describe("merging", () => {
+  it("makes one army of a realm's idle armies in an area, never of marching ones or another realm's", () => {
+    const world = realmWorld();
+    const home = raise(world, 1, 100);
+    home.weapons = 10;
+    const coming = raise(world, 0, 50);
+    coming.weapons = 50;
+    const passing = raise(world, 2, 30);
+    send(world, { type: "moveArmy", army: coming.id, destination: 1 });
+    send(world, { type: "moveArmy", army: passing.id, destination: 3 });
+    const foreign = raise(world, 3, 20, 1);
+    foreign.location = { kind: "area", area: 1 };
+    world.config.pace.militaryResponsiveness = 4.5; // Harbor → Valley in one tick, Isle → Harbor not yet
+    runMilitary(world);
+    expect(world.armies.has(coming.id)).toBe(false);
+    expect(home).toMatchObject({ soldiers: 150, weapons: 60, location: { kind: "area", area: 1 } });
+    expect(world.armies.has(passing.id)).toBe(true);
+    expect(world.armies.has(foreign.id)).toBe(true);
+  });
+
+  it("walks into a realm at peace without attacking it", () => {
+    const world = realmWorld();
+    const army = raise(world, 1, 1000);
+    send(world, { type: "moveArmy", army: army.id, destination: 3 });
+    for (let day = 0; day < 10; day++) runMilitary(world);
+    expect(army.location).toEqual({ kind: "area", area: 3 });
+    expect(areaOf(world, 3).besiegingGovernment).toBeNull();
+    expect(areaOf(world, 3).owner).toBe(1);
   });
 });
 
@@ -128,7 +158,6 @@ describe("combat and sieges", () => {
     send(world, { type: "declareWar", target: 1 });
     const attacker = raise(world, 1, soldiers);
     attacker.weapons = soldiers / 2;
-    attacker.stance = "attack";
     attacker.location = { kind: "area", area: 3 };
     areaOf(world, 3).militia = militia;
     return { world, attacker, march: areaOf(world, 3) };
@@ -232,7 +261,6 @@ describe("combat and sieges", () => {
     const world = realmWorld();
     send(world, { type: "declareWar", target: 0 }, AI_PLAYER, 1);
     const attacker = raise(world, 3, 1000, 1);
-    attacker.stance = "attack";
     attacker.location = { kind: "area", area: 0 };
     areaOf(world, 2).population = 20_000;
     areaOf(world, 0).siegeProgress = 0.999;
@@ -247,7 +275,6 @@ describe("combat and sieges", () => {
     const world = realmWorld();
     const attacker = raise(world, 1, 1000);
     attacker.weapons = 1000;
-    attacker.stance = "attack";
     const neutral = areaOf(world, 3);
     world.governments[1]?.ownedAreas.splice(0);
     world.governments[1]?.areaStates.clear();

@@ -1,6 +1,7 @@
 // Values derived from static data, snapshots and the price table.
 import {
   type AreaDetail,
+  type Army,
   CONSUMER_GROUP_COUNT,
   decodePrice,
   type GovernmentSummary,
@@ -447,6 +448,16 @@ export function actionTarget(government: GovernmentView, selection: readonly num
   if (selection.length > 0 && own.length === 0) return { realm: false, areas: [] };
   const realm = own.length === 0 || own.length === owned.size;
   return { realm, areas: realm ? [...government.ownedAreas] : own };
+}
+
+/** The area an army stands in, or the area it left while marching. */
+export const armyArea = (army: Army) => (army.location.kind === "area" ? army.location.area : army.location.from);
+
+/** The armies standing in, or marching from, the selected areas; every army when nothing is selected. */
+export function armiesIn(armies: readonly Army[], selection: readonly number[]): Army[] {
+  if (selection.length === 0) return [...armies];
+  const selected = new Set(selection);
+  return armies.filter((army) => selected.has(armyArea(army)));
 }
 
 /** Every area a realm owns now, or every area of the map for "all". */

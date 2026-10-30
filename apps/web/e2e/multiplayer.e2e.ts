@@ -56,7 +56,10 @@ test("a host and a joined player share a game", async ({ browser }, testInfo) =>
   await guest.getByRole("button", { name: "Recruit", exact: true }).click();
   await expect(guest.getByTestId("army")).toHaveCount(1, { timeout: 15_000 });
   await openTab(hostPage, "Armies");
-  await expect(hostPage.getByText(/150 soldiers of/)).toBeVisible({ timeout: 15_000 });
+  await hostPage.getByLabel("Select a realm").selectOption({ label: "Whole map" });
+  await expect(hostPage.getByTestId("other-army").filter({ hasText: "150 soldiers in 1 area" })).toBeVisible({
+    timeout: 15_000,
+  });
 
   // The host declares war on the guest's realm; the guest sees it, with the host's name beside the realm.
   await openTab(hostPage, "Diplomacy");

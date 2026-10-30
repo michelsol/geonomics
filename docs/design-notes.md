@@ -113,6 +113,12 @@ Founded realms send their areas through the government code paths: the policy lo
 
 At first, an army in attack stance stopped on entering an area it attacked, but set out again on the next tick, so it walked through enemy land without besieging anything. An attacking army now stays in an area until it falls or the war ends, then follows the rest of its path. A march order in attack stance is therefore a campaign: each area on the way is taken in turn. Armies in hold stance pass through.
 
+### Soldiers by area, attacking by default
+
+Players managed armies one by one: a card per army with its own Move, Attack/Hold and Disband, and every recruit order made another army, so a realm at war soon had dozens of cards. Now a realm's idle armies in one area merge at the end of each tick, recruits join the army standing where they are raised, and the Armies panel acts on the soldiers in the selection. Move sends a share of them, set by a slider, to an area picked on the map, splitting armies where needed; Disband sends the same share home. The orders name areas, not army ids, so an army merged away between the snapshot and the order cannot make them fail. The AI still orders armies by id: it plans per army, and merging only makes its home garrisons one army per area.
+
+The stance went with the cards. Hold mattered only for crossing a realm at war without fighting, which players rarely meant to do. Every army now attacks an enemy or neutral area it stands in, and areas of realms at peace are passed through, as hold did. Weapons are no longer bought from the Armies panel: a standing order keeps depots stocked, which is what a player buying by hand was doing. Saves move to version 7, since an army no longer has a stance.
+
 ### The §6 example
 
 On the small catalog, 1,000 equipped soldiers attacking a neutral area of 10,000 people:
@@ -551,6 +557,10 @@ The economy is unchanged: on 300 areas over 40 years, population levels off near
 The map is a globe the player turns, so nothing is stretched and nothing has an edge. PixiJS draws in 2D, so the renderer moved to three.js: one mesh holds every cell as a fan of triangles colored per vertex, and a layer change rewrites only the colors. Lines, routes, arrows and marks sit just above the surface, and the globe hides those on its far side. Arrows and air routes follow great circles, and marks lie flat in the tangent plane at their area, sized in screen pixels. Realm names are HTML labels, so they stay sharp. The renderer keeps the 2D map's interface and its caching, so panels, input and tests were left as they were.
 
 Speed came from three changes, measured on the 3,000-area globe with every trade arrow shown, in headless Chromium, which draws WebGL in software. Thousands of thin cell lines and route dashes drawn as wide lines took most of each frame, so they are plain one-pixel lines. Materials are kept across redraws, since a freed material frees its shader, which was compiled again with every snapshot. Antialiasing is off where WebGL runs in software, where it halves the frame rate. Turning the globe went from 6 to about 35 frames per second. three.js adds about 39 KB gzipped to the map's code (180 KB against 141 KB with PixiJS).
+
+### Cold desert at the poles
+
+A sphere has poles, and plains running up to them looked wrong. Low land beyond about 60 degrees of latitude is now cold desert: sparse (0.15 density), slow to cross and less productive, holding ore, coal, oil, gas, stone and herds by catalog. A noise field wobbles the line by a few degrees, so the caps have ragged edges; hills and mountains keep their own terrain. The field draws from its own seeded stream, so adding it left every other field of every map as it was. On 300 to 3,000 areas it covers 7 to 10% of areas and holds about 2% of the people, and no capital starts there.
 
 ## Open questions
 

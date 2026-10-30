@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { armyArea } from "../army";
 import { createConfig, type DeepPartial, type WorldConfig } from "../config";
 import { aiPersonalities } from "../government";
 import { hashWorld } from "../hash";
@@ -148,12 +149,11 @@ describe("war and peace", () => {
     expect(send(world, { type: "declareWar", target: 1 })).toBeNull();
     expect(send(world, { type: "recruitArmy", area: 1, soldiers: 2000 })).toBeNull();
     const attacker = [...world.armies.values()].at(-1) as NonNullable<ReturnType<World["armies"]["get"]>>;
-    send(world, { type: "setArmyStance", army: attacker.id, stance: "attack" });
     send(world, { type: "moveArmy", army: attacker.id, destination: 3 });
     days(world, 12);
     const defenders = [...world.armies.values()].filter((army) => army.owner === 1);
     expect(defenders.length).toBeGreaterThan(0);
-    expect(defenders[0]?.stance).toBe("hold");
+    expect(defenders.some((army) => army.location.kind === "area" && army.location.area === 3)).toBe(true);
   });
 
   it("a conqueror declares war on a weak neighbor and marches on it", () => {
@@ -161,7 +161,10 @@ describe("war and peace", () => {
     (world.areas[2] as World["areas"][number]).population = 5000; // a neighbor at most three times its size
     days(world, TRAITS.conqueror.firstWarDelayDays + 30);
     expect(world.relations[1]?.[0]).toBe("war");
-    const attackers = [...world.armies.values()].filter((army) => army.owner === 1 && army.stance === "attack");
+    // Its armies march on the enemy, or already stand in its land.
+    const attackers = [...world.armies.values()].filter(
+      (army) => army.owner === 1 && (army.path.length > 0 || world.areas[armyArea(army)]?.owner !== 1),
+    );
     expect(attackers.length).toBeGreaterThan(0);
   });
 

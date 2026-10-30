@@ -262,7 +262,7 @@ export class GlobeRenderer {
       this.drawFlows(state, px);
       this.drawn.flows = flowInputs;
     }
-    const markerInputs = [state.snapshot, state.selectedArmy, px];
+    const markerInputs = [state.snapshot, state.selection, px];
     if (changed(this.drawn.markers, markerInputs)) {
       this.drawMarkers(state, px);
       this.drawn.markers = markerInputs;
@@ -624,8 +624,12 @@ export class GlobeRenderer {
     }
     const paths: number[] = [];
     const pathColors: number[] = [];
+    // The player's soldiers in the selection, which the Armies panel moves, stand out.
+    const selected = new Set(state.selection);
+    const me = snapshot?.government?.id;
     for (const army of snapshot?.armies ?? []) {
       const from = army.location.kind === "area" ? army.location.area : army.location.from;
+      const chosen = army.owner === me && selected.has(from);
       const at = position(from);
       const hex = parseColor(state.governments[army.owner]?.color ?? "#ffffff");
       color.setHex(hex);
@@ -640,10 +644,10 @@ export class GlobeRenderer {
         }
         previous = position(step);
       }
-      const size = army.id === state.selectedArmy ? 11 : 8;
+      const size = chosen ? 11 : 8;
       const triangle = [0, -size, size, 0.8 * size, -size, 0.8 * size];
       const grown = [0, -size - 2.5, size + 2.2, 0.8 * size + 1.5, -size - 2.2, 0.8 * size + 1.5];
-      if (army.id === state.selectedArmy) fill(placeShape(at, grown, px, radius), SELECTION);
+      if (chosen) fill(placeShape(at, grown, px, radius), SELECTION);
       else outline(placeShape(at, grown, px, radius));
       fill(placeShape(at, triangle, px, radius), hex);
     }

@@ -29,7 +29,7 @@ import {
   transportFlows,
 } from "../state/selectors";
 import { gameStore, type PanelName, useGame } from "../state/store";
-import { count, fmt } from "./components";
+import { count, fmt, pct } from "./components";
 import { AreaPanel } from "./panels/AreaPanel";
 import { ArmiesPanel } from "./panels/ArmiesPanel";
 import type { PanelProps } from "./panels/common";
@@ -588,9 +588,11 @@ function ModeBanner() {
     );
   return (
     <div className="mode-banner" role="status">
-      {mode.kind === "moveArmy" ? "Click the destination" : `Click areas to exchange (${picked})`}
+      {mode.kind === "moveSoldiers"
+        ? `Click where to send ${count(mode.soldiers * mode.share)} soldiers (${pct(mode.share)})`
+        : `Click areas to exchange (${picked})`}
       <button type="button" onClick={() => setMode({ kind: "select" })}>
-        {mode.kind === "moveArmy" ? "Cancel" : "Done"}
+        {mode.kind === "moveSoldiers" ? "Cancel" : "Done"}
       </button>
     </div>
   );

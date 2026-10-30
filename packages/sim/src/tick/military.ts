@@ -1,5 +1,5 @@
 // Phases 3, 7 and 8: equipment, desertion, marching, combat, sieges and captures (specification §6).
-import { canMarch, disbandArmy, returnSoldiers } from "../army";
+import { canMarch, disbandArmy, mergeArmies, returnSoldiers } from "../army";
 import { transferArea } from "../government";
 import { effectiveLevel } from "../infrastructure";
 import { EPSILON, fractionPerTick } from "../math";
@@ -64,7 +64,7 @@ export function wearWeapons(world: World): void {
   for (const army of world.armies.values()) army.weapons *= keep;
 }
 
-/** Phase 8: marching, then combat, sieges and captures in every area where armies stand. */
+/** Phase 8: marching, then combat, sieges and captures in every area where armies stand, then idle armies merge. */
 export function runMilitary(world: World): void {
   for (const army of world.armies.values()) march(world, army);
 
@@ -90,18 +90,19 @@ export function runMilitary(world: World): void {
     else besiege(world, area, attackers);
   }
   for (const army of [...world.armies.values()]) if (army.soldiers < 1) disbandArmy(world, army);
+  mergeArmies(world);
 }
 
-/** An army attacks a neutral area, or one owned by a government it is at war with, when in attack stance. */
+/** An army attacks the area it stands in when it is neutral, or owned by a government it is at war with. */
 function attacks(world: World, army: Army, area: Area): boolean {
-  if (army.stance !== "attack" || army.soldiers <= 0) return false;
+  if (army.soldiers <= 0) return false;
   return area.owner === null || world.relations[army.owner]?.[area.owner] === "war";
 }
 
 /**
  * Moves an army along its path by days × militaryResponsiveness, carrying leftover days into the next edge. An army
- * stops when its path ends and when it can no longer embark. An attacking army stays in any area it attacks until
- * the area falls or the war ends, then marches on.
+ * stops when its path ends and when it can no longer embark. It stays in any area it attacks until the area falls or
+ * the war ends, then marches on.
  */
 function march(world: World, army: Army): void {
   let budget = world.config.pace.gameDaysPerTick * world.config.pace.militaryResponsiveness;

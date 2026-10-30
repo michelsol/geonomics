@@ -31,6 +31,52 @@ export function planningOrigin(world: World, army: Army): AreaId {
   return edge.areaA === army.location.from ? edge.areaB : edge.areaA;
 }
 
+/** An army of `owner` standing in `area` with no path left, which recruits and arriving armies join. */
+export function idleArmyIn(world: World, owner: GovernmentId, area: AreaId): Army | undefined {
+  for (const army of world.armies.values()) {
+    if (army.owner === owner && army.path.length === 0 && army.location.kind === "area" && army.location.area === area)
+      return army;
+  }
+  return undefined;
+}
+
+/** Splits `soldiers` off an army, with the same share of its weapons, as a new army in the same place. */
+export function splitArmy(world: World, army: Army, soldiers: number): Army {
+  const id = world.nextArmyId++;
+  const part: Army = {
+    id,
+    owner: army.owner,
+    location: { ...army.location },
+    path: [...army.path],
+    soldiers,
+    weapons: (army.weapons * soldiers) / army.soldiers,
+  };
+  army.soldiers -= soldiers;
+  army.weapons -= part.weapons;
+  world.armies.set(id, part);
+  return part;
+}
+
+/**
+ * Armies of one government standing in the same area with no path left become one, the one with the lowest id,
+ * carrying all their soldiers and weapons: an area holds one idle army per realm.
+ */
+export function mergeArmies(world: World): void {
+  const idle = new Map<string, Army>();
+  for (const army of [...world.armies.values()].sort((a, b) => a.id - b.id)) {
+    if (army.location.kind !== "area" || army.path.length > 0) continue;
+    const key = `${army.owner} ${army.location.area}`;
+    const into = idle.get(key);
+    if (!into) {
+      idle.set(key, army);
+      continue;
+    }
+    into.soldiers += army.soldiers;
+    into.weapons += army.weapons;
+    world.armies.delete(army.id);
+  }
+}
+
 /** Soldiers leave the army and rejoin the population of the area where it is, as unemployed workers. */
 export function returnSoldiers(world: World, army: Army, count: number): void {
   const soldiers = Math.min(count, army.soldiers);

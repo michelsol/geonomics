@@ -316,8 +316,6 @@ export type ArmyLocation =
   | { kind: "area"; area: AreaId } // standing in an area
   | { kind: "edge"; edge: EdgeId; from: AreaId; daysTravelled: number }; // marching along an edge
 
-export type ArmyStance = "hold" | "attack";
-
 export interface Army {
   id: ArmyId; // unique id
   owner: GovernmentId; // government the army belongs to
@@ -325,7 +323,6 @@ export interface Army {
   path: AreaId[]; // remaining areas to march through, in order
   soldiers: number; // number of soldiers
   weapons: number; // units of the weapons good carried
-  stance: ArmyStance; // hold: defend only; attack: engage enemies and besiege
 }
 
 export interface PeaceProposal {
@@ -351,7 +348,10 @@ export type Command =
   | { type: "recruitArmy"; area: AreaId; soldiers: number }
   | { type: "disbandArmy"; army: ArmyId; soldiers: number }
   | { type: "moveArmy"; army: ArmyId; destination: AreaId }
-  | { type: "setArmyStance"; army: ArmyId; stance: ArmyStance }
+  // every army of the government in (or marching from) these areas: a share of its soldiers, split off when less
+  // than all, marches on the destination, or goes back to work
+  | { type: "moveSoldiers"; areas: AreaId[]; destination: AreaId; share: number }
+  | { type: "disbandSoldiers"; areas: AreaId[]; share: number }
   | { type: "setSoldierWage"; wage: number }
   | { type: "declareWar"; target: GovernmentId }
   | { type: "proposePeace"; proposal: Omit<PeaceProposal, "id"> }

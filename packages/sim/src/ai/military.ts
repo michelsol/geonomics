@@ -161,7 +161,7 @@ function defend(view: AiView, realm: Realm, memory: AiMemory, commands: Command[
   const enemies = new Set(memory.wars.map((war) => war.enemy));
   const threat = new Map<AreaId, number>();
   for (const army of view.snapshot.armies) {
-    if (!enemies.has(army.owner) || army.stance !== "attack") continue;
+    if (!enemies.has(army.owner)) continue;
     const area = [armyArea(view, army), ...army.path.slice(0, 1)].find((a) => realm.owned.has(a));
     if (area !== undefined) threat.set(area, (threat.get(area) ?? 0) + armyPower(army));
   }
@@ -237,7 +237,7 @@ function frontline(
   return areas.sort((a, b) => a.defense - b.defense);
 }
 
-/** Armies at home march together on the weakest enemy area next to the realm, in attack stance. */
+/** Armies at home march together on the weakest enemy area next to the realm. */
 function attack(view: AiView, realm: Realm, memory: AiMemory, traits: Traits, commands: Command[]): void {
   // A war that has run its course waits for peace: no new attacks.
   const wars = memory.wars.filter((war) => war.declaredByMe && !wantsPeace(view, realm, war, traits));
@@ -251,7 +251,6 @@ function attack(view: AiView, realm: Realm, memory: AiMemory, traits: Traits, co
   for (const war of wars) if (war.enemy === ownerOf(view, target.area)) war.target = target.area;
   for (const army of ready) {
     if (!canReach(view, armyArea(view, army), target.area)) continue;
-    if (army.stance !== "attack") commands.push({ type: "setArmyStance", army: army.id, stance: "attack" });
     commands.push({ type: "moveArmy", army: army.id, destination: target.area });
   }
 }
@@ -294,7 +293,6 @@ function considerWar(
   war.target = choice.weakest.area;
   memory.wars.push(war);
   for (const army of ready) {
-    commands.push({ type: "setArmyStance", army: army.id, stance: "attack" });
     if (canReach(view, armyArea(view, army), choice.weakest.area))
       commands.push({ type: "moveArmy", army: army.id, destination: choice.weakest.area });
   }
@@ -305,7 +303,6 @@ function standDown(view: AiView, realm: Realm, traits: Traits, commands: Command
   const capital = realm.government.capital;
   for (const army of realm.armies) {
     if (!idle(army)) continue;
-    if (army.stance === "attack") commands.push({ type: "setArmyStance", army: army.id, stance: "hold" });
     if (!realm.owned.has(armyArea(view, army)) && capital !== null && canReach(view, armyArea(view, army), capital))
       commands.push({ type: "moveArmy", army: army.id, destination: capital });
   }

@@ -196,7 +196,6 @@ describe("conquest estimate", () => {
       path: [],
       soldiers: 100,
       weapons: 100,
-      stance: "hold",
     });
     expect(conquestEstimate(data, buildSnapshot(world, 0), enemy.id).defensePower).toBe(500);
   });
@@ -313,9 +312,12 @@ describe("game store", () => {
   it("turns map clicks into army moves and peace picks by mode", () => {
     const { state, sent } = setup();
     state().chooseRealm(0);
-    state().setMode({ kind: "moveArmy", army: 7 });
+    state().setMode({ kind: "moveSoldiers", areas: [3, 4], share: 0.5, soldiers: 800 });
     state().clickArea(12);
-    expect(sent.at(-1)).toEqual({ type: "command", command: { type: "moveArmy", army: 7, destination: 12 } });
+    expect(sent.at(-1)).toEqual({
+      type: "command",
+      command: { type: "moveSoldiers", areas: [3, 4], destination: 12, share: 0.5 },
+    });
     expect(state().mode.kind).toBe("select");
     state().setMode({ kind: "pickPeaceAreas" });
     state().clickArea(3);

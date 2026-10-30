@@ -48,7 +48,8 @@ export const PANEL_LAYERS: Record<PanelName, Layer> = {
 };
 export type Mode =
   | { kind: "select" }
-  | { kind: "moveArmy"; army: number }
+  // the soldiers in these areas wait for a destination: `share` of them, `soldiers` in all when the move began
+  | { kind: "moveSoldiers"; areas: number[]; share: number; soldiers: number }
   | { kind: "pickPeaceAreas" }
   | { kind: "brush" };
 /** The selection brush (specification §9, Selection): whether a stroke adds or erases, and how wide it paints. */
@@ -122,7 +123,7 @@ export interface GameState {
   selection: number[]; // the selected areas (specification §9, Selection)
   selectedArea: number | null; // the selected area when exactly one is selected
   selectedGood: number;
-  selectedArmy: number | null;
+  sendShare: number; // the share of the selection's soldiers that Move and Disband act on, in (0, 1]
   selectedResource: number; // the primary good the Resources panel and the resources layer show
   panel: PanelName; // the open panel, which sets the map layer and flows
   layer: Layer;
@@ -167,7 +168,7 @@ export interface GameState {
   /** Applies a finished brush stroke to the selection: adds its areas, or takes them out when erasing. */
   paint(areas: readonly number[]): void;
   selectGood(good: number): void;
-  selectArmy(army: number | null): void;
+  setSendShare(share: number): void;
   selectResource(good: number): void;
   /** Opens a panel, with its map layer and, if its checkbox is on, its flows. */
   openPanel(panel: PanelName): void;
@@ -206,7 +207,7 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     selection: [],
     selectedArea: null,
     selectedGood: 0,
-    selectedArmy: null,
+    sendShare: 1,
     selectedResource: 0,
     panel: "area",
     layer: "realms",
@@ -318,8 +319,8 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     clickArea(area, additive = false) {
       const { mode } = get();
       if (area === null) return;
-      if (mode.kind === "moveArmy") {
-        get().send({ type: "moveArmy", army: mode.army, destination: area });
+      if (mode.kind === "moveSoldiers") {
+        get().send({ type: "moveSoldiers", areas: mode.areas, destination: area, share: mode.share });
         set({ mode: { kind: "select" } });
       } else if (mode.kind === "pickPeaceAreas") get().togglePeaceArea(area);
       else if (mode.kind === "select") {
@@ -358,8 +359,8 @@ export function createGameStore(port: Port): StoreApi<GameState> {
       set({ selectedGood: good });
       watchFlows();
     },
-    selectArmy(army) {
-      set({ selectedArmy: army });
+    setSendShare(share) {
+      set({ sendShare: Math.min(1, Math.max(0.01, share)) });
     },
     selectResource(good) {
       set({ selectedResource: good });

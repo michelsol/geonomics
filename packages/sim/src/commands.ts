@@ -1,5 +1,5 @@
 // Phase 0: command validation and application (specification §2, Commands and Command validation).
-import { armyPath, disbandArmy, planningOrigin, returnSoldiers } from "./army";
+import { armyArea, armyPath, disbandArmy, idleArmyIn, planningOrigin, returnSoldiers, splitArmy } from "./army";
 import { WAGE_BAND_COUNT } from "./bands";
 import { resolvePolicies, sameScope, settleRealm, transferArea, upsertSetting } from "./government";
 import type { Path } from "./graph";
@@ -172,10 +172,18 @@ function validate(world: World, government: Government, command: Command): strin
         ? null
         : "the army cannot reach this area";
     }
-    case "setArmyStance": {
-      const { army, reason } = ownArmy(world, government, command.army);
-      if (!army) return reason;
-      return command.stance === "hold" || command.stance === "attack" ? null : "stance must be hold or attack";
+    case "moveSoldiers":
+    case "disbandSoldiers": {
+      if (!Array.isArray(command.areas) || command.areas.length > world.areas.length) return "areas must be a list";
+      if (!command.areas.every((area) => isIndex(area, world.areas.length))) return "unknown area";
+      if (!isAmount(command.share) || command.share <= 0 || command.share > 1) return "share must be within (0, 1]";
+      const armies = armiesIn(world, government, command.areas);
+      if (armies.length === 0) return "none of your soldiers is there";
+      if (command.type === "disbandSoldiers") return null;
+      if (!isIndex(command.destination, world.areas.length)) return "unknown area";
+      return armies.some((army) => armyPath(world, government.id, planningOrigin(world, army), command.destination))
+        ? null
+        : "your soldiers there cannot reach this area";
     }
     case "setSoldierWage":
       return isAmount(command.wage) && command.wage <= MAXIMUM_WAGE_OFFER
@@ -296,6 +304,21 @@ function validateRule(world: World, rule: StandingRule): string | null {
   }
 }
 
+/** The government's armies standing in, or marching from, any of the areas. */
+function armiesIn(world: World, government: Government, areas: readonly AreaId[]): Army[] {
+  const places = new Set(areas);
+  return [...world.armies.values()].filter((army) => army.owner === government.id && places.has(armyArea(army)));
+}
+
+/**
+ * The part of an army a share of its soldiers makes, in whole soldiers: the army itself when that is all of it, or
+ * when less than one soldier would stay behind; otherwise a new army split off it.
+ */
+function shareOf(world: World, army: Army, share: number): Army {
+  const soldiers = Math.max(1, Math.round(army.soldiers * share));
+  return army.soldiers - soldiers < 1 ? army : splitArmy(world, army, soldiers);
+}
+
 function ownArmy(
   world: World,
   government: Government,
@@ -414,6 +437,12 @@ function execute(world: World, government: Government, command: Command): void {
       const area = world.areas[command.area] as Area;
       const soldiers = takeWorkers(world, area, command.soldiers);
       area.population -= soldiers;
+      // Recruits join the army already standing there, if any.
+      const standing = idleArmyIn(world, government.id, area.id);
+      if (standing) {
+        standing.soldiers += soldiers;
+        return;
+      }
       const id = world.nextArmyId++;
       world.armies.set(id, {
         id,
@@ -422,7 +451,6 @@ function execute(world: World, government: Government, command: Command): void {
         path: [],
         soldiers,
         weapons: 0,
-        stance: "hold",
       });
       return;
     }
@@ -438,8 +466,18 @@ function execute(world: World, government: Government, command: Command): void {
       army.path = path.steps.map((step) => step.to);
       return;
     }
-    case "setArmyStance":
-      (world.armies.get(command.army) as Army).stance = command.stance;
+    case "moveSoldiers":
+      for (const army of armiesIn(world, government, command.areas)) {
+        const path = armyPath(world, government.id, planningOrigin(world, army), command.destination);
+        if (!path) continue; // those that cannot reach it stay
+        shareOf(world, army, command.share).path = path.steps.map((step) => step.to);
+      }
+      return;
+    case "disbandSoldiers":
+      for (const army of armiesIn(world, government, command.areas)) {
+        returnSoldiers(world, army, command.share >= 1 ? army.soldiers : army.soldiers * command.share);
+        if (army.soldiers < 1) disbandArmy(world, army);
+      }
       return;
     case "setSoldierWage":
       government.soldierWage = command.wage;

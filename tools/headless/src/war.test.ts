@@ -62,12 +62,7 @@ describe("the §6 example", () => {
     const east = world.areas[1] as World["areas"][number];
     east.population = 10_000;
     const army = equippedArmy(world, 0, 1000);
-    order(
-      world,
-      0,
-      { type: "setArmyStance", army: army.id, stance: "attack" },
-      { type: "moveArmy", army: army.id, destination: 1 },
-    );
+    order(world, 0, { type: "moveArmy", army: army.id, destination: 1 });
     let arrived = -1;
     let captured = -1;
     for (let day = 1; day <= 60 && captured < 0; day++) {
@@ -142,12 +137,7 @@ describe("war between two realms", () => {
       const world = splitChain();
       order(world, 0, { type: "declareWar", target: 1 });
       const army = equippedArmy(world, 4, 800);
-      order(
-        world,
-        0,
-        { type: "setArmyStance", army: army.id, stance: "attack" },
-        { type: "moveArmy", army: army.id, destination: 7 },
-      );
+      order(world, 0, { type: "moveArmy", army: army.id, destination: 7 });
       for (let i = 0; i < 90; i++) runTick(world);
       return { hash: hashWorld(world), owners: world.areas.map((area) => area.owner) };
     };

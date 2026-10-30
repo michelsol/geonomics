@@ -16,11 +16,13 @@ Every area defends itself with a militia, beside its owner's armies. `Area.milit
 
 ### Armies
 
-- **Recruiting** takes soldiers from the area's unemployed workers first, then from private jobs, and removes them from the population. A new army carries nothing and holds.
+- **Recruiting** takes soldiers from the area's unemployed workers first, then from private jobs, and removes them from the population. Recruits join the government's army standing in the area with no path left, if there is one; otherwise they form a new army, which carries nothing.
+- **Merging.** At the end of phase 8, a government's armies standing in the same area with no path left become one: the one with the lowest id, carrying all their soldiers and weapons. Armies marching, or held in an area they attack with a path left, stay apart. So players deal with soldiers by area rather than with armies.
+- **Moving by share.** `moveSoldiers` acts on every army of the government standing in, or marching from, the given areas. A share of each army's soldiers, rounded to whole soldiers and at least one, marches on the destination: the army itself when that is all of it or leaves less than one soldier behind, or else a new army split off with the same share of the weapons, in the same place. The rest keeps its path. Armies that cannot reach the destination stay. `disbandSoldiers` sends the same share of each army back to work, as Disbanding below.
 - **Disbanding** returns soldiers to the population of the area where the army stands (or the area it left, while marching) as unemployed workers. A fully disbanded army leaves what it carries in its government's depot there, or in the area's stock if the government does not own the area.
 - **Marching** follows the fastest path by `travelDays` over active land and sea edges. Crossing an edge takes its `travelDays`; each tick an army covers `days × militaryResponsiveness` days of travel, carrying leftover days into the next edge. A new order replans from the area the army stands in or is heading to.
 - **Sea crossings**, over lanes and routes, are allowed only from an area owned by the army's government with a running port (built and staffed, section 5, Infrastructure). This is checked when the path is planned and again when the army sets out; an army that can no longer embark stops. So an invasion by sea needs a friendly port to embark from. Armies never use air routes.
-- **Attacking.** An army in `attack` stance attacks every area it stands in that is neutral or owned by a government at war with its own. It stays there until the area falls or the war ends, then follows the rest of its path. An army in `hold` stance never attacks and passes through.
+- **Attacking.** Every army attacks the area it stands in when that area is neutral or owned by a government at war with its own. It stays there until the area falls or the war ends, then follows the rest of its path. Areas of governments at peace with its own it passes through.
 - **Wages** of `government.soldierWage × hoursPerWorkerDay × soldiers × days` go from the treasury into the savings of the area where the army stands (or the area it left). They join the government's bill and are scaled down with it when the treasury is short (section 5, Tax collection). The player sets the wage with `setSoldierWage`.
 
 ### Equipment and desertion
@@ -39,7 +41,7 @@ armyPower    = soldiers * powerPerSoldier
 defensePower = (sum of defending army power + militia) * (1 + runningFortLevel)   // fort level × staffed share
 ```
 
-Defenders are the area's militia and its owner's armies in the area (any stance). Attackers are the attacking armies standing there (see Armies).
+Defenders are the area's militia and its owner's armies in the area. Attackers are the armies standing there that attack it (see Armies).
 
 ### Combat
 
