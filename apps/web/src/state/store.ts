@@ -48,8 +48,9 @@ export const PANEL_LAYERS: Record<PanelName, Layer> = {
 };
 export type Mode =
   | { kind: "select" }
-  // the soldiers in these areas wait for a destination: `share` of them, `soldiers` in all when the move began
-  | { kind: "moveSoldiers"; areas: number[]; share: number; soldiers: number }
+  // `share` of the soldiers in these areas (`soldiers` in all when the move began) wait for their destinations,
+  // picked on the map in `targets`, over which they spread when sent
+  | { kind: "moveSoldiers"; areas: number[]; share: number; soldiers: number; targets: number[] }
   | { kind: "pickPeaceAreas" }
   | { kind: "brush" };
 /** The selection brush (specification §9, Selection): whether a stroke adds or erases, and how wide it paints. */
@@ -169,6 +170,7 @@ export interface GameState {
   paint(areas: readonly number[]): void;
   selectGood(good: number): void;
   setSendShare(share: number): void;
+  sendSoldiers(): void;
   selectResource(good: number): void;
   /** Opens a panel, with its map layer and, if its checkbox is on, its flows. */
   openPanel(panel: PanelName): void;
@@ -320,8 +322,8 @@ export function createGameStore(port: Port): StoreApi<GameState> {
       const { mode } = get();
       if (area === null) return;
       if (mode.kind === "moveSoldiers") {
-        get().send({ type: "moveSoldiers", areas: mode.areas, destination: area, share: mode.share });
-        set({ mode: { kind: "select" } });
+        const targets = mode.targets.includes(area) ? mode.targets.filter((a) => a !== area) : [...mode.targets, area];
+        set({ mode: { ...mode, targets } });
       } else if (mode.kind === "pickPeaceAreas") get().togglePeaceArea(area);
       else if (mode.kind === "select") {
         if (additive) get().toggleArea(area);
@@ -361,6 +363,12 @@ export function createGameStore(port: Port): StoreApi<GameState> {
     },
     setSendShare(share) {
       set({ sendShare: Math.min(1, Math.max(0.01, share)) });
+    },
+    sendSoldiers() {
+      const { mode } = get();
+      if (mode.kind !== "moveSoldiers" || mode.targets.length === 0) return;
+      get().send({ type: "moveSoldiers", areas: mode.areas, destinations: mode.targets, share: mode.share });
+      set({ mode: { kind: "select" } });
     },
     selectResource(good) {
       set({ selectedResource: good });

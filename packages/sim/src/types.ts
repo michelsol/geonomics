@@ -349,8 +349,8 @@ export type Command =
   | { type: "disbandArmy"; army: ArmyId; soldiers: number }
   | { type: "moveArmy"; army: ArmyId; destination: AreaId }
   // every army of the government in (or marching from) these areas: a share of its soldiers, split off when less
-  // than all, marches on the destination, or goes back to work
-  | { type: "moveSoldiers"; areas: AreaId[]; destination: AreaId; share: number }
+  // than all, marches on the destinations, spread evenly over those it can reach; or goes back to work
+  | { type: "moveSoldiers"; areas: AreaId[]; destinations: AreaId[]; share: number }
   | { type: "disbandSoldiers"; areas: AreaId[]; share: number }
   | { type: "setSoldierWage"; wage: number }
   | { type: "declareWar"; target: GovernmentId }

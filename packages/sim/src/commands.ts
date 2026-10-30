@@ -180,10 +180,15 @@ function validate(world: World, government: Government, command: Command): strin
       const armies = armiesIn(world, government, command.areas);
       if (armies.length === 0) return "none of your soldiers is there";
       if (command.type === "disbandSoldiers") return null;
-      if (!isIndex(command.destination, world.areas.length)) return "unknown area";
-      return armies.some((army) => armyPath(world, government.id, planningOrigin(world, army), command.destination))
+      const { destinations } = command;
+      if (!Array.isArray(destinations) || destinations.length === 0 || destinations.length > world.areas.length)
+        return "destinations must be a list of areas";
+      if (!destinations.every((area) => isIndex(area, world.areas.length))) return "unknown area";
+      return armies.some((army) =>
+        destinations.some((area) => armyPath(world, government.id, planningOrigin(world, army), area)),
+      )
         ? null
-        : "your soldiers there cannot reach this area";
+        : "your soldiers there cannot reach these areas";
     }
     case "setSoldierWage":
       return isAmount(command.wage) && command.wage <= MAXIMUM_WAGE_OFFER
@@ -311,12 +316,27 @@ function armiesIn(world: World, government: Government, areas: readonly AreaId[]
 }
 
 /**
- * The part of an army a share of its soldiers makes, in whole soldiers: the army itself when that is all of it, or
- * when less than one soldier would stay behind; otherwise a new army split off it.
+ * Sends a share of an army's soldiers, in whole soldiers, to the destinations it can reach, spread evenly: equal
+ * parts, the remainder to the first destinations, none to a destination whose part would be under one soldier. Each
+ * part splits off with its share of the weapons; the last is the army itself when nothing, or less than one soldier,
+ * would stay behind.
  */
-function shareOf(world: World, army: Army, share: number): Army {
-  const soldiers = Math.max(1, Math.round(army.soldiers * share));
-  return army.soldiers - soldiers < 1 ? army : splitArmy(world, army, soldiers);
+function spreadArmy(world: World, army: Army, destinations: readonly AreaId[], share: number): void {
+  const origin = planningOrigin(world, army);
+  const paths = destinations.flatMap((area) => {
+    const path = armyPath(world, army.owner, origin, area);
+    return path ? [path.steps.map((step) => step.to)] : [];
+  });
+  if (paths.length === 0) return; // it stays
+  const moving = Math.max(1, Math.round(army.soldiers * share));
+  const each = Math.floor(moving / paths.length);
+  const parts = paths
+    .map((path, i) => ({ path, soldiers: each + (i < moving - each * paths.length ? 1 : 0) }))
+    .filter((part) => part.soldiers >= 1);
+  for (const [i, part] of parts.entries()) {
+    const last = i === parts.length - 1 && army.soldiers - part.soldiers < 1;
+    (last ? army : splitArmy(world, army, part.soldiers)).path = part.path;
+  }
 }
 
 function ownArmy(
@@ -467,11 +487,8 @@ function execute(world: World, government: Government, command: Command): void {
       return;
     }
     case "moveSoldiers":
-      for (const army of armiesIn(world, government, command.areas)) {
-        const path = armyPath(world, government.id, planningOrigin(world, army), command.destination);
-        if (!path) continue; // those that cannot reach it stay
-        shareOf(world, army, command.share).path = path.steps.map((step) => step.to);
-      }
+      for (const army of armiesIn(world, government, command.areas))
+        spreadArmy(world, army, command.destinations, command.share);
       return;
     case "disbandSoldiers":
       for (const army of armiesIn(world, government, command.areas)) {

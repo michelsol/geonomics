@@ -307,7 +307,7 @@ test("a selection with none of your areas has no action target", async ({ page }
   await expect(page.getByTestId("employment-bar")).toBeVisible();
 });
 
-test("a share of the selection's soldiers moves to an area picked on the map", async ({ page }) => {
+test("a share of the selection's soldiers spreads over areas picked on the map", async ({ page }) => {
   await startGame(page);
   await openTab(page, "Armies");
   await page.getByLabel("Recruits").fill("200");
@@ -320,32 +320,30 @@ test("a share of the selection's soldiers moves to an area picked on the map", a
   // With nothing selected, the panel acts on every soldier, wherever the march takes them.
   await page.getByRole("button", { name: "Clear", exact: true }).click();
   await page.getByLabel("Share of soldiers").fill("25");
+  await page.getByRole("button", { name: "Move 100" }).click();
+  const banner = page.getByTestId("move-banner");
+  await expect(banner).toContainText("Click areas to send 100 soldiers (25%) to · 0 picked");
+  await expect(banner.getByRole("button", { name: "Send" })).toBeDisabled();
   const canvas = page.getByTestId("map-canvas");
   const box = await canvas.boundingBox();
   const sheet = await page.getByRole("complementary", { name: "Panels" }).boundingBox();
   if (!box || !sheet) throw new Error("map canvas has no size");
-  // The capital is in the middle of the map's uncovered part (above the phone's sheet): pick points around it until
-  // one is an area the soldiers can reach.
+  // The capital is in the middle of the map's uncovered part (above the phone's sheet): click points around it, off
+  // the capital, until two areas are picked (water picks nothing).
   const cx = box.width / 2;
   const cy = (sheet.y > box.y + 100 ? sheet.y - box.y : box.height) / 2;
-  const banner = page.locator(".mode-banner");
-  for (let step = 0; step < 16 && (await page.getByTestId("army").count()) < 2; step++) {
-    await page.getByRole("button", { name: "Move 100" }).click();
-    await expect(banner).toContainText("Click where to send 100 soldiers (25%)");
+  for (let step = 0; step < 16 && !(await banner.textContent())?.includes("2 picked"); step++) {
     const angle = (step * Math.PI) / 4;
-    const radius = 40 + 30 * Math.floor(step / 8);
+    const radius = 55 + 30 * Math.floor(step / 8);
     await canvas.click({ position: { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) } });
-    if (await banner.isVisible())
-      await page.keyboard.press("Escape"); // water: nothing picked
-    // A pick of the capital itself sends nobody; any other waits for the next snapshot.
-    else
-      await expect(page.getByTestId("army"))
-        .toHaveCount(2, { timeout: 3000 })
-        .catch(() => {});
   }
-  await expect(page.getByTestId("army")).toHaveCount(2);
+  await expect(banner).toContainText("2 picked");
+  await banner.getByRole("button", { name: "Send" }).click();
+  await expect(banner).toHaveCount(0);
+  // The rest stays; the hundred sent split between the two areas, or all go to one when the other is out of reach.
+  await expect.poll(() => page.getByTestId("army").count()).toBeGreaterThanOrEqual(2);
   await expect(page.getByTestId("army").first()).toContainText("300 in");
-  await expect(page.getByTestId("army").nth(1)).toContainText(/^100 (marching from|in)/);
+  await expect(page.getByTestId("selection-soldiers")).toHaveText("400");
 });
 
 test("rejected commands are explained", async ({ page }) => {

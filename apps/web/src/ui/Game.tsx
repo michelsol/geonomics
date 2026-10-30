@@ -152,6 +152,11 @@ export function Game() {
         else if (state.selection.length > 1) state.selectArea(null);
         return;
       }
+      if (event.code === "Enter" && gameStore.getState().mode.kind === "moveSoldiers") {
+        if (target?.closest("input, select, textarea, button")) return; // a focused control answers Enter itself
+        gameStore.getState().sendSoldiers();
+        return;
+      }
       if (event.code !== "Space" || target?.closest("input, select, textarea, button")) return;
       event.preventDefault();
       gameStore.getState().togglePause();
@@ -547,6 +552,7 @@ function ModeBanner() {
   const brush = useGame((state) => state.brush);
   const setMode = useGame((state) => state.setMode);
   const setBrush = useGame((state) => state.setBrush);
+  const sendSoldiers = useGame((state) => state.sendSoldiers);
   if (mode.kind === "select") return null;
   if (mode.kind === "brush")
     return (
@@ -586,13 +592,32 @@ function ModeBanner() {
         </button>
       </div>
     );
+  if (mode.kind === "moveSoldiers")
+    return (
+      <div className="mode-banner" role="status" data-testid="move-banner">
+        <span>
+          Click areas to send {count(mode.soldiers * mode.share)} soldiers ({pct(mode.share)}) to ·{" "}
+          {mode.targets.length} picked
+        </span>
+        <button
+          type="button"
+          className="primary"
+          disabled={mode.targets.length === 0}
+          title="The soldiers spread evenly over the picked areas they can reach"
+          onClick={sendSoldiers}
+        >
+          Send
+        </button>
+        <button type="button" onClick={() => setMode({ kind: "select" })}>
+          Cancel
+        </button>
+      </div>
+    );
   return (
     <div className="mode-banner" role="status">
-      {mode.kind === "moveSoldiers"
-        ? `Click where to send ${count(mode.soldiers * mode.share)} soldiers (${pct(mode.share)})`
-        : `Click areas to exchange (${picked})`}
+      Click areas to exchange ({picked})
       <button type="button" onClick={() => setMode({ kind: "select" })}>
-        {mode.kind === "moveSoldiers" ? "Cancel" : "Done"}
+        Done
       </button>
     </div>
   );

@@ -312,11 +312,15 @@ describe("game store", () => {
   it("turns map clicks into army moves and peace picks by mode", () => {
     const { state, sent } = setup();
     state().chooseRealm(0);
-    state().setMode({ kind: "moveSoldiers", areas: [3, 4], share: 0.5, soldiers: 800 });
-    state().clickArea(12);
+    state().setMode({ kind: "moveSoldiers", areas: [3, 4], share: 0.5, soldiers: 800, targets: [] });
+    const before = sent.length;
+    state().sendSoldiers(); // nothing picked yet: nothing sent
+    expect(sent.length).toBe(before);
+    for (const area of [12, 7, 12, 9]) state().clickArea(area);
+    state().sendSoldiers();
     expect(sent.at(-1)).toEqual({
       type: "command",
-      command: { type: "moveSoldiers", areas: [3, 4], destination: 12, share: 0.5 },
+      command: { type: "moveSoldiers", areas: [3, 4], destinations: [7, 9], share: 0.5 },
     });
     expect(state().mode.kind).toBe("select");
     state().setMode({ kind: "pickPeaceAreas" });

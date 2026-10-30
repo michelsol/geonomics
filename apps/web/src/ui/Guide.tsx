@@ -75,10 +75,10 @@ export function Guide() {
           <h2>War and peace</h2>
           <p>
             Recruit soldiers in the Armies panel and arm them with weapons from your depots. Select areas, then Move
-            sends a share of the soldiers there to the area you click on the map. Declaring war blocks trade and
-            migration across the front. Soldiers attack every enemy area they reach; once they beat its defenders they
-            besiege it, and take it when the siege completes. Peace is proposed in the Diplomacy panel, with areas and
-            money changing hands; the other side may refuse.
+            sends a share of the soldiers there to the areas you click on the map, spread evenly over them, once you
+            press Send. Declaring war blocks trade and migration across the front. Soldiers attack every enemy area they
+            reach; once they beat its defenders they besiege it, and take it when the siege completes. Peace is proposed
+            in the Diplomacy panel, with areas and money changing hands; the other side may refuse.
           </p>
         </section>
 

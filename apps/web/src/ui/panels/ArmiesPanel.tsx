@@ -188,8 +188,8 @@ function YourSoldiers({ armies, wage }: { armies: Army[]; wage: number }) {
         <button
           type="button"
           className="primary"
-          title="Then click the destination on the map. Soldiers attack the enemy areas they reach."
-          onClick={() => setMode({ kind: "moveSoldiers", areas, share, soldiers: total })}
+          title="Then click one area or more on the map, and Send. Soldiers attack the enemy areas they reach."
+          onClick={() => setMode({ kind: "moveSoldiers", areas, share, soldiers: total, targets: [] })}
         >
           Move {count(sent)}
         </button>
@@ -203,8 +203,9 @@ function YourSoldiers({ armies, wage }: { armies: Army[]; wage: number }) {
         </button>
       </div>
       <span className="hint">
-        A realm's armies standing in the same area join into one. Soldiers attack every area they stand in that belongs
-        to a realm at war with yours, until it falls.
+        Move, then click one area or more: the soldiers spread evenly over them. A realm's armies standing in the same
+        area join into one. Soldiers attack every area they stand in that belongs to a realm at war with yours, until it
+        falls.
       </span>
     </Section>
   );

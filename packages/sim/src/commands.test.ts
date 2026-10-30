@@ -410,29 +410,72 @@ describe("armies", () => {
     recruit(world, 3, 50, AI_PLAYER, 1);
     const army = onlyArmy(world);
     army.weapons = 80;
-    expect(send(world, { type: "moveSoldiers", areas: [1], destination: 2, share: 0.25 })).toBeNull();
+    expect(send(world, { type: "moveSoldiers", areas: [1], destinations: [2], share: 0.25 })).toBeNull();
     const moving = [...world.armies.values()].find((a) => a.owner === 0 && a.id !== army.id) as Army;
     expect(moving).toMatchObject({ soldiers: 25, weapons: 20, path: [0, 2] });
     expect(army).toMatchObject({ soldiers: 75, weapons: 60, path: [] });
     // All of them: the army itself marches.
-    expect(send(world, { type: "moveSoldiers", areas: [1], destination: 0, share: 1 })).toBeNull();
+    expect(send(world, { type: "moveSoldiers", areas: [1], destinations: [0], share: 1 })).toBeNull();
     expect(army.path).toEqual([0]);
     expect(world.armies.size).toBe(3);
+  });
+
+  /** A government's armies, in the order they were raised, as soldiers, weapons and path. */
+  const parts = (world: World, owner: number) =>
+    [...world.armies.values()]
+      .filter((army) => army.owner === owner)
+      .map(({ soldiers, weapons, path }) => ({ soldiers, weapons, path }));
+
+  it("spreads the soldiers sent evenly over the destinations", () => {
+    const world = realmWorld();
+    recruit(world);
+    onlyArmy(world).weapons = 80;
+    expect(send(world, { type: "moveSoldiers", areas: [1], destinations: [0, 3], share: 1 })).toBeNull();
+    expect(parts(world, 0)).toEqual([
+      { soldiers: 50, weapons: 40, path: [3] }, // the army itself takes the last part
+      { soldiers: 50, weapons: 40, path: [0] },
+    ]);
+  });
+
+  it("leaves the rest behind, and gives the remainder to the first destinations", () => {
+    const world = realmWorld();
+    recruit(world, 1, 101);
+    expect(send(world, { type: "moveSoldiers", areas: [1], destinations: [0, 2], share: 0.31 })).toBeNull();
+    expect(parts(world, 0).map(({ soldiers, path }) => ({ soldiers, path }))).toEqual([
+      { soldiers: 70, path: [] },
+      { soldiers: 16, path: [0] },
+      { soldiers: 15, path: [0, 2] },
+    ]);
+  });
+
+  it("sends nothing to a destination an army cannot reach, and nobody to parts under one soldier", () => {
+    const world = realmWorld();
+    recruit(world, 3, 50, AI_PLAYER, 1);
+    // The other realm has no port to sail to the isle from: the Valley gets them all.
+    expect(send(world, { type: "moveSoldiers", areas: [3], destinations: [2, 1], share: 1 }, AI_PLAYER, 1)).toBeNull();
+    expect(parts(world, 1).map(({ soldiers, path }) => ({ soldiers, path }))).toEqual([{ soldiers: 50, path: [1] }]);
+    recruit(world, 1, 2);
+    expect(send(world, { type: "moveSoldiers", areas: [1], destinations: [0, 2, 3], share: 1 })).toBeNull();
+    expect(parts(world, 0).map(({ soldiers, path }) => ({ soldiers, path }))).toEqual([
+      { soldiers: 1, path: [0, 2] },
+      { soldiers: 1, path: [0] },
+    ]);
   });
 
   it("rejects moves with no soldiers there, a bad share, or nowhere reachable", () => {
     const world = realmWorld();
     recruit(world);
     recruit(world, 3, 50, AI_PLAYER, 1);
-    const move = (areas: number[], destination: number, share: number) =>
-      send(world, { type: "moveSoldiers", areas, destination, share });
-    expect(move([0], 2, 1)).toMatch(/none of your soldiers/);
-    expect(move([3], 2, 1)).toMatch(/none of your soldiers/); // another realm's army is not yours to move
-    expect(move([1], 2, 0)).toMatch(/share/);
-    expect(move([1], 2, 1.5)).toMatch(/share/);
-    expect(move([1], 9, 1)).toMatch(/unknown area/);
+    const move = (areas: number[], destinations: number[], share: number) =>
+      send(world, { type: "moveSoldiers", areas, destinations, share });
+    expect(move([0], [2], 1)).toMatch(/none of your soldiers/);
+    expect(move([3], [2], 1)).toMatch(/none of your soldiers/); // another realm's army is not yours to move
+    expect(move([1], [2], 0)).toMatch(/share/);
+    expect(move([1], [2], 1.5)).toMatch(/share/);
+    expect(move([1], [], 1)).toMatch(/destinations/);
+    expect(move([1], [2, 9], 1)).toMatch(/unknown area/);
     // The other realm has no port to sail to the isle from.
-    expect(send(world, { type: "moveSoldiers", areas: [3], destination: 2, share: 1 }, AI_PLAYER, 1)).toMatch(
+    expect(send(world, { type: "moveSoldiers", areas: [3], destinations: [2], share: 1 }, AI_PLAYER, 1)).toMatch(
       /cannot reach/,
     );
   });

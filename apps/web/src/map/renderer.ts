@@ -676,10 +676,16 @@ export class GlobeRenderer {
     const frontier = this.geometry.outline(state.selection);
     if (frontier.length > 0)
       group.add(this.lines(frontier, { width: 3, color: SELECTION, opacity: 1, lift: LIFT.lines }));
-    const peace = state.mode.kind === "pickPeaceAreas" || state.peaceAreas.length > 0 ? state.peaceAreas : [];
-    if (peace.length > 0) {
-      group.add(this.cellFill(peace, PICKED, 0.35));
-      group.add(this.lines(this.geometry.outline(peace), { width: 2, color: PICKED, opacity: 1, lift: LIFT.lines }));
+    // Areas picked on the map: for a peace proposal, or as the destinations of soldiers being moved.
+    const picked =
+      state.mode.kind === "moveSoldiers"
+        ? state.mode.targets
+        : state.mode.kind === "pickPeaceAreas" || state.peaceAreas.length > 0
+          ? state.peaceAreas
+          : [];
+    if (picked.length > 0) {
+      group.add(this.cellFill(picked, PICKED, 0.35));
+      group.add(this.lines(this.geometry.outline(picked), { width: 2, color: PICKED, opacity: 1, lift: LIFT.lines }));
     }
   }
 

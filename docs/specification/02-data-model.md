@@ -330,8 +330,8 @@ type Command =
   | { type: "disbandArmy"; army: ArmyId; soldiers: number }
   | { type: "moveArmy"; army: ArmyId; destination: AreaId }
   // every army of the government standing in, or marching from, these areas: a share of its soldiers marches on the
-  // destination (split off as a new army when less than all), or goes back to work
-  | { type: "moveSoldiers"; areas: AreaId[]; destination: AreaId; share: number }
+  // destinations, spread evenly over those it can reach (split off as new armies), or goes back to work
+  | { type: "moveSoldiers"; areas: AreaId[]; destinations: AreaId[]; share: number }
   | { type: "disbandSoldiers"; areas: AreaId[]; share: number }
   | { type: "setSoldierWage"; wage: number }
   | { type: "declareWar"; target: GovernmentId }
@@ -361,7 +361,7 @@ The host validates every command before applying it. A rejected command changes 
 | Policies | Income and consumption tax rates and tariffs must be within [−1, 5]; only the income tax takes a wage band, 0 to 3 or none for every band; the unemployed tax and head tax any finite number (negative: a benefit, an allowance); ceilings and floors ≥ 0; the staff wage within [0, 5]. Head tax and the staff wage take no good; every other policy takes one good, or none for every good |
 | Wages | `wageOffer` and the soldier wage must be within [0, 10] |
 | Recruiting | At least one soldier, and no more than the area's unemployed and private workers |
-| Armies | `moveArmy` needs a reachable destination under the marching rules; `disbandArmy` at most the army's soldiers. `moveSoldiers` and `disbandSoldiers` take a share within (0, 1] and need at least one of the government's armies in the areas; `moveSoldiers` also needs one of them to reach the destination, and those that cannot stay |
+| Armies | `moveArmy` needs a reachable destination under the marching rules; `disbandArmy` at most the army's soldiers. `moveSoldiers` and `disbandSoldiers` take a share within (0, 1] and need at least one of the government's armies in the areas; `moveSoldiers` also needs a non-empty list of destinations and one of the armies to reach one of them; an army sends nothing to the destinations it cannot reach, and stays when it reaches none |
 | Jobs | `produce` never a service, and a primary good only where the area has natural capacity for it |
 | Infrastructure | A level is a whole number within [0, `maximumLevel`]; a port above 0 only in a coastal area |
 | Goods | Market orders and standing rules never name a service |
