@@ -2,7 +2,7 @@
 // terrain, coasts, water cells, population, resources on land and at sea, land edges, sea lanes and capital positions.
 import { createNoise3D, type NoiseFunction3D } from "simplex-noise";
 import type { Catalog } from "./catalog";
-import type { WorldConfig } from "./config";
+import { cellCount, type WorldConfig } from "./config";
 import { MinHeap } from "./heap";
 import { referenceDemandPerPerson } from "./init";
 import { nextRandom, seedFrom } from "./random";
@@ -45,7 +45,7 @@ export function generateMap(catalog: Catalog, config: WorldConfig, seed: number)
 
   // 1. Cells: points spread over a sphere whose surface holds every cell at about cellSpacing apart, jittered, then
   // relaxed toward even spacing.
-  const count = Math.max(12, Math.round(m.landAreaCount / m.landShare));
+  const count = cellCount(m);
   const s = m.cellSpacing;
   const radius = s * Math.sqrt(count / (4 * Math.PI));
   let points: Point3[] = fibonacciSphere(count, radius, JITTER, random);

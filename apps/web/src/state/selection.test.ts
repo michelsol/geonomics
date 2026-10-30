@@ -62,9 +62,11 @@ describe("natural capacity", () => {
     const ports = world.areas.filter((area) => area.portLevel > 0);
     expect(ports.length).toBeGreaterThan(0);
     for (const area of world.areas) {
+      // Snapshots carry Float32 values: equal to about one part in ten million.
+      const expected = extractionCapacityMaximum(world, area, fish);
       expect(capacityMaximum(data, snapshot, area.id, fish)).toBeCloseTo(
-        extractionCapacityMaximum(world, area, fish),
-        0,
+        expected,
+        -Math.log10(Math.max(1, expected * 1e-6)),
       );
     }
     // Without a snapshot, the land alone: no fish there.

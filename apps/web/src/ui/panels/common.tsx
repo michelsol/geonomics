@@ -1,5 +1,11 @@
 // Helpers shared by the panels.
-import { type GovernmentView, type Snapshot, type StaticData, WAGE_BAND_BOUNDARIES } from "@geonomics/sim";
+import {
+  type GovernmentView,
+  REFERENCE_AREA_POPULATION,
+  type Snapshot,
+  type StaticData,
+  WAGE_BAND_BOUNDARIES,
+} from "@geonomics/sim";
 import { type PanelName, useGame } from "../../state/store";
 
 export type { PanelName };
@@ -42,6 +48,17 @@ export function useView(): View | null {
   const snapshot = useGame((state) => state.snapshot);
   if (!data || !snapshot?.government) return null;
   return { data, snapshot, government: snapshot.government };
+}
+
+/**
+ * A default amount of people (recruits, workers) set for areas of REFERENCE_AREA_POPULATION, scaled to the map's
+ * people per area and rounded to two significant digits: 500 recruits become 400,000 on an Earth of 1,000 areas.
+ */
+export function scaledAmount(data: StaticData | null, reference: number): number {
+  if (!data) return reference;
+  const value = (reference * data.config.map.meanAreaPopulation) / REFERENCE_AREA_POPULATION;
+  const unit = 10 ** Math.max(0, Math.floor(Math.log10(Math.max(value, 1))) - 1);
+  return Math.max(1, Math.round(value / unit) * unit);
 }
 
 export const areaName = (data: StaticData, area: number) => data.areas[area]?.name ?? `#${area}`;

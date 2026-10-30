@@ -10,7 +10,8 @@ const trim = (value: number, decimals: number) => {
 /** Compact form of a large number, three significant digits at most: 24,312 → 24.3k, 5,600,000 → 5.6M. */
 function compact(value: number): string {
   const abs = Math.abs(value);
-  const [scale, suffix] = abs >= 999.5e6 ? [1e9, "B"] : abs >= 999.5e3 ? [1e6, "M"] : [1e3, "k"];
+  const [scale, suffix] =
+    abs >= 999.5e9 ? [1e12, "T"] : abs >= 999.5e6 ? [1e9, "B"] : abs >= 999.5e3 ? [1e6, "M"] : [1e3, "k"];
   const scaled = value / scale;
   const decimals = Math.abs(scaled) >= 100 ? 0 : Math.abs(scaled) >= 10 ? 1 : 2;
   return `${trim(scaled, decimals)}${suffix}`;

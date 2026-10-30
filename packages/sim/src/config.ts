@@ -222,6 +222,68 @@ export const DEFAULT_CONFIG: Omit<WorldConfig, "military"> & {
   warmupResponsivenessBoost: 3,
 };
 
+/**
+ * The population of an area the absolute defaults were tuned for: infrastructure costs and staff, route capacities
+ * and the AI's smallest armies. A planet of other people per area scales them (planetOverrides).
+ */
+export const REFERENCE_AREA_POPULATION = 10_000;
+
+/** A planet a new game is played on: its circumference in km, and its people at the start. */
+export interface Planet {
+  circumference: number;
+  population: number;
+}
+
+export const EARTH: Planet = { circumference: 40_000, population: 8e9 };
+
+/**
+ * The pace a new game starts at: real-world speeds on an Earth-sized planet. Prices settle in days and jobs in weeks;
+ * the population grows about 0.9% a year, migration closes half a gap in about nine months; armies march 25 km a day.
+ * DEFAULT_CONFIG keeps every multiplier at 1, the reference the rates were tuned at.
+ */
+export const NEW_GAME_PACE: Pick<
+  WorldConfig["pace"],
+  "gameDaysPerTick" | "economyResponsiveness" | "demographyResponsiveness" | "militaryResponsiveness"
+> = {
+  gameDaysPerTick: 1,
+  economyResponsiveness: 1,
+  demographyResponsiveness: 0.25,
+  militaryResponsiveness: 1,
+};
+
+/** Cells on a generated map, land and water: enough for landAreaCount land cells at the land share. */
+export function cellCount(map: Pick<WorldConfig["map"], "landAreaCount" | "landShare">): number {
+  return Math.max(12, Math.round(map.landAreaCount / map.landShare));
+}
+
+/**
+ * Overrides putting a map of `map.landAreaCount` areas on a planet: the cell spacing that gives its circumference,
+ * the mean area population that gives its people, and the absolute defaults scaled by people per area against
+ * REFERENCE_AREA_POPULATION, so a port costs the same days of an area's work whatever its size.
+ */
+export function planetOverrides(
+  map: Pick<WorldConfig["map"], "landAreaCount" | "landShare">,
+  planet: Planet,
+): DeepPartial<WorldConfig> {
+  const radius = planet.circumference / (2 * Math.PI);
+  const meanAreaPopulation = planet.population / map.landAreaCount;
+  const k = meanAreaPopulation / REFERENCE_AREA_POPULATION;
+  const scale = <T extends Record<string, number>>(values: T) =>
+    Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value * k])) as T;
+  const { infrastructure, transport } = DEFAULT_CONFIG;
+  return {
+    map: { cellSpacing: radius * Math.sqrt((4 * Math.PI) / cellCount(map)), meanAreaPopulation },
+    infrastructure: {
+      costPerLevel: scale(infrastructure.costPerLevel),
+      staffPerLevel: scale(infrastructure.staffPerLevel),
+    },
+    transport: {
+      seaCapacityPerPortLevel: transport.seaCapacityPerPortLevel * k,
+      airCapacityPerAirportLevel: transport.airCapacityPerAirportLevel * k,
+    },
+  };
+}
+
 export type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] };
 
 /** Builds a full config for a catalog from partial overrides. The military weapons good comes from the catalog. */

@@ -1,9 +1,18 @@
 // New game, realm choice and end-of-session screens (specification §9, Screens).
 
 import { readCode } from "@geonomics/net/code"; // the code helpers alone: PeerJS loads when joining
-import type { AiMix, SaveInfo } from "@geonomics/sim";
+import {
+  type AiMix,
+  cellCount,
+  DEFAULT_CONFIG,
+  EARTH,
+  LAND_DISTANCE_PER_TRAVEL_DAY,
+  NEW_GAME_PACE,
+  type Planet,
+  type SaveInfo,
+} from "@geonomics/sim";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CatalogName } from "../host/protocol";
+import type { CatalogName, NewGamePace } from "../host/protocol";
 import { deleteSave, listSaves } from "../host/saves";
 import { hostEntered, stopHosting } from "../net/host";
 import { joinTarget, savedName } from "../net/options";
@@ -19,6 +28,154 @@ const CATALOGS: { value: CatalogName; label: string }[] = [
   { value: "medium", label: "Medium — 14 goods" },
   { value: "large", label: "Large — 54 goods" },
 ];
+
+const CIRCUMFERENCE = { min: 5_000, max: 80_000, step: 1_000 };
+const POPULATIONS = [1e7, 3e7, 1e8, 3e8, 1e9, 3e9, 8e9, 2e10];
+const DAYS_PER_TICK = [0.25, 0.5, 1, 2, 3, 5, 7];
+const MULTIPLIERS = [0.1, 0.25, 0.5, 1, 2, 4];
+
+/** People in words: "8 billion", "300 million". */
+function people(value: number): string {
+  return value >= 1e9 ? `${value / 1e9} billion` : `${value / 1e6} million`;
+}
+
+/** A slider over a list of preset values, showing `shown` for the one chosen. */
+function PresetField({
+  id,
+  label,
+  presets,
+  value,
+  onChange,
+  shown,
+}: {
+  id: string;
+  label: string;
+  presets: readonly number[];
+  value: number;
+  onChange: (value: number) => void;
+  shown: string;
+}) {
+  const index = Math.max(0, presets.indexOf(value));
+  return (
+    <RangeField
+      id={id}
+      label={label}
+      min={0}
+      max={presets.length - 1}
+      step={1}
+      value={index}
+      onChange={(i) => onChange(presets[i] as number)}
+      shown={shown}
+    />
+  );
+}
+
+/**
+ * The planet and the pace of a new game: Earth's size and people, and real-world speeds, by default (specification §3,
+ * New games).
+ */
+function PlanetAndPace({
+  areas,
+  planet,
+  setPlanet,
+  pace,
+  setPace,
+}: {
+  areas: number;
+  planet: Planet;
+  setPlanet: (planet: Planet) => void;
+  pace: NewGamePace;
+  setPace: (pace: NewGamePace) => void;
+}) {
+  const { economy, population } = DEFAULT_CONFIG;
+  const radius = planet.circumference / (2 * Math.PI);
+  const spacing =
+    radius * Math.sqrt((4 * Math.PI) / cellCount({ landAreaCount: areas, landShare: DEFAULT_CONFIG.map.landShare }));
+  const isDefault =
+    planet.circumference === EARTH.circumference &&
+    planet.population === EARTH.population &&
+    (Object.keys(NEW_GAME_PACE) as (keyof NewGamePace)[]).every((key) => pace[key] === NEW_GAME_PACE[key]);
+  const multiplier = (value: number) => `×${value}`;
+  return (
+    <>
+      <label htmlFor="circumference">Planet</label>
+      <RangeField
+        id="circumference"
+        label="Circumference"
+        {...CIRCUMFERENCE}
+        value={planet.circumference}
+        onChange={(circumference) => setPlanet({ ...planet, circumference })}
+        shown={`${count(planet.circumference)} km around${planet.circumference === EARTH.circumference ? " (Earth)" : ""}`}
+      />
+      <label htmlFor="people">People</label>
+      <PresetField
+        id="people"
+        label="World population"
+        presets={POPULATIONS}
+        value={planet.population}
+        onChange={(value) => setPlanet({ ...planet, population: value })}
+        shown={people(planet.population)}
+      />
+      <span />
+      <span className="muted" data-testid="planet-scale">
+        About {count(spacing)} km between neighboring areas · {count(planet.population / areas)} people per area
+      </span>
+      <label htmlFor="days-per-tick">Pace</label>
+      <PresetField
+        id="days-per-tick"
+        label="Days per tick"
+        presets={DAYS_PER_TICK}
+        value={pace.gameDaysPerTick}
+        onChange={(gameDaysPerTick) => setPace({ ...pace, gameDaysPerTick })}
+        shown={`${pace.gameDaysPerTick} ${pace.gameDaysPerTick === 1 ? "day" : "days"} per tick`}
+      />
+      <label htmlFor="economy">Economy</label>
+      <PresetField
+        id="economy"
+        label="Economy responsiveness"
+        presets={MULTIPLIERS}
+        value={pace.economyResponsiveness}
+        onChange={(economyResponsiveness) => setPace({ ...pace, economyResponsiveness })}
+        shown={`${multiplier(pace.economyResponsiveness)} · prices settle in ${fmt(
+          Math.round((10 * Math.LN2) / (economy.priceAdjustmentRatePerDay * pace.economyResponsiveness)) / 10,
+        )} days`}
+      />
+      <label htmlFor="demography">Demography</label>
+      <PresetField
+        id="demography"
+        label="Demography responsiveness"
+        presets={MULTIPLIERS}
+        value={pace.demographyResponsiveness}
+        onChange={(demographyResponsiveness) => setPace({ ...pace, demographyResponsiveness })}
+        shown={`${multiplier(pace.demographyResponsiveness)} · births ${pct(
+          population.birthRatePerDay * pace.demographyResponsiveness * 365,
+        )}/year`}
+      />
+      <label htmlFor="military">Military</label>
+      <PresetField
+        id="military"
+        label="Military responsiveness"
+        presets={MULTIPLIERS}
+        value={pace.militaryResponsiveness}
+        onChange={(militaryResponsiveness) => setPace({ ...pace, militaryResponsiveness })}
+        shown={`${multiplier(pace.militaryResponsiveness)} · marching ${fmt(LAND_DISTANCE_PER_TRAVEL_DAY * pace.militaryResponsiveness)} km/day`}
+      />
+      <span />
+      <div className="row">
+        <button
+          type="button"
+          disabled={isDefault}
+          onClick={() => {
+            setPlanet(EARTH);
+            setPace(NEW_GAME_PACE);
+          }}
+        >
+          Reset to Earth
+        </button>
+      </div>
+    </>
+  );
+}
 
 const AI_MIXES: { value: AiMix; label: string }[] = [
   { value: "balanced", label: "Balanced — traders, builders, conquerors" },
@@ -43,6 +200,8 @@ export function NewGame() {
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e6));
   const [chosenRealms, setRealms] = useState(8);
   const [aiMix, setAiMix] = useState<AiMix>("balanced");
+  const [planet, setPlanet] = useState<Planet>(EARTH);
+  const [pace, setPace] = useState<NewGamePace>(NEW_GAME_PACE);
   const realms = Math.min(chosenRealms, areas); // at most one realm per area
 
   return (
@@ -77,7 +236,7 @@ export function NewGame() {
             onSubmit={(event) => {
               event.preventDefault();
               stopHosting();
-              newGame({ catalog, areas, seed, realms, aiMix, warmupDays: warmupOverride() });
+              newGame({ catalog, areas, seed, realms, aiMix, planet, pace, warmupDays: warmupOverride() });
             }}
           >
             <div className="form-grid">
@@ -103,6 +262,7 @@ export function NewGame() {
               />
               <label htmlFor="ai-mix">AI</label>
               <Select label="AI personalities" value={aiMix} options={AI_MIXES} onChange={setAiMix} />
+              <PlanetAndPace areas={areas} planet={planet} setPlanet={setPlanet} pace={pace} setPace={setPace} />
               <label htmlFor="seed">Seed</label>
               <div className="row">
                 <input

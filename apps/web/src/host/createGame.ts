@@ -1,10 +1,14 @@
 // Builds a new solo game: map generation, Rule 6 initialization, founding and warm-up (specification §4, §5).
 import {
   createConfig,
+  DEFAULT_CONFIG,
+  EARTH,
   foundGovernments,
   generateMap,
   initializeWorld,
   loadCatalog,
+  NEW_GAME_PACE,
+  planetOverrides,
   type World,
   warmUp,
 } from "@geonomics/sim";
@@ -19,7 +23,13 @@ const WARMUP_CHUNK_DAYS = 10;
 /** Generates, initializes and warms up a world, reporting progress in [0, 1] along the way. */
 export function createGame(options: GameOptions, progress: (stage: string, done: number) => void): World {
   const catalog = loadCatalog(CATALOGS[options.catalog]);
-  const config = createConfig(catalog, { map: { landAreaCount: options.areas, governmentCount: options.realms } });
+  const map = { landAreaCount: options.areas, governmentCount: options.realms };
+  const planet = planetOverrides({ ...map, landShare: DEFAULT_CONFIG.map.landShare }, options.planet ?? EARTH);
+  const config = createConfig(catalog, {
+    ...planet,
+    map: { ...planet.map, ...map },
+    pace: { ...NEW_GAME_PACE, ...options.pace },
+  });
   progress("Generating the map", 0);
   const { world, capitals } = generateMap(catalog, config, options.seed);
   progress("Settling the population", 0.1);

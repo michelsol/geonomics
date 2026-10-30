@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { actionTarget, capacityMaximum, employmentOf, splitByPopulation } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { count, fmt, NumberField, pct, Section, Select } from "../components";
-import { areaName, goodOptions, NoOwnArea, storable, useSend, useView, type View } from "./common";
+import { areaName, goodOptions, NoOwnArea, scaledAmount, storable, useSend, useView, type View } from "./common";
 
 // Categorical slots 1 and 2 of the chart palette (dark steps), validated against the panel surface; the unemployed
 // are a neutral gray, since they are the absence of a job rather than a third kind of one.
@@ -26,7 +26,8 @@ export function JobsPanel() {
   const view = useView();
   const send = useSend();
   const selection = useGame((state) => state.selection);
-  const [job, setJob] = useState({ good: -1, workers: 100 });
+  const staticData = useGame((state) => state.data);
+  const [job, setJob] = useState(() => ({ good: -1, workers: scaledAmount(staticData, 100) }));
   if (!view) return null;
   const { data, government, snapshot } = view;
   const target = actionTarget(government, selection);

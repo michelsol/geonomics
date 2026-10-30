@@ -6,6 +6,8 @@ import type {
   GoodId,
   GovernmentId,
   GovernmentSummary,
+  NEW_GAME_PACE,
+  Planet,
   PlayerId,
   SaveInfo,
   Snapshot,
@@ -20,8 +22,13 @@ export interface GameOptions {
   seed: number;
   realms: number; // governments founded; they split the whole map between them
   aiMix: AiMix; // personalities of the realms the AI runs
+  planet?: Planet; // circumference and people; Earth's by default
+  pace?: Partial<NewGamePace>; // game days per tick and responsiveness; NEW_GAME_PACE by default
   warmupDays?: number; // defaults to the config's warmupDays; shortened for tests
 }
+
+/** The pace parameters a new game sets. */
+export type NewGamePace = typeof NEW_GAME_PACE;
 
 /** Target speed: ticks per second, or "max" to run ticks back to back. */
 export type Speed = number | "max";

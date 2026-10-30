@@ -72,6 +72,22 @@ Three multipliers change the feel of a game without touching individual rates:
 
 To speed up a whole game, raise `gameDaysPerTick` or `maxTicksPerSecond`. To make the economy react faster relative to game time, raise `economyResponsiveness`. Rule 2 keeps both safe.
 
+### New games: the planet and its pace
+
+The defaults of the configuration below are the **reference world** the rates were tuned on: cells about 100 km apart, 10,000 people per area, every multiplier at 1. Tests and the headless runner use it. A new game instead chooses a **planet**, its circumference in km and its people, and a **pace**; the start menu sets both (section 9), Earth's by default.
+
+- **Circumference.** `cellSpacing = (circumference / 2π) × √(4π / cells)`, where `cells = max(12, round(landAreaCount / landShare))`, so the generated sphere is exactly that size around (section 4, Map generation). Distances are real: transport costs per tonne and km, and marching at 25 km a day, are unchanged, so trade between neighbors costs more, and armies take longer, on a bigger planet.
+- **People.** `meanAreaPopulation = population / landAreaCount`. The few defaults that are absolute numbers rather than per person or per km scale with the people per area, `k = meanAreaPopulation / 10,000`: `infrastructure.costPerLevel`, `infrastructure.staffPerLevel`, `transport.seaCapacityPerPortLevel` and `transport.airCapacityPerAirportLevel`, and the AI's smallest armies (section 10). A port then costs the same days of an area's work, and the economy per person plays alike at any population.
+- **Earth**, the default planet: 40,000 km around and 8 billion people.
+- **Pace**, real-world speeds at Earth scale:
+
+| Parameter | New game | Reference | At the new-game value |
+| --- | --- | --- | --- |
+| `gameDaysPerTick` | 1 | 1 | a game day per tick |
+| `economyResponsiveness` | 1 | 1 | prices settle in about 2 days, trade in 3, jobs in about 10 |
+| `demographyResponsiveness` | 0.25 | 1 | births about 0.9% a year; migration closes half a gap in about 9 months; total famine kills about 27% a year |
+| `militaryResponsiveness` | 1 | 1 | armies march 25 km a day on land and 100 km at sea; 1,000 equipped soldiers take an area of 10,000 in about 20 days |
+
 ### Diagnostics
 
 A headless runner (Node) simulates thousands of days and reports, per area and good:

@@ -3,7 +3,7 @@ import large from "../../../data/goods/large.json";
 import medium from "../../../data/goods/medium.json";
 import small from "../../../data/goods/small.json";
 import { loadCatalog } from "./catalog";
-import { createConfig } from "./config";
+import { createConfig, DEFAULT_CONFIG, EARTH, planetOverrides, REFERENCE_AREA_POPULATION } from "./config";
 import { hashWorld } from "./hash";
 import { generateMap } from "./mapgen";
 import type { World } from "./types";
@@ -45,6 +45,26 @@ describe("generateMap", () => {
     for (const count of [300, 1000]) {
       const areas = generate("small", 3, count).world.areas.length;
       expect(Math.abs(areas - count) / count).toBeLessThan(0.05);
+    }
+  });
+
+  it("puts a map on a planet of a given size and population", () => {
+    for (const landAreaCount of [300, 3000]) {
+      const map = { landAreaCount, landShare: DEFAULT_CONFIG.map.landShare };
+      const overrides = planetOverrides(map, EARTH);
+      const config = createConfig(catalogs.small, { ...overrides, map: { ...overrides.map, ...map } });
+      const generated = generateMap(catalogs.small, config, 1).world;
+      expect(2 * Math.PI * (generated.map?.radius as number)).toBeCloseTo(EARTH.circumference, 6);
+      expect(config.map.meanAreaPopulation).toBe(EARTH.population / landAreaCount);
+      // Absolute costs, staff and capacities scale with people per area.
+      const k = config.map.meanAreaPopulation / REFERENCE_AREA_POPULATION;
+      expect(config.infrastructure.costPerLevel.port).toBeCloseTo(k * DEFAULT_CONFIG.infrastructure.costPerLevel.port);
+      expect(config.infrastructure.staffPerLevel.fort).toBeCloseTo(
+        k * DEFAULT_CONFIG.infrastructure.staffPerLevel.fort,
+      );
+      expect(config.transport.seaCapacityPerPortLevel).toBeCloseTo(
+        k * DEFAULT_CONFIG.transport.seaCapacityPerPortLevel,
+      );
     }
   });
 

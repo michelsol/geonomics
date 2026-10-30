@@ -1,5 +1,6 @@
 // An AI's wars (specification §10): defense for every personality; conquest, armies and weapons for the conqueror;
 // peace when a war has run its course.
+import { REFERENCE_AREA_POPULATION } from "../config";
 import { runningLevel } from "../snapshot";
 import { chord } from "../sphere";
 import type { AiMemory, AiWar, AreaId, Army, Command, GovernmentId } from "../types";
@@ -14,8 +15,12 @@ const AREA_RECRUIT_SHARE = 0.1; // a defending army raised in an area takes at m
 const ARMY_RECRUIT_SHARE = 0.01; // the standing army takes at most this share of an area's population per decision
 const RECRUITING_AREAS = 3; // the standing army is raised in this many of the most populous areas
 const MARCHING_ARMIES = 8; // armies sent to attack in one decision at most, the largest first: each order plans a path
+// The smallest recruitment and attacking army, for areas of REFERENCE_AREA_POPULATION: scaled by people per area.
 const MINIMUM_RECRUITS = 50;
 const MINIMUM_ATTACK_ARMY = 200;
+
+/** People per area against the reference the AI's smallest armies were set for. */
+const peopleScale = (view: AiView) => view.data.config.map.meanAreaPopulation / REFERENCE_AREA_POPULATION;
 const ATTACK_ODDS = 1.5; // attack an area only with this much more power than its defense
 const WAR_ODDS = 2; // declare war only with this much more power than the target's weakest border area
 const LARGEST_TARGET_POPULATION = 3; // never attack a realm more populous than this many times its own
@@ -175,7 +180,7 @@ function defend(view: AiView, realm: Realm, memory: AiMemory, commands: Command[
     const soldiers = Math.floor(
       Math.min(wanted, recruitable(view, area), AREA_RECRUIT_SHARE * (areas.population[area] as number)),
     );
-    if (soldiers >= MINIMUM_RECRUITS) commands.push({ type: "recruitArmy", area, soldiers });
+    if (soldiers >= MINIMUM_RECRUITS * peopleScale(view)) commands.push({ type: "recruitArmy", area, soldiers });
     // The nearest idle army at home joins in.
     const helper = realm.armies
       .filter(
@@ -206,7 +211,7 @@ function distance(view: AiView, a: AreaId, b: AreaId): number {
 function raiseArmy(view: AiView, realm: Realm, traits: Traits, commands: Command[]): void {
   if (realm.government.treasury < realm.reserve) return;
   const missing = traits.armyShare * realm.population - realm.soldiers;
-  if (missing < MINIMUM_RECRUITS) return;
+  if (missing < MINIMUM_RECRUITS * peopleScale(view)) return;
   const { population } = view.snapshot.areas;
   const sources = [...realm.owned]
     .sort((a, b) => (population[b] as number) - (population[a] as number))
@@ -215,7 +220,7 @@ function raiseArmy(view: AiView, realm: Realm, traits: Traits, commands: Command
     const soldiers = Math.floor(
       Math.min(missing / sources.length, recruitable(view, area), ARMY_RECRUIT_SHARE * (population[area] as number)),
     );
-    if (soldiers >= MINIMUM_RECRUITS) commands.push({ type: "recruitArmy", area, soldiers });
+    if (soldiers >= MINIMUM_RECRUITS * peopleScale(view)) commands.push({ type: "recruitArmy", area, soldiers });
   }
 }
 
@@ -245,7 +250,7 @@ function attack(view: AiView, realm: Realm, memory: AiMemory, traits: Traits, co
   // Armies fighting in enemy land keep at it; those at home and idle go to the front.
   const ready = readyArmies(view, realm);
   const power = ready.reduce((sum, army) => sum + armyPower(army), 0);
-  if (ready.length === 0 || power < MINIMUM_ATTACK_ARMY) return;
+  if (ready.length === 0 || power < MINIMUM_ATTACK_ARMY * peopleScale(view)) return;
   const target = frontline(view, realm, enemies).find((entry) => power >= ATTACK_ODDS * entry.defense);
   if (!target) return;
   for (const war of wars) if (war.enemy === ownerOf(view, target.area)) war.target = target.area;
@@ -269,7 +274,10 @@ function considerWar(
   if (memory.lastPeaceDay !== null && realm.day - memory.lastPeaceDay < traits.peaceCooldownDays) return;
   // Ready once the army is near its target, or as near as recruiting gets it.
   const target = traits.armyShare * realm.population;
-  if (realm.soldiers < Math.min(0.8 * target, target - MINIMUM_RECRUITS) || realm.government.treasury < realm.reserve)
+  if (
+    realm.soldiers < Math.min(0.8 * target, target - MINIMUM_RECRUITS * peopleScale(view)) ||
+    realm.government.treasury < realm.reserve
+  )
     return;
   const ready = readyArmies(view, realm);
   const power = ready.reduce((sum, army) => sum + armyPower(army), 0);
@@ -311,7 +319,7 @@ function standDown(view: AiView, realm: Realm, traits: Traits, commands: Command
     .filter((army) => idle(army) && realm.owned.has(armyArea(view, army)))
     .sort((a, b) => b.soldiers - a.soldiers);
   for (const army of home) {
-    if (excess < MINIMUM_RECRUITS) break;
+    if (excess < MINIMUM_RECRUITS * peopleScale(view)) break;
     const soldiers = Math.min(army.soldiers, Math.floor(excess));
     commands.push({ type: "disbandArmy", army: army.id, soldiers });
     excess -= soldiers;

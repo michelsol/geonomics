@@ -134,14 +134,14 @@ describe("realm results", () => {
     snapshot.armies.push({ owner: 1, soldiers: 250 } as never);
     const fallen = snapshot.governments[2] as (typeof snapshot.governments)[number];
     snapshot.governments[2] = { ...fallen, isEliminated: true };
-    const results = realmResults(data, snapshot, encodePriceTable(world), [0, 1e9]);
+    const results = realmResults(data, snapshot, encodePriceTable(world), [0, 1e12]);
     expect(results).toHaveLength(world.governments.length);
     for (const result of results) {
       const government = snapshot.governments[result.id];
       expect(result.areas).toBe(government?.areaCount);
-      expect(result.population).toBeCloseTo(government?.population ?? 0, -1);
+      expect(result.population / (government?.population ?? 1)).toBeCloseTo(1, 6); // Float32 areas, summed
     }
-    expect(results.find((r) => r.id === 1)?.peakPopulation).toBe(1e9);
+    expect(results.find((r) => r.id === 1)?.peakPopulation).toBe(1e12);
     expect(results.find((r) => r.id === 1)?.soldiers).toBeCloseTo(before + 250, 6);
     expect(results.at(-1)?.id).toBe(2);
   });
@@ -305,7 +305,7 @@ describe("game store", () => {
     const realm = history?.demographyOf([]);
     expect(realm?.length).toBe(1);
     const people = owned.reduce((sum, area) => sum + (world.areas[area]?.population ?? 0), 0);
-    expect(realm?.channel(0)[0]).toBeCloseTo(people, -1);
+    expect((realm?.channel(0)[0] ?? 0) / people).toBeCloseTo(1, 6); // Float32 areas, summed
     expect(history?.demographyOf(owned.slice(0, 2))?.length).toBe(1);
   });
 

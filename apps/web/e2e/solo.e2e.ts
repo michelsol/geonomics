@@ -21,7 +21,8 @@ async function openTab(page: Page, name: string) {
 
 test("a solo game runs, pauses, and takes commands", async ({ page }) => {
   await startGame(page);
-  await expect(page.getByTestId("realm-population")).toHaveText(/^👥 [\d,]+$/);
+  // People are whole numbers, compact from a million: billions on an Earth-sized planet.
+  await expect(page.getByTestId("realm-population")).toHaveText(/^👥 ([\d,]+|\d+(\.\d+)?[MBT])$/);
 
   // Time runs, and pause stops it.
   const start = await day(page);
@@ -133,7 +134,8 @@ test("the panels resize by dragging the divider", async ({ page }, testInfo) => 
 
 test("the market table sorts by column, and counts show no decimals", async ({ page }) => {
   await startGame(page);
-  await expect(page.getByTestId("population")).not.toContainText(".");
+  // A count: whole below a million, compact (three digits at most) above.
+  await expect(page.getByTestId("population")).toHaveText(/^([\d,]+|\d{1,3}(\.\d{1,2})?[MBT])$/);
   const market = page.getByTestId("market");
   await market.getByRole("button", { name: "Price" }).click();
   await expect(market.getByRole("columnheader", { name: /Price/ })).toHaveAttribute("aria-sort", "descending");
@@ -157,6 +159,33 @@ test("the realm count is chosen at the start", async ({ page }) => {
   await expect(page.locator(".realm-list button")).toHaveCount(12);
 });
 
+test("the planet and the pace are chosen at the start, Earth's by default", async ({ page }) => {
+  await page.goto("/?warmup=10");
+  await page.getByLabel("Map size").fill("300");
+  await page.getByLabel("Goods catalog").selectOption("small");
+  await expect(page.locator(".range-field", { has: page.getByLabel("Circumference") })).toContainText(
+    "40,000 km around (Earth)",
+  );
+  await expect(page.locator(".range-field", { has: page.getByLabel("World population") })).toContainText("8 billion");
+  await expect(page.getByTestId("planet-scale")).toContainText("26.7M people per area");
+  const reset = page.getByRole("button", { name: "Reset to Earth" });
+  await expect(reset).toBeDisabled();
+  // A small, sparse world at a quicker pace.
+  await page.getByLabel("Circumference").fill("10000");
+  await page.getByLabel("World population").fill("2"); // the third preset: 100 million
+  await page.getByLabel("Demography responsiveness").fill("3"); // ×1
+  await expect(page.getByTestId("planet-scale")).toContainText(
+    "218 km between neighboring areas · 333,333 people per area",
+  );
+  await expect(reset).toBeEnabled();
+  await page.getByRole("button", { name: "New game" }).click();
+  await expect(page.getByRole("heading", { name: "Choose your realm" })).toBeVisible({ timeout: 60_000 });
+  await page.locator(".realm-list button").first().click();
+  await page.getByRole("navigation").getByRole("button", { name: "Game", exact: true }).click();
+  await expect(page.getByTestId("planet")).toContainText("10,000 km around");
+  await expect(page.getByTestId("planet")).toContainText("demography ×1");
+});
+
 test("each panel shows its map layer, and flows when its checkbox is on", async ({ page }) => {
   await startGame(page);
   const legend = page.getByTestId("legend");
@@ -165,7 +194,7 @@ test("each panel shows its map layer, and flows when its checkbox is on", async 
 
   await openTab(page, "Population");
   await expect(legend).toContainText("Population per area");
-  await expect(page.getByTestId("population-total")).toHaveText(/^[\d,]+$/);
+  await expect(page.getByTestId("population-total")).toHaveText(/^([\d,]+|\d+(\.\d+)?[MBT])$/);
   await expect(page.getByTestId("births")).toHaveText(/^<?[\d.,]+[kM]?\/day$/);
   await expect(page.getByTestId("deaths")).toHaveText(/^<?[\d.,]+[kM]?\/day$/);
   await page.getByLabel("Show migration flows").check();
@@ -349,7 +378,7 @@ test("a share of the selection's soldiers spreads over areas picked on the map",
 test("rejected commands are explained", async ({ page }) => {
   await startGame(page);
   await openTab(page, "Armies");
-  await page.getByLabel("Recruits").fill("1000000");
+  await page.getByLabel("Recruits").fill("1000000000000");
   await page.getByRole("button", { name: "Recruit", exact: true }).click();
   await expect(page.locator(".toast")).toContainText("not enough");
 });

@@ -562,9 +562,20 @@ Speed came from three changes, measured on the 3,000-area globe with every trade
 
 A sphere has poles, and plains running up to them looked wrong. Low land beyond about 60 degrees of latitude is now cold desert: sparse (0.15 density), slow to cross and less productive, holding ore, coal, oil, gas, stone and herds by catalog. A noise field wobbles the line by a few degrees, so the caps have ragged edges; hills and mountains keep their own terrain. The field draws from its own seeded stream, so adding it left every other field of every map as it was. On 300 to 3,000 areas it covers 7 to 10% of areas and holds about 2% of the people, and no capital starts there.
 
+### An Earth-sized planet at real-world pace
+
+The globe was about 100 km between areas and 10,000 people per area: a 300-area world was 5,600 km around with 3 million people. New games now default to Earth, 40,000 km around and 8 billion people, and the start menu sets both. The configuration's defaults stay the reference world the rates were tuned on, so tests and the headless runner kept their numbers; a new game derives its cell spacing and mean area population from the planet.
+
+Distances are real: costs per tonne-km and marching at 25 km a day were already realistic, so an Earth of 300 areas, 874 km between neighbors, makes trade between neighbors about nine times dearer and land hops 35 days long. People scale without changing the economy: only four defaults were absolute numbers (infrastructure cost and staff, sea and air capacity) besides the AI's smallest armies, and they now scale with people per area. On 300 areas of the large catalog, seed 1, over two years, the reference world and the same world with 8 billion people tracked each other within noise: necessities unmet 1.2–4.5% against 1.2–4.7%, trade per person within 6%, 38 and 40 areas conquered.
+
+The pace keeps the economy at 1, where prices settle in days and jobs in weeks, and the military at 1, which is the 25 km a day. Demography at 1 grew populations 3.7% a year and closed half a migration gap in 70 days, too fast for regions hundreds of km across; new games run it at 0.25, about 0.9% a year and nine months.
+
+At Earth scale and that pace, over the same two years on 300 areas: necessities unmet 2.6–6.6% (against 1.2–4.5%), trade per person about 20% lower, population flat, and 2 areas conquered rather than 38, wars being slower with month-long marches. On the medium catalog, 300 and 1,000 areas, unmet stays under 2%.
+
 ## Open questions
 
 - **Tick time on large maps.** At 3,000 areas with the large catalog a tick takes about 50 ms in Node and 65 ms in the browser worker. The interface stays smooth because the simulation runs in a worker; only the top speed on large maps is limited. Worth revisiting if players need faster large maps.
 - **Naval combat and blockades** on sea routes.
 - **The dip in trade after warm-up.** When warm-up ends and the AI realms start taxing, trade falls by up to two thirds for about a month before it recovers, on every map tried. A player sees it as the game opens.
+- **Hunger on large maps with the large catalog.** On the reference world, seed 1, 1,000 areas leave 16–20% of necessities unmet with population falling about 6% a year, and 3,000 areas about 30% and 11%; Earth scale is close (22–27% and 33%, falling about 3% a year at its slower demography). The medium catalog stays under 2% on the same maps. It predates the Earth-sized planet.
 - **Research**, if it returns with its effect on the economy fixed (it left people hungrier past a few levels; see AI governments), and with it gating the modern recipes of the large catalog.

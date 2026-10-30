@@ -5,7 +5,7 @@ import { type CSSProperties, useState } from "react";
 import { actionTarget, armiesIn, armyArea, realmAverageWage, splitByPopulation } from "../../state/selectors";
 import { useGame } from "../../state/store";
 import { count, fmt, NumberField, pct, Section, Stat, Swatch } from "../components";
-import { AreaLink, NoOwnArea, useSend, useView } from "./common";
+import { AreaLink, NoOwnArea, scaledAmount, useSend, useView } from "./common";
 
 /** Armies listed one per line, the largest first, before the rest are counted. */
 const LISTED_ARMIES = 8;
@@ -34,7 +34,8 @@ export function ArmiesPanel() {
   const view = useView();
   const send = useSend();
   const selection = useGame((state) => state.selection);
-  const [recruits, setRecruits] = useState(500);
+  const staticData = useGame((state) => state.data);
+  const [recruits, setRecruits] = useState(() => scaledAmount(staticData, 500));
   if (!view) return null;
   const { snapshot, government, data } = view;
   const own = snapshot.armies.filter((army) => army.owner === government.id);

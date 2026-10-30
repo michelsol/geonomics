@@ -1,6 +1,6 @@
-// The game: who plays, inviting more players, saving, and ending or leaving the session.
+// The game: who plays, the planet and its pace, inviting more players, saving, and ending or leaving the session.
 import { useGame } from "../../state/store";
-import { Section } from "../components";
+import { count, Section } from "../components";
 import { Invite, Players } from "../Players";
 
 export function GamePanel() {
@@ -13,6 +13,8 @@ export function GamePanel() {
         <Players />
         <Invite />
       </Section>
+
+      <Planet />
 
       <Section title="Session">
         <div className="row">
@@ -31,5 +33,23 @@ export function GamePanel() {
         </div>
       </Section>
     </>
+  );
+}
+
+/** The planet's size and people now, and the pace it runs at. */
+function Planet() {
+  const data = useGame((state) => state.data);
+  const snapshot = useGame((state) => state.snapshot);
+  if (!data?.map || !snapshot) return null;
+  const pace = data.config.pace;
+  const people = snapshot.governments.reduce((sum, government) => sum + government.population, 0);
+  return (
+    <Section title="Planet">
+      <div className="muted" data-testid="planet">
+        {count(2 * Math.PI * data.map.radius)} km around · {count(people)} people in its realms · {pace.gameDaysPerTick}{" "}
+        {pace.gameDaysPerTick === 1 ? "day" : "days"} per tick · economy ×{pace.economyResponsiveness}, demography ×
+        {pace.demographyResponsiveness}, military ×{pace.militaryResponsiveness}
+      </div>
+    </Section>
   );
 }
